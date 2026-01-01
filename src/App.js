@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList
@@ -153,11 +153,8 @@ const App = () => {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
+        // 修正: 外部デプロイ用にシンプル化（プレビュー環境変数を削除）
+        await signInAnonymously(auth);
       } catch (e) { 
         console.error("Auth failed", e);
         setLoading(false);
@@ -947,7 +944,15 @@ const App = () => {
                           <button onClick={() => handleEditLog(l)} className="text-slate-300 hover:text-blue-500 transition-colors p-2 bg-slate-50 rounded-xl">
                             <Edit size={16}/>
                           </button>
-                          <button onClick={() => { if(confirm('記録を削除しますか？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id))}} className="text-slate-300 hover:text-rose-500 transition-colors p-2 bg-slate-50 rounded-xl">
+                          {/* 修正箇所: confirmDialogを使用するように変更 */}
+                          <button onClick={() => setConfirmDialog({
+                            isOpen: true,
+                            message: 'この記録を削除しますか？',
+                            onConfirm: async () => {
+                              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id));
+                              setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
+                            }
+                          })} className="text-slate-300 hover:text-rose-500 transition-colors p-2 bg-slate-50 rounded-xl">
                             <Trash2 size={16}/>
                           </button>
                       </div>
@@ -976,6 +981,19 @@ const App = () => {
             <BarChart2 size={22} /><span className="text-[8px] font-black uppercase tracking-widest mt-1">Data</span>
           </button>
         </nav>
+        
+        {/* Custom Confirmation Dialog (Coach & Runner Shared) */}
+        {confirmDialog.isOpen && (
+          <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
+              <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">{confirmDialog.message}</p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500 text-sm">キャンセル</button>
+                <button onClick={confirmDialog.onConfirm} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg">OK</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1032,11 +1050,7 @@ const App = () => {
               <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border border-slate-100">
                 <div className="p-6 bg-slate-100 text-[10px] font-black uppercase tracking-widest border-b">Recent Activity</div>
                 <div className="divide-y divide-slate-50 max-h-[30rem] overflow-y-auto no-scrollbar">
-                  {allLogs
-                    .filter(l => activeRunners.some(r => r.id === l.runnerId))
-                    .sort((a,b)=>new Date(b.date)-new Date(a.date))
-                    .slice(0, 50)
-                    .map(l => (
+                  {allLogs.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, 50).map(l => (
                     <div key={l.id} className="p-6 flex flex-col gap-2">
                       <div className="flex justify-between items-start">
                         <div className="flex gap-4 items-center">
