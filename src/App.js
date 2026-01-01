@@ -153,7 +153,6 @@ const App = () => {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // 修正: 外部デプロイ用にシンプル化（プレビュー環境変数を削除）
         await signInAnonymously(auth);
       } catch (e) { 
         console.error("Auth failed", e);
@@ -433,22 +432,26 @@ const App = () => {
 
     setIsSubmitting(true);
 
-    // 修正: 既存データを取得して目標値を維持する
-    const existingData = allRunners.find(r => r.id === user.uid) || {};
-
-    const newProfile = {
-      ...existingData, // 既存データがあれば展開
-      lastName: formData.lastName.trim(), 
-      firstName: formData.firstName.trim(), 
-      // 既存の値があればそれを使い、なければ初期値を使う
-      goalMonthly: existingData.goalMonthly || 400, 
-      goalPeriod: existingData.goalPeriod || 200, 
-      status: 'active',
-      registeredAt: existingData.registeredAt || new Date().toISOString()
-    };
-
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', user.uid), newProfile);
+      // 1. 最新のデータを直接取得する (stateのallRunnersに依存しない)
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'runners', user.uid);
+      const docSnap = await getDoc(docRef);
+      const existingData = docSnap.exists() ? docSnap.data() : {};
+
+      // 2. データをマージする（既存の目標値があれば維持する）
+      const newProfile = {
+        ...existingData, // 既存データ（目標値や履歴など）をすべて展開
+        lastName: formData.lastName.trim(), 
+        firstName: formData.firstName.trim(), 
+        // 既存の目標値があればそれを使用、なければ初期値
+        goalMonthly: existingData.goalMonthly !== undefined ? existingData.goalMonthly : 400, 
+        goalPeriod: existingData.goalPeriod !== undefined ? existingData.goalPeriod : 200, 
+        status: 'active',
+        // 登録日時は既存があれば維持、なければ現在時刻
+        registeredAt: existingData.registeredAt || new Date().toISOString()
+      };
+
+      await setDoc(docRef, newProfile);
       setProfile(newProfile);
       setRole('runner'); 
       setView('menu');
