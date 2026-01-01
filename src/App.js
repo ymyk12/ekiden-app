@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc, updateDoc, getDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList
 } from 'recharts';
@@ -433,33 +433,83 @@ const App = () => {
     setIsSubmitting(true);
 
     try {
-      // 1. 最新のデータを直接取得する (stateのallRunnersに依存しない)
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'runners', user.uid);
-      const docSnap = await getDoc(docRef);
-      const existingData = docSnap.exists() ? docSnap.data() : {};
+      const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners');
+      // 1. 同姓同名の過去データを検索（現在のID以外）
+      const q = query(
+        runnersRef, 
+        where("lastName", "==", formData.lastName.trim()),
+        where("firstName", "==", formData.firstName.trim())
+      );
+      
+      const querySnapshot = await getDocs(q);
+      let oldProfile = null;
+      let oldId = null;
 
-      // 2. データをマージする（既存の目標値があれば維持する）
+      querySnapshot.forEach((doc) => {
+        // 現在のユーザーIDと異なるデータがあれば、それを「過去の自分」とみなす
+        if (doc.id !== user.uid) {
+          oldProfile = doc.data();
+          oldId = doc.id;
+        }
+      });
+
+      // 2. プロフィールを作成（引き継ぎがあればその値を使用）
       const newProfile = {
-        ...existingData, // 既存データ（目標値や履歴など）をすべて展開
         lastName: formData.lastName.trim(), 
         firstName: formData.firstName.trim(), 
-        // 既存の目標値があればそれを使用、なければ初期値
-        goalMonthly: existingData.goalMonthly !== undefined ? existingData.goalMonthly : 400, 
-        goalPeriod: existingData.goalPeriod !== undefined ? existingData.goalPeriod : 200, 
+        // 過去データがあれば目標値を引き継ぐ, なければ0
+        goalMonthly: oldProfile?.goalMonthly !== undefined ? oldProfile.goalMonthly : 0, 
+        goalPeriod: oldProfile?.goalPeriod !== undefined ? oldProfile.goalPeriod : 200, 
+        goalQ1: oldProfile?.goalQ1 || 0,
+        goalQ2: oldProfile?.goalQ2 || 0,
+        goalQ3: oldProfile?.goalQ3 || 0,
+        goalQ4: oldProfile?.goalQ4 || 0,
         status: 'active',
-        // 登録日時は既存があれば維持、なければ現在時刻
-        registeredAt: existingData.registeredAt || new Date().toISOString()
+        registeredAt: oldProfile?.registeredAt || new Date().toISOString()
       };
 
-      await setDoc(docRef, newProfile);
+      await setDoc(doc(runnersRef, user.uid), newProfile);
+
+      // 3. データ引き継ぎ処理（過去のログを新しいIDに移動）
+      if (oldId) {
+        // 過去のログを検索
+        const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'logs');
+        const oldLogsQuery = query(logsRef, where("runnerId", "==", oldId));
+        const oldLogsSnap = await getDocs(oldLogsQuery);
+
+        if (!oldLogsSnap.empty) {
+          const batch = writeBatch(db);
+          oldLogsSnap.forEach((logDoc) => {
+            // 新しいIDでログを複製（または更新）
+            const newLogRef = doc(logsRef); // 新しいIDを発行
+            batch.set(newLogRef, {
+              ...logDoc.data(),
+              runnerId: user.uid // 所有者を現在のユーザーに変更
+            });
+            // 古いログは削除
+            batch.delete(logDoc.ref);
+          });
+          
+          // 古いプロフィールも削除（重複防止）
+          batch.delete(doc(runnersRef, oldId));
+          
+          await batch.commit();
+          setSuccessMsg('以前のデータを復元しました！');
+        } else {
+          setSuccessMsg('登録完了！');
+        }
+      } else {
+        setSuccessMsg('登録完了！');
+      }
+
       setProfile(newProfile);
       setRole('runner'); 
       setView('menu');
-      setSuccessMsg('登録完了！');
       setTimeout(() => setSuccessMsg(''), 3000);
+
     } catch (e) {
       console.error(e);
-      setErrorMsg("登録に失敗しました。再読み込みして試してください。");
+      setErrorMsg("登録処理に失敗しました。: " + e.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -660,10 +710,8 @@ const App = () => {
               <h1 className="text-2xl font-black tracking-tighter">{profile.lastName} {profile.firstName}</h1>
             </div>
 
-            {/* Right: User/Profile */}
-            <button onClick={() => setView('goal')} className="bg-white/20 p-2.5 rounded-2xl active:scale-90 transition-all text-white">
-              <User size={20}/>
-            </button>
+            {/* Right: Spacer to center Name */}
+            <div className="w-10"></div>
           </div>
         </header>
 
@@ -676,7 +724,6 @@ const App = () => {
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-widest">Monthly Mileage</h3>
-                    <button onClick={() => setView('goal')} className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black">EDIT</button>
                   </div>
                   <div className="flex justify-between items-end mb-2">
                     <span className="text-3xl font-black text-blue-600 tracking-tighter">{personalStats.monthly} <span className="text-xs font-normal text-slate-400">km</span></span>
@@ -954,7 +1001,15 @@ const App = () => {
                           <button onClick={() => handleEditLog(l)} className="text-slate-300 hover:text-blue-500 transition-colors p-2 bg-slate-50 rounded-xl">
                             <Edit size={16}/>
                           </button>
-                          <button onClick={() => { if(confirm('記録を削除しますか？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id))}} className="text-slate-300 hover:text-rose-500 transition-colors p-2 bg-slate-50 rounded-xl">
+                          {/* 修正箇所: confirmDialogを使用するように変更 */}
+                          <button onClick={() => setConfirmDialog({
+                            isOpen: true,
+                            message: 'この記録を削除しますか？',
+                            onConfirm: async () => {
+                              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id));
+                              setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
+                            }
+                          })} className="text-slate-300 hover:text-rose-500 transition-colors p-2 bg-slate-50 rounded-xl">
                             <Trash2 size={16}/>
                           </button>
                       </div>
@@ -984,7 +1039,7 @@ const App = () => {
           </button>
         </nav>
         
-        {/* Custom Confirmation Dialog */}
+        {/* Custom Confirmation Dialog (Coach & Runner Shared) */}
         {confirmDialog.isOpen && (
           <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
