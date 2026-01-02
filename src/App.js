@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc, updateDoc, getDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, LineChart, Line, Legend
 } from 'recharts';
 import { 
   Home, Plus, BarChart2, Users, Settings, LogOut, ChevronRight, 
@@ -25,6 +25,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'kswc-ekidenteam-distancerecords';
+
+// --- Colors for Charts ---
+const COLORS = ['#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#14b8a6'];
 
 // --- Helper: Date Quarter Calculation ---
 const calculateAutoQuarters = (startStr, endStr) => {
@@ -230,6 +233,7 @@ const App = () => {
     return appSettings.quarters || [];
   }, [appSettings]);
 
+  // Filter for active runners only
   const activeRunners = useMemo(() => {
     return allRunners.filter(r => r.status !== 'retired');
   }, [allRunners]);
@@ -333,7 +337,31 @@ const App = () => {
     return { matrix, totals, qTotals };
   }, [reportDates, activeRunners, allLogs, activeQuarters]);
 
-  // --- Missing Functions Restored ---
+  // --- Calculate Cumulative Data for Line Chart ---
+  const cumulativeData = useMemo(() => {
+    const data = [];
+    // Initialize with dates
+    reportDates.forEach(date => {
+      data.push({ date: date.slice(5).replace('-', '/') }); // Format MM/DD
+    });
+
+    // Calculate cumulative distance for each runner
+    activeRunners.forEach(r => {
+      let sum = 0;
+      reportDates.forEach((date, idx) => {
+        const dayLog = allLogs.find(l => l.runnerId === r.id && l.date === date);
+        const dist = dayLog ? (Number(dayLog.distance) || 0) : 0;
+        sum += dist;
+        // Add runner's cumulative data to the day's record
+        if (data[idx]) {
+          data[idx][r.id] = Math.round(sum * 10) / 10;
+        }
+      });
+    });
+    return data;
+  }, [reportDates, activeRunners, allLogs]);
+
+  // --- Helper Functions ---
   const updateGoals = async () => {
     const updates = {};
     if (goalInput.monthly) updates.goalMonthly = parseFloat(goalInput.monthly);
@@ -397,7 +425,6 @@ const App = () => {
     link.download = `ekiden_team_data.csv`;
     link.click();
   };
-  // --------------------------------
 
   const resetForm = () => {
     setFormData({
@@ -880,15 +907,12 @@ const App = () => {
                   <input type="number" className="w-full text-4xl font-black text-emerald-600 bg-slate-50 rounded-2xl p-5 outline-none border-2 border-transparent focus:border-emerald-100" placeholder={profile.goalPeriod} onChange={e => setGoalInput({...goalInput, period: e.target.value})} />
                 </div>
                 
-                {/* Quarter Goals Input */}
                 {activeQuarters.length > 0 && (
                   <div className="bg-slate-50 p-4 rounded-3xl">
-                    {/* 修正箇所: 安全な文字列操作 */}
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-left">Quarter Goals ({appSettings.startDate ? appSettings.startDate.slice(5) : ''}〜)</p>
                     <div className="grid grid-cols-2 gap-4">
                       {activeQuarters.map((q, idx) => (
                         <div key={idx} className="text-left">
-                          {/* 修正箇所: 安全な文字列操作 */}
                           <label className="text-[8px] font-bold text-slate-400 ml-1 block mb-1 truncate">
                             Q{idx+1} ({q.start ? q.start.slice(5).replace('-','/') : ''}〜)
                           </label>
@@ -1304,6 +1328,35 @@ const App = () => {
                     );
                   })}
                 </div>
+
+                {/* Cumulative Distance Trends */}
+                <div className="mt-8 pt-8 border-t-4 border-slate-100 page-break">
+                  <h3 className="font-black text-xs uppercase tracking-widest mb-4 text-center">Cumulative Distance Trends</h3>
+                  <div className="h-96 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={cumulativeData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
+                        <XAxis dataKey="date" tick={{fontSize: 10}} />
+                        <YAxis tick={{fontSize: 10}} />
+                        <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
+                        <Legend wrapperStyle={{fontSize: '10px', paddingTop: '10px'}} />
+                        {activeRunners.map((r, i) => (
+                          <Line 
+                            key={r.id} 
+                            type="monotone" 
+                            dataKey={r.id} 
+                            name={`${r.lastName} ${r.firstName}`}
+                            stroke={COLORS[i % COLORS.length]} 
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 6 }}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
               </div>
             </>
           )}
