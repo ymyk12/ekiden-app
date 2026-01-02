@@ -149,6 +149,16 @@ const App = () => {
 
   // 1. Auth & Initial Load
   useEffect(() => {
+    // Set Document Title
+    document.title = "KSWC Ekiden Team";
+
+    // Set Favicon (Running Shirt Emoji)
+    const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+    link.type = 'image/svg+xml';
+    link.rel = 'shortcut icon';
+    link.href = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎽</text></svg>`;
+    document.getElementsByTagName('head')[0].appendChild(link);
+
     const initAuth = async () => {
       try {
         await signInAnonymously(auth);
@@ -907,12 +917,15 @@ const App = () => {
                   <input type="number" className="w-full text-4xl font-black text-emerald-600 bg-slate-50 rounded-2xl p-5 outline-none border-2 border-transparent focus:border-emerald-100" placeholder={profile.goalPeriod} onChange={e => setGoalInput({...goalInput, period: e.target.value})} />
                 </div>
                 
+                {/* Quarter Goals Input */}
                 {activeQuarters.length > 0 && (
                   <div className="bg-slate-50 p-4 rounded-3xl">
+                    {/* 修正箇所: 安全な文字列操作 */}
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-left">Quarter Goals ({appSettings.startDate ? appSettings.startDate.slice(5) : ''}〜)</p>
                     <div className="grid grid-cols-2 gap-4">
                       {activeQuarters.map((q, idx) => (
                         <div key={idx} className="text-left">
+                          {/* 修正箇所: 安全な文字列操作 */}
                           <label className="text-[8px] font-bold text-slate-400 ml-1 block mb-1 truncate">
                             Q{idx+1} ({q.start ? q.start.slice(5).replace('-','/') : ''}〜)
                           </label>
