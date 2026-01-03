@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { 
   Home, Plus, BarChart2, Users, Settings, LogOut, ChevronRight, 
-  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus
+  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -109,6 +109,9 @@ const App = () => {
   
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
+  // 監督用: 未入力チェック日付
+  const [checkDate, setCheckDate] = useState(new Date().toLocaleDateString('sv-SE'));
 
   const [formData, setFormData] = useState({
     date: new Date().toLocaleDateString('sv-SE'), 
@@ -150,14 +153,7 @@ const App = () => {
   // 1. Auth & Initial Load
   useEffect(() => {
     // Set Document Title
-    document.title = "KSWC Ekiden Team";
-
-    // Set Favicon (Running Shirt Emoji)
-    const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
-    link.type = 'image/svg+xml';
-    link.rel = 'shortcut icon';
-    link.href = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎽</text></svg>`;
-    document.getElementsByTagName('head')[0].appendChild(link);
+    document.title = "KSWC-EkidenTeam";
 
     const initAuth = async () => {
       try {
@@ -227,7 +223,12 @@ const App = () => {
         if (!data.quarters) {
           data.quarters = calculateAutoQuarters(data.startDate, data.endDate);
         }
-        setAppSettings(data);
+        setAppSettings(prev => ({
+          ...prev,
+          ...data,
+          startDate: data.startDate || '',
+          endDate: data.endDate || ''
+        }));
       }
     });
 
@@ -370,6 +371,49 @@ const App = () => {
     });
     return data;
   }, [reportDates, activeRunners, allLogs]);
+
+  // --- Check List Data for Coach (Unsubmitted vs Rest vs Active) ---
+  const checkListData = useMemo(() => {
+    return activeRunners.map(runner => {
+      const log = allLogs.find(l => l.runnerId === runner.id && l.date === checkDate);
+      let status = 'unsubmitted'; // Default
+      let detail = '-';
+      
+      if (log) {
+        if (log.category === '完全休養' || Number(log.distance) === 0) {
+          status = 'rest';
+          detail = '休み';
+        } else {
+          status = 'active';
+          detail = `${log.distance}km`;
+        }
+      }
+      return { ...runner, status, detail };
+    });
+  }, [activeRunners, allLogs, checkDate]);
+
+
+  // --- Coach Stats Calculations ---
+  const coachStats = useMemo(() => {
+    // 1. Reporting Rate for Today
+    const todayStr = new Date().toLocaleDateString('sv-SE');
+    const reportedCount = activeRunners.filter(r => {
+      return allLogs.some(l => l.runnerId === r.id && l.date === todayStr);
+    }).length;
+    const reportRate = activeRunners.length > 0 ? Math.round((reportedCount / activeRunners.length) * 100) : 0;
+
+    // 2. Pain Alert (Latest log has pain >= 3)
+    const painAlertCount = activeRunners.filter(r => {
+      const runnerLogs = allLogs.filter(l => l.runnerId === r.id);
+      if (runnerLogs.length === 0) return false;
+      // Sort by date desc
+      runnerLogs.sort((a,b) => new Date(b.date) - new Date(a.date));
+      return runnerLogs[0].pain >= 3;
+    }).length;
+
+    return { reportRate, painAlertCount, reportedCount };
+  }, [activeRunners, allLogs]);
+
 
   // --- Helper Functions ---
   const updateGoals = async () => {
@@ -648,6 +692,48 @@ const App = () => {
     }
   };
 
+  // 選手用: 休養日登録 (確認ダイアログ版)
+  const confirmRestRegister = () => {
+    setConfirmDialog({
+      isOpen: true,
+      message: '今日を「完全休養」として記録しますか？',
+      onConfirm: async () => {
+        setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
+        await handleRestRegister();
+      }
+    });
+  };
+
+  const handleRestRegister = async () => {
+    setIsSubmitting(true);
+    try {
+      const dataToSave = {
+        date: formData.date, 
+        distance: 0,
+        category: '完全休養',
+        menuDetail: 'オフ',
+        rpe: 1,
+        pain: 1,
+        achieved: true,
+        runnerId: user.uid,
+        runnerName: `${profile.lastName} ${profile.firstName}`,
+      };
+      
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+          ...dataToSave,
+          createdAt: new Date().toISOString()
+      });
+      setSuccessMsg('休養日として記録しました');
+      resetForm();
+      setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500);
+    } catch(e) {
+      console.error(e);
+      setSuccessMsg("保存エラー");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleQuarterChange = (index, field, value) => {
     const newQuarters = [...appSettings.quarters];
     newQuarters[index] = { ...newQuarters[index], [field]: value };
@@ -672,7 +758,7 @@ const App = () => {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 text-white">
         <Trophy className="mb-6 text-blue-500 animate-bounce" size={60} />
-        <h1 className="text-4xl font-black italic tracking-tighter mb-12">KSWC EKIDEN TEAM</h1>
+        <h1 className="text-4xl font-black italic tracking-tighter mb-12">KSWC-EkidenTeam</h1>
         <div className="w-full max-w-xs space-y-4">
           <button onClick={() => setRole('registering')} className="w-full bg-blue-600 py-5 rounded-3xl font-black text-lg shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
             <UserPlus size={24}/> 初めての方 (新規登録)
@@ -998,21 +1084,67 @@ const App = () => {
                 {editingLogId ? "記録の編集" : "練習記録"}
               </h2>
               <div className="space-y-6">
-                <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1 rounded-2xl">
-                  {['朝練', '午前練', '午後練'].map(cat => (
-                    <button key={cat} onClick={() => setFormData({...formData, category: cat})} className={`py-3 rounded-[1.1rem] font-black text-[10px] uppercase transition-all ${formData.category === cat ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
-                      {cat}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">日付</label>
+                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-xs outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
+                  </div>
+                  <div className="space-y-1">
+                     {/* 修正: 「今日は休み」ボタンを日付の横などに配置すると収まりが良い */}
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">休憩</label>
+                    <button onClick={() => setConfirmDialog({
+                      isOpen: true,
+                      message: '今日を「完全休養」として記録しますか？',
+                      onConfirm: async () => {
+                        setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
+                        setIsSubmitting(true);
+                        try {
+                          const dataToSave = {
+                            date: formData.date, 
+                            distance: 0,
+                            category: '完全休養',
+                            menuDetail: 'オフ',
+                            rpe: 1,
+                            pain: 1,
+                            achieved: true,
+                            runnerId: user.uid,
+                            runnerName: `${profile.lastName} ${profile.firstName}`,
+                          };
+                          
+                          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+                              ...dataToSave,
+                              createdAt: new Date().toISOString()
+                          });
+                          setSuccessMsg('休養日として記録しました');
+                          resetForm();
+                          setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500);
+                        } catch(e) {
+                          console.error(e);
+                          setSuccessMsg("保存エラー");
+                        } finally {
+                          setIsSubmitting(false);
+                        }
+                      }
+                    })} disabled={isSubmitting} className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm border border-emerald-100 active:scale-95 transition-all">
+                      休養
                     </button>
-                  ))}
+                  </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">距離 (km)</label>
                     <input type="number" step="0.1" className="w-full p-4 bg-slate-50 rounded-2xl font-black text-2xl text-blue-600 outline-none" value={formData.distance} onChange={e => setFormData({...formData, distance: e.target.value})} placeholder="0.0"/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">日付</label>
-                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-xs outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">練習区分</label>
+                    <div className="grid grid-rows-3 gap-1 h-full">
+                       {['朝練', '午前練', '午後練'].map(cat => (
+                        <button key={cat} onClick={() => setFormData({...formData, category: cat})} className={`h-full rounded-lg font-bold text-[9px] uppercase transition-all ${formData.category === cat ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 
@@ -1171,7 +1303,7 @@ const App = () => {
 
         <main className="p-5 space-y-6 max-w-md mx-auto print:max-w-none print:p-0 print:w-full">
           <div className="flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-hidden print:hidden">
-            {['stats', 'report', 'menu', 'roster', 'settings'].map(t => (
+            {['stats', 'report', 'check', 'menu', 'roster', 'settings'].map(t => (
               <button key={t} onClick={() => setView(`coach-${t}`)} className={`flex-1 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${view === `coach-${t}` ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-400'}`}>{t}</button>
             ))}
           </div>
@@ -1180,7 +1312,10 @@ const App = () => {
             <div className="space-y-5 animate-in fade-in">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border-b-4 border-blue-500"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">Runners</p><p className="text-4xl font-black text-slate-800 text-center">{activeRunners.length}</p></div>
-                <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border-b-4 border-emerald-500"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">Total KM</p><p className="text-3xl font-black text-emerald-600 text-center">{reportMatrix.totals['TOTAL'] || 0} <span className="text-xs text-slate-400 font-bold tracking-normal uppercase">km</span></p></div>
+                <div className={`bg-white p-6 rounded-[2.5rem] shadow-sm border-b-4 ${coachStats.painAlertCount > 0 ? 'border-rose-500 bg-rose-50' : 'border-emerald-500'}`}>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">痛みアラート</p>
+                  <p className={`text-3xl font-black text-center ${coachStats.painAlertCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{coachStats.painAlertCount}<span className="text-xs text-slate-400 font-bold tracking-normal uppercase">名</span></p>
+                </div>
               </div>
 
               <div className="bg-white p-7 rounded-[3rem] shadow-sm">
@@ -1212,7 +1347,12 @@ const App = () => {
               <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border border-slate-100">
                 <div className="p-6 bg-slate-100 text-[10px] font-black uppercase tracking-widest border-b">Recent Activity</div>
                 <div className="divide-y divide-slate-50 max-h-[30rem] overflow-y-auto no-scrollbar">
-                  {allLogs.filter(l => !activeRunners.find(r => r.id === l.runnerId)?.status === 'retired').sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, 50).map(l => (
+                  {/* 修正: 確実に現役選手のログのみを表示 */}
+                  {allLogs
+                    .filter(l => activeRunners.some(r => r.id === l.runnerId))
+                    .sort((a,b)=>new Date(b.date)-new Date(a.date))
+                    .slice(0, 50)
+                    .map(l => (
                     <div key={l.id} className="p-6 flex flex-col gap-2">
                       <div className="flex justify-between items-start">
                         <div className="flex gap-4 items-center">
@@ -1372,6 +1512,71 @@ const App = () => {
 
               </div>
             </>
+          )}
+
+          {view === 'coach-check' && (
+            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Status Check</h3>
+              
+              <div className="flex flex-col items-center mb-6 gap-4">
+                 <input type="date" className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500" value={checkDate} onChange={e => setCheckDate(e.target.value)} />
+                 
+                 {/* 報告率表示エリアを追加 */}
+                 <div className="grid grid-cols-2 gap-4 w-full">
+                    <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center">
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出率</span>
+                       <div className="flex items-end gap-1">
+                          <span className="text-3xl font-black text-blue-600">
+                            {checkListData.length > 0 
+                              ? Math.round((checkListData.filter(r => r.status !== 'unsubmitted').length / checkListData.length) * 100) 
+                              : 0}
+                          </span>
+                          <span className="text-xs font-bold text-slate-400 mb-1">%</span>
+                       </div>
+                    </div>
+                    <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center">
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span>
+                       <div className="flex items-end gap-1">
+                          <span className="text-3xl font-black text-emerald-600">{checkListData.filter(r => r.status !== 'unsubmitted').length}</span>
+                          <span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {checkListData.map(r => (
+                  <div key={r.id} className="py-4 flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${r.status === 'active' ? 'bg-blue-500' : r.status === 'rest' ? 'bg-emerald-400' : 'bg-rose-400'}`}>
+                        {r.lastName.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p>
+                      </div>
+                    </div>
+                    <div>
+                      {r.status === 'active' && (
+                        <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
+                          <Check size={12}/> {r.detail}
+                        </span>
+                      )}
+                      {r.status === 'rest' && (
+                        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
+                          {/* 修正箇所: コーヒーアイコンを削除 */}
+                          {r.detail}
+                        </span>
+                      )}
+                      {r.status === 'unsubmitted' && (
+                        <span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
+                          <AlertTriangle size={12}/> 未提出
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {view === 'coach-menu' && (
