@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { 
   Home, Plus, BarChart2, Users, Settings, LogOut, ChevronRight, 
-  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check
+  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -123,7 +123,8 @@ const App = () => {
     achieved: true,
     lastName: '',
     firstName: '',
-    teamPass: ''
+    teamPass: '',
+    personalPin: ''
   });
 
   const [menuInput, setMenuInput] = useState({ date: new Date().toLocaleDateString('sv-SE'), text: '' });
@@ -153,7 +154,7 @@ const App = () => {
   // 1. Auth & Initial Load
   useEffect(() => {
     // Set Document Title
-    document.title = "KSWC-EkidenTeam";
+    document.title = "KCTF-EkidenTeam";
 
     const initAuth = async () => {
       try {
@@ -491,7 +492,8 @@ const App = () => {
       achieved: true,
       lastName: '',
       firstName: '',
-      teamPass: ''
+      teamPass: '',
+      personalPin: ''
     });
     setEditingLogId(null);
   };
@@ -507,12 +509,19 @@ const App = () => {
     setIsMenuOpen(false); 
   };
 
+  // --- 新規登録（PINあり・重複チェックあり） ---
   const handleRegister = async () => {
     setErrorMsg(''); 
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
     
+    // チームコードチェック
     if (formData.teamPass !== appSettings.teamPass) {
-      setErrorMsg("チームパスコードが間違っています。監督に確認してください。");
+      setErrorMsg("チームパスコードが間違っています。");
+      return;
+    }
+    // PINチェック（4桁数字）
+    if (!formData.personalPin || !/^\d{4}$/.test(formData.personalPin)) {
+      setErrorMsg("個人パスコードは4桁の数字で設定してください。");
       return;
     }
 
@@ -520,17 +529,25 @@ const App = () => {
 
     try {
       const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners');
-      // 1. 同姓同名の過去データを検索（現在のID以外）
+      
+      // 1. 同姓同名チェック
       const q = query(
         runnersRef, 
         where("lastName", "==", formData.lastName.trim()),
         where("firstName", "==", formData.firstName.trim())
       );
-      
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
         setErrorMsg("すでに登録があります。「2回目以降」からログインしてください。");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. PIN重複チェック (Activeな部員のみ)
+      const isPinTaken = allRunners.some(r => r.status !== 'retired' && r.pin === formData.personalPin);
+      if (isPinTaken) {
+        setErrorMsg("そのパスコードは既に使用されています。別の数字にしてください。");
         setIsSubmitting(false);
         return;
       }
@@ -541,6 +558,7 @@ const App = () => {
         goalMonthly: 0, 
         goalPeriod: 200, 
         status: 'active',
+        pin: formData.personalPin, // PIN保存
         registeredAt: new Date().toISOString()
       };
 
@@ -559,12 +577,16 @@ const App = () => {
     }
   };
 
+  // --- ログイン（PIN認証・引き継ぎ） ---
   const handleLogin = async () => {
     setErrorMsg('');
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
     
-    if (formData.teamPass !== appSettings.teamPass) {
-      setErrorMsg("チームパスコードが間違っています。");
+    // ログイン時はチームコード不要（削除）
+    
+    // ログイン時もPIN形式チェック
+    if (!formData.personalPin || !/^\d{4}$/.test(formData.personalPin)) {
+      setErrorMsg("個人パスコード(4桁の数字)を入力してください。");
       return;
     }
 
@@ -588,19 +610,33 @@ const App = () => {
 
       let oldProfile = null;
       let oldId = null;
+      let targetDoc = null;
       
+      // 同姓同名のデータを探す
       const sameIdDoc = querySnapshot.docs.find(d => d.id === user.uid);
-      
       if (sameIdDoc) {
-        setProfile(sameIdDoc.data());
+          targetDoc = sameIdDoc;
       } else {
-        const oldDoc = querySnapshot.docs[0];
-        oldProfile = oldDoc.data();
-        oldId = oldDoc.id;
+          targetDoc = querySnapshot.docs[0];
+      }
+      
+      oldProfile = targetDoc.data();
+      oldId = targetDoc.id;
 
+      // --- PIN認証ロジック ---
+      // 既存データにPINがある場合 -> 一致チェック
+      if (oldProfile.pin && oldProfile.pin !== formData.personalPin) {
+        setErrorMsg("個人パスコードが間違っています。");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // データ移行が必要か？（IDが変わっている場合）
+      if (oldId !== user.uid) {
         await setDoc(doc(runnersRef, user.uid), {
           ...oldProfile,
-          status: 'active' 
+          status: 'active',
+          pin: oldProfile.pin || formData.personalPin 
         });
 
         const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'logs');
@@ -618,13 +654,19 @@ const App = () => {
         });
         
         batch.delete(doc(runnersRef, oldId));
+        
         await batch.commit();
+        setProfile({ ...oldProfile, pin: formData.personalPin });
+      } else {
+        if (!oldProfile.pin) {
+           await updateDoc(doc(runnersRef, user.uid), { pin: formData.personalPin });
+        }
         setProfile(oldProfile);
-        setSuccessMsg('データ復元完了！');
       }
 
       setRole('runner'); 
       setView('menu');
+      setSuccessMsg('ログイン完了');
       setTimeout(() => setSuccessMsg(''), 3000);
 
     } catch (e) {
@@ -758,7 +800,7 @@ const App = () => {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 text-white">
         <Trophy className="mb-6 text-blue-500 animate-bounce" size={60} />
-        <h1 className="text-4xl font-black italic tracking-tighter mb-12">KSWC-EkidenTeam</h1>
+        <h1 className="text-4xl font-black italic tracking-tighter mb-12">KCTF-EkidenTeam</h1>
         <div className="w-full max-w-xs space-y-4">
           <button onClick={() => setRole('registering')} className="w-full bg-blue-600 py-5 rounded-3xl font-black text-lg shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
             <UserPlus size={24}/> 初めての方 (新規登録)
@@ -786,9 +828,9 @@ const App = () => {
     );
   }
 
-  // --- 新規登録画面 ---
+  // --- 新規登録画面 (PINあり) ---
   if (role === 'registering') {
-    const isReady = formData.lastName && formData.firstName && formData.teamPass;
+    const isReady = formData.lastName && formData.firstName && formData.teamPass && formData.personalPin.length === 4;
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="w-full max-w-sm bg-white p-10 rounded-[3rem] shadow-2xl space-y-6">
@@ -802,6 +844,13 @@ const App = () => {
                 <input type="text" placeholder="チームパスコード" className={`w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ${errorMsg ? 'ring-rose-500' : 'ring-blue-500'}`} value={formData.teamPass} onChange={e => setFormData({...formData, teamPass: e.target.value})} />
                 <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 ${errorMsg ? 'text-rose-500' : 'text-slate-400'}`} size={20}/>
               </div>
+              
+              <div className="relative">
+                 <input type="tel" maxLength={4} placeholder="個人パスコード(数字4桁)" className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500" value={formData.personalPin} onChange={e => setFormData({...formData, personalPin: e.target.value.replace(/[^0-9]/g, '')})} />
+                 <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20}/>
+              </div>
+              <p className="text-[10px] text-slate-400 font-bold ml-2">※ログイン時に必要になります。忘れないでください。</p>
+
               {errorMsg && (
                 <div className="flex items-center gap-2 text-rose-500 px-2 animate-in slide-in-from-left-2">
                   <AlertCircle size={14} />
@@ -824,9 +873,9 @@ const App = () => {
     );
   }
 
-  // --- ログイン（引き継ぎ）画面 ---
+  // --- ログイン画面 (PINあり) ---
   if (role === 'login') {
-    const isReady = formData.lastName && formData.firstName && formData.teamPass;
+    const isReady = formData.lastName && formData.firstName && formData.personalPin.length === 4;
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="w-full max-w-sm bg-white p-10 rounded-[3rem] shadow-2xl space-y-6">
@@ -838,9 +887,10 @@ const App = () => {
             
             <div className="space-y-2">
               <div className="relative">
-                <input type="text" placeholder="チームパスコード" className={`w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ${errorMsg ? 'ring-rose-500' : 'ring-emerald-500'}`} value={formData.teamPass} onChange={e => setFormData({...formData, teamPass: e.target.value})} />
-                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 ${errorMsg ? 'text-rose-500' : 'text-slate-400'}`} size={20}/>
+                 <input type="tel" maxLength={4} placeholder="個人パスコード(数字4桁)" className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500" value={formData.personalPin} onChange={e => setFormData({...formData, personalPin: e.target.value.replace(/[^0-9]/g, '')})} />
+                 <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20}/>
               </div>
+
               {errorMsg && (
                 <div className="flex items-center gap-2 text-rose-500 px-2 animate-in slide-in-from-left-2">
                   <AlertCircle size={14} />
@@ -854,7 +904,7 @@ const App = () => {
               disabled={!isReady || isSubmitting} 
               className={`w-full py-4 rounded-2xl font-bold text-lg shadow-xl transition-all ${isReady ? 'bg-emerald-600 text-white active:scale-95' : 'bg-slate-200 text-slate-400'}`}
             >
-              {isSubmitting ? '検索中...' : 'データを復元して開始'}
+              {isSubmitting ? '検索中...' : '開始'}
             </button>
             <button onClick={() => setRole(null)} className="w-full text-slate-400 font-bold uppercase text-xs text-center">キャンセル</button>
           </div>
@@ -864,6 +914,7 @@ const App = () => {
   }
 
   // --- RUNNER VIEW ---
+  // ... (Header)
   if (role === 'runner' && profile) {
     if (!profile) return <div className="h-screen flex items-center justify-center text-slate-400 font-bold">Loading...</div>;
 
@@ -1347,7 +1398,7 @@ const App = () => {
               <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border border-slate-100">
                 <div className="p-6 bg-slate-100 text-[10px] font-black uppercase tracking-widest border-b">Recent Activity</div>
                 <div className="divide-y divide-slate-50 max-h-[30rem] overflow-y-auto no-scrollbar">
-                  {/* 修正: 確実に現役選手のログのみを表示 */}
+                  {/* 修正: 確実に現役選手のログのみを表示（IDリストとの突合） */}
                   {allLogs
                     .filter(l => activeRunners.some(r => r.id === l.runnerId))
                     .sort((a,b)=>new Date(b.date)-new Date(a.date))
@@ -1521,7 +1572,7 @@ const App = () => {
               <div className="flex flex-col items-center mb-6 gap-4">
                  <input type="date" className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500" value={checkDate} onChange={e => setCheckDate(e.target.value)} />
                  
-                 {/* 報告率表示エリアを追加 */}
+                 {/* 報告率表示エリア */}
                  <div className="grid grid-cols-2 gap-4 w-full">
                     <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center">
                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出率</span>
@@ -1605,6 +1656,8 @@ const App = () => {
                         <div>
                           <p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p>
                           <p className="text-[10px] text-slate-400 font-bold">Goal: {r.goalMonthly}km/mo</p>
+                          {/* 監督用: PIN表示 */}
+                          <p className="text-[10px] text-slate-300 font-mono">PIN: {r.pin || '未設定'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
