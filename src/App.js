@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { 
   Home, Plus, BarChart2, Users, Settings, LogOut, ChevronRight, 
-  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound
+  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound, ArrowLeft, Save
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -107,6 +107,10 @@ const App = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingLogId, setEditingLogId] = useState(null);
   
+  // 監督用: 個別編集
+  const [selectedRunner, setSelectedRunner] = useState(null);
+  const [coachEditFormData, setCoachEditFormData] = useState({});
+
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
@@ -133,7 +137,7 @@ const App = () => {
   // Print Styles
   const printStyles = `
     @media print {
-      @page { size: landscape; margin: 10mm; }
+      @page { size: A4 landscape; margin: 10mm; }
       body { background-color: white !important; -webkit-print-color-adjust: exact; }
       body * { visibility: hidden; }
       #printable-report, #printable-report * { visibility: visible; }
@@ -147,13 +151,31 @@ const App = () => {
         background-color: white !important;
       }
       .no-print { display: none !important; }
-      .recharts-responsive-container { width: 100% !important; height: auto !important; }
+      
+      /* グラフレイアウト修正: 印刷時は縦積み・改ページ禁止 */
+      .print-chart-container {
+        width: 100% !important;
+        page-break-inside: avoid;
+        margin-bottom: 30px;
+        display: block !important;
+      }
+      
+      /* グラフの高さを確保 */
+      .recharts-responsive-container {
+        width: 100% !important;
+        height: 350px !important;
+      }
+      
+      /* グリッドレイアウトを解除 */
+      .print-block {
+        display: block !important;
+        grid-template-columns: none !important;
+      }
     }
   `;
 
   // 1. Auth & Initial Load
   useEffect(() => {
-    // Set Document Title
     document.title = "KCTF-EkidenTeam";
 
     const initAuth = async () => {
@@ -170,7 +192,9 @@ const App = () => {
       if (u) {
         setUser(u);
       } else {
+        setUser(null);
         setLoading(false);
+        signInAnonymously(auth).catch(e => console.error(e));
       }
     });
     return () => unsub();
@@ -209,6 +233,11 @@ const App = () => {
       if (myP) { 
         setProfile(myP); 
         setRole(prev => (prev === 'coach' ? 'coach' : 'runner')); 
+      } else {
+        setProfile(null);
+        if (role !== 'coach' && role !== 'registering' && role !== 'login' && role !== 'coach-auth') {
+           setRole(null);
+        }
       }
       setLoading(false);
       clearTimeout(timeout);
@@ -320,9 +349,27 @@ const App = () => {
     const matrix = reportDates.map(date => {
       const row = { date };
       runnerIds.forEach(id => {
+        // Find logs for this runner and date
         const logs = allLogs.filter(l => l.runnerId === id && l.date === date);
-        const total = logs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
-        row[id] = total > 0 ? Math.round(total * 10) / 10 : '-';
+        
+        if (logs.length === 0) {
+          // 未入力
+          row[id] = '未';
+        } else {
+          // ログがある場合
+          const total = logs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+          
+          if (logs.some(l => l.category === '完全休養')) {
+            // 休養タグがある場合（優先）
+            row[id] = '休';
+          } else if (total === 0) {
+            // 距離0だが休養タグがない場合（念のため）
+            row[id] = '0';
+          } else {
+            // 通常の走行距離
+            row[id] = Math.round(total * 10) / 10;
+          }
+        }
       });
       return row;
     });
@@ -442,7 +489,7 @@ const App = () => {
     const dataRows = reportMatrix.matrix.map(row => {
       const rowData = [row.date.slice(5).replace('-','/')];
       runnerIds.forEach(id => {
-        rowData.push(row[id] !== '-' ? row[id] : '');
+        rowData.push(row[id] !== '-' ? row[id] : ''); // CSV export also supports new string values
       });
       return rowData;
     });
@@ -503,39 +550,37 @@ const App = () => {
     setView(newView);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut(auth); // Firebaseからサインアウト
     setRole(null);
+    setProfile(null);
     setView('menu'); 
     setIsMenuOpen(false); 
   };
 
-  // --- 新規登録（PINあり・重複チェックあり） ---
+  // --- 新規登録（上書き防止チェック付き） ---
   const handleRegister = async () => {
     setErrorMsg(''); 
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
-    
-    // チームコードチェック
-    if (formData.teamPass !== appSettings.teamPass) {
-      setErrorMsg("チームパスコードが間違っています。");
-      return;
-    }
-    // PINチェック（4桁数字）
-    if (!formData.personalPin || !/^\d{4}$/.test(formData.personalPin)) {
-      setErrorMsg("個人パスコードは4桁の数字で設定してください。");
-      return;
-    }
+    if (formData.teamPass !== appSettings.teamPass) { setErrorMsg("チームパスコードが間違っています。"); return; }
+    if (!formData.personalPin || !/^\d{4}$/.test(formData.personalPin)) { setErrorMsg("個人パスコードは4桁の数字で設定してください。"); return; }
 
     setIsSubmitting(true);
 
     try {
       const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners');
       
-      // 1. 同姓同名チェック
-      const q = query(
-        runnersRef, 
-        where("lastName", "==", formData.lastName.trim()),
-        where("firstName", "==", formData.firstName.trim())
-      );
+      const currentDocSnap = await getDoc(doc(runnersRef, user.uid));
+      if (currentDocSnap.exists()) {
+        const currentData = currentDocSnap.data();
+        if (currentData.lastName !== formData.lastName.trim() || currentData.firstName !== formData.firstName.trim()) {
+           setErrorMsg("前の利用者のデータが残っています。一度アプリを再読み込みするか、ブラウザを閉じてください。");
+           await signOut(auth);
+           return;
+        }
+      }
+
+      const q = query(runnersRef, where("lastName", "==", formData.lastName.trim()), where("firstName", "==", formData.firstName.trim()));
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
@@ -544,13 +589,8 @@ const App = () => {
         return;
       }
 
-      // 2. PIN重複チェック (Activeな部員のみ)
       const isPinTaken = allRunners.some(r => r.status !== 'retired' && r.pin === formData.personalPin);
-      if (isPinTaken) {
-        setErrorMsg("そのパスコードは既に使用されています。別の数字にしてください。");
-        setIsSubmitting(false);
-        return;
-      }
+      if (isPinTaken) { setErrorMsg("そのパスコードは既に使用されています。別の数字にしてください。"); setIsSubmitting(false); return; }
 
       const newProfile = {
         lastName: formData.lastName.trim(), 
@@ -558,7 +598,7 @@ const App = () => {
         goalMonthly: 0, 
         goalPeriod: 200, 
         status: 'active',
-        pin: formData.personalPin, // PIN保存
+        pin: formData.personalPin, 
         registeredAt: new Date().toISOString()
       };
 
@@ -577,29 +617,28 @@ const App = () => {
     }
   };
 
-  // --- ログイン（PIN認証・引き継ぎ） ---
+  // --- ログイン（上書き防止チェック付き） ---
   const handleLogin = async () => {
     setErrorMsg('');
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
-    
-    // ログイン時はチームコード不要（削除）
-    
-    // ログイン時もPIN形式チェック
-    if (!formData.personalPin || !/^\d{4}$/.test(formData.personalPin)) {
-      setErrorMsg("個人パスコード(4桁の数字)を入力してください。");
-      return;
-    }
+    if (!formData.personalPin || !/^\d{4}$/.test(formData.personalPin)) { setErrorMsg("個人パスコード(4桁の数字)を入力してください。"); return; }
 
     setIsSubmitting(true);
 
     try {
       const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners');
-      const q = query(
-        runnersRef, 
-        where("lastName", "==", formData.lastName.trim()),
-        where("firstName", "==", formData.firstName.trim())
-      );
-      
+
+      const currentDocSnap = await getDoc(doc(runnersRef, user.uid));
+      if (currentDocSnap.exists()) {
+        const currentData = currentDocSnap.data();
+        if (currentData.lastName !== formData.lastName.trim() || currentData.firstName !== formData.firstName.trim()) {
+           setErrorMsg("前の利用者のデータが残っています。一度アプリを再読み込みするか、ブラウザを閉じてください。");
+           await signOut(auth);
+           return;
+        }
+      }
+
+      const q = query(runnersRef, where("lastName", "==", formData.lastName.trim()), where("firstName", "==", formData.firstName.trim()));
       const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
@@ -610,57 +649,30 @@ const App = () => {
 
       let oldProfile = null;
       let oldId = null;
-      let targetDoc = null;
-      
-      // 同姓同名のデータを探す
       const sameIdDoc = querySnapshot.docs.find(d => d.id === user.uid);
-      if (sameIdDoc) {
-          targetDoc = sameIdDoc;
-      } else {
-          targetDoc = querySnapshot.docs[0];
-      }
+      const targetDoc = sameIdDoc || querySnapshot.docs[0];
       
       oldProfile = targetDoc.data();
       oldId = targetDoc.id;
 
-      // --- PIN認証ロジック ---
-      // 既存データにPINがある場合 -> 一致チェック
       if (oldProfile.pin && oldProfile.pin !== formData.personalPin) {
         setErrorMsg("個人パスコードが間違っています。");
         setIsSubmitting(false);
         return;
       }
 
-      // データ移行が必要か？（IDが変わっている場合）
       if (oldId !== user.uid) {
-        await setDoc(doc(runnersRef, user.uid), {
-          ...oldProfile,
-          status: 'active',
-          pin: oldProfile.pin || formData.personalPin 
-        });
-
+        await setDoc(doc(runnersRef, user.uid), { ...oldProfile, status: 'active', pin: oldProfile.pin || formData.personalPin });
         const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'logs');
         const oldLogsQuery = query(logsRef, where("runnerId", "==", oldId));
         const oldLogsSnap = await getDocs(oldLogsQuery);
-
         const batch = writeBatch(db);
-        oldLogsSnap.forEach((logDoc) => {
-          const newLogRef = doc(logsRef); 
-          batch.set(newLogRef, {
-            ...logDoc.data(),
-            runnerId: user.uid 
-          });
-          batch.delete(logDoc.ref);
-        });
-        
+        oldLogsSnap.forEach((logDoc) => { const newLogRef = doc(logsRef); batch.set(newLogRef, { ...logDoc.data(), runnerId: user.uid }); batch.delete(logDoc.ref); });
         batch.delete(doc(runnersRef, oldId));
-        
         await batch.commit();
         setProfile({ ...oldProfile, pin: formData.personalPin });
       } else {
-        if (!oldProfile.pin) {
-           await updateDoc(doc(runnersRef, user.uid), { pin: formData.personalPin });
-        }
+        if (!oldProfile.pin) { await updateDoc(doc(runnersRef, user.uid), { pin: formData.personalPin }); }
         setProfile(oldProfile);
       }
 
@@ -677,121 +689,38 @@ const App = () => {
     }
   };
 
-  const handleEditLog = (log) => {
-    setFormData({
-      date: log.date,
-      distance: log.distance,
-      category: log.category,
-      menuDetail: log.menuDetail || '',
-      rpe: log.rpe,
-      pain: log.pain,
-      achieved: log.achieved,
-      lastName: '', 
-      firstName: '',
-      teamPass: ''
+  const handleCoachEditRunner = (runner) => {
+    setSelectedRunner(runner);
+    setCoachEditFormData({
+      lastName: runner.lastName,
+      firstName: runner.firstName,
+      pin: runner.pin || ''
     });
-    setEditingLogId(log.id);
-    setView('entry');
+    setView('coach-runner-detail');
   };
 
-  const handleSaveLog = async () => {
-    if (!formData.distance) return;
-    setIsSubmitting(true);
+  const handleCoachSaveProfile = async () => {
+    if(!selectedRunner) return;
     try {
-      const dataToSave = {
-        date: formData.date,
-        distance: parseFloat(formData.distance),
-        category: formData.category,
-        menuDetail: formData.menuDetail,
-        rpe: formData.rpe,
-        pain: formData.pain,
-        achieved: formData.achieved,
-        runnerId: user.uid,
-        runnerName: `${profile.lastName} ${profile.firstName}`,
-      };
-
-      if (editingLogId) {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), {
-          ...dataToSave,
-          updatedAt: new Date().toISOString()
-        });
-        setSuccessMsg('記録を更新しました');
-      } else {
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
-          ...dataToSave,
-          createdAt: new Date().toISOString()
-        });
-        setSuccessMsg('記録を保存しました');
-      }
-      
-      resetForm();
-      setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500);
-    } catch (e) {
-      console.error(e);
-      setSuccessMsg("保存エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 選手用: 休養日登録 (確認ダイアログ版)
-  const confirmRestRegister = () => {
-    setConfirmDialog({
-      isOpen: true,
-      message: '今日を「完全休養」として記録しますか？',
-      onConfirm: async () => {
-        setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-        await handleRestRegister();
-      }
-    });
-  };
-
-  const handleRestRegister = async () => {
-    setIsSubmitting(true);
-    try {
-      const dataToSave = {
-        date: formData.date, 
-        distance: 0,
-        category: '完全休養',
-        menuDetail: 'オフ',
-        rpe: 1,
-        pain: 1,
-        achieved: true,
-        runnerId: user.uid,
-        runnerName: `${profile.lastName} ${profile.firstName}`,
-      };
-      
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
-          ...dataToSave,
-          createdAt: new Date().toISOString()
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), {
+        lastName: coachEditFormData.lastName,
+        firstName: coachEditFormData.firstName,
+        pin: coachEditFormData.pin
       });
-      setSuccessMsg('休養日として記録しました');
-      resetForm();
-      setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500);
+      setSuccessMsg('プロフィールを更新しました');
+      setTimeout(()=>setSuccessMsg(''), 2000);
     } catch(e) {
-      console.error(e);
-      setSuccessMsg("保存エラー");
-    } finally {
-      setIsSubmitting(false);
+      alert("更新エラー: " + e.message);
     }
   };
 
-  const handleQuarterChange = (index, field, value) => {
-    const newQuarters = [...appSettings.quarters];
-    newQuarters[index] = { ...newQuarters[index], [field]: value };
-    setAppSettings(prev => ({ ...prev, quarters: newQuarters }));
-  };
+  const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: user.uid, runnerName: `${profile.lastName} ${profile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, updatedAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
+  const confirmRestRegister = () => { setConfirmDialog({ isOpen: true, message: '今日を「完全休養」として記録しますか？', onConfirm: async () => { setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); await handleRestRegister(); } }); };
+  const handleRestRegister = async () => { setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: 0, category: '完全休養', menuDetail: 'オフ', rpe: 1, pain: 1, achieved: true, runnerId: user.uid, runnerName: `${profile.lastName} ${profile.firstName}`, }; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('休養日として記録しました'); resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch(e) { console.error(e); setSuccessMsg("保存エラー"); } finally { setIsSubmitting(false); } };
 
-  const handleAutoFillQuarters = () => {
-    const newQuarters = calculateAutoQuarters(appSettings.startDate, appSettings.endDate);
-    setAppSettings(prev => ({ ...prev, quarters: newQuarters }));
-  };
-
-  const isCurrentQuarter = (q) => {
-    if (!q || !q.start || !q.end) return false;
-    const now = new Date().toLocaleDateString('sv-SE');
-    return now >= q.start && now <= q.end;
-  };
+  const handleQuarterChange = (index, field, value) => { const newQuarters = [...appSettings.quarters]; newQuarters[index] = { ...newQuarters[index], [field]: value }; setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
+  const handleAutoFillQuarters = () => { const newQuarters = calculateAutoQuarters(appSettings.startDate, appSettings.endDate); setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
+  const isCurrentQuarter = (q) => { if (!q || !q.start || !q.end) return false; const now = new Date().toLocaleDateString('sv-SE'); return now >= q.start && now <= q.end; };
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div></div>;
 
@@ -816,6 +745,7 @@ const App = () => {
     );
   }
 
+  // (Coach Auth, Registering, Login, Runner View are same as before)
   if (role === 'coach-auth') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
@@ -828,7 +758,6 @@ const App = () => {
     );
   }
 
-  // --- 新規登録画面 (PINあり) ---
   if (role === 'registering') {
     const isReady = formData.lastName && formData.firstName && formData.teamPass && formData.personalPin.length === 4;
     return (
@@ -873,7 +802,6 @@ const App = () => {
     );
   }
 
-  // --- ログイン画面 (PINあり) ---
   if (role === 'login') {
     const isReady = formData.lastName && formData.firstName && formData.personalPin.length === 4;
     return (
@@ -914,7 +842,6 @@ const App = () => {
   }
 
   // --- RUNNER VIEW ---
-  // ... (Header)
   if (role === 'runner' && profile) {
     if (!profile) return <div className="h-screen flex items-center justify-center text-slate-400 font-bold">Loading...</div>;
 
@@ -1398,7 +1325,7 @@ const App = () => {
               <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border border-slate-100">
                 <div className="p-6 bg-slate-100 text-[10px] font-black uppercase tracking-widest border-b">Recent Activity</div>
                 <div className="divide-y divide-slate-50 max-h-[30rem] overflow-y-auto no-scrollbar">
-                  {/* 修正: 確実に現役選手のログのみを表示（IDリストとの突合） */}
+                  {/* 修正: 現役選手のIDリストに含まれるログのみをフィルタリングして表示 */}
                   {allLogs
                     .filter(l => activeRunners.some(r => r.id === l.runnerId))
                     .sort((a,b)=>new Date(b.date)-new Date(a.date))
@@ -1443,7 +1370,7 @@ const App = () => {
                   </div>
                 </div>
 
-                {/* Data Matrix */}
+                {/* Data Matrix - Modified for Status Display */}
                 <div className="overflow-x-auto pb-4">
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -1460,11 +1387,21 @@ const App = () => {
                       {reportMatrix.matrix.map((row, i) => (
                         <tr key={row.date} className={i % 2 === 0 ? 'bg-slate-50/50' : ''}>
                           <td className="p-2 border-b border-slate-50 font-bold text-slate-500 whitespace-nowrap">{row.date.slice(5).replace('-','/')}</td>
-                          {activeRunners.map(r => (
-                            <td key={r.id} className="p-2 border-b border-slate-50 text-center font-bold text-slate-700">
-                              {row[r.id] !== '-' ? <span className="text-blue-600">{row[r.id]}</span> : <span className="text-slate-200">-</span>}
-                            </td>
-                          ))}
+                          {activeRunners.map(r => {
+                            const val = row[r.id];
+                            // セルの内容に応じた色分け
+                            let cellClass = "p-2 border-b border-slate-50 text-center font-bold ";
+                            if (val === '未') cellClass += "text-rose-400 bg-rose-50/50";
+                            else if (val === '休') cellClass += "text-emerald-500";
+                            else if (val === '0') cellClass += "text-slate-300";
+                            else cellClass += "text-blue-600";
+
+                            return (
+                              <td key={r.id} className={cellClass}>
+                                {val}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                       {/* Footer: Totals */}
@@ -1492,8 +1429,8 @@ const App = () => {
                 </div>
 
                 {/* Charts Section for Report */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t-4 border-slate-100 print:grid-cols-2">
-                  <div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t-4 border-slate-100 print:block">
+                  <div className="print-chart-container">
                     <h3 className="font-black text-xs uppercase tracking-widest mb-4 text-center">Total Distance</h3>
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
@@ -1516,7 +1453,7 @@ const App = () => {
                       return { name: r.lastName, total: Math.round(total * 10) / 10 };
                     });
                     return (
-                      <div key={idx}>
+                      <div key={idx} className="print-chart-container">
                         <h3 className="font-black text-xs uppercase tracking-widest mb-4 text-center">Q{idx + 1} ({q.start.slice(5)} - {q.end.slice(5)})</h3>
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
@@ -1534,7 +1471,7 @@ const App = () => {
                 </div>
 
                 {/* Cumulative Distance Trends */}
-                <div className="mt-8 pt-8 border-t-4 border-slate-100 page-break">
+                <div className="mt-8 pt-8 border-t-4 border-slate-100 page-break print-chart-container">
                   <h3 className="font-black text-xs uppercase tracking-widest mb-4 text-center">Cumulative Distance Trends</h3>
                   <div className="h-96 w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1650,7 +1587,7 @@ const App = () => {
                 <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><UserCheck size={16}/> Active Members ({activeRunners.length})</h4>
                 <div className="divide-y divide-slate-100">
                   {activeRunners.map(r => (
-                    <div key={r.id} className="py-4 flex items-center justify-between group">
+                    <div key={r.id} className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2" onClick={() => handleCoachEditRunner(r)}>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">{r.lastName.charAt(0)}</div>
                         <div>
@@ -1661,20 +1598,7 @@ const App = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => setConfirmDialog({
-                            isOpen: true,
-                            message: `${r.lastName}選手を引退(リストから除外)させますか？`,
-                            onConfirm: async () => {
-                              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id), { status: 'retired' });
-                              setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                            }
-                          })}
-                          className="bg-slate-100 text-slate-400 p-2 rounded-xl hover:bg-slate-200 hover:text-slate-600 transition-colors"
-                          title="引退へ移動"
-                        >
-                          <UserMinus size={18}/>
-                        </button>
+                        <ChevronRight className="text-slate-300" size={20}/>
                       </div>
                     </div>
                   ))}
@@ -1728,6 +1652,102 @@ const App = () => {
                   ))}
                   {allRunners.filter(r => r.status === 'retired').length === 0 && (
                     <p className="text-[10px] text-slate-300 italic py-2">引退した選手はいません</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {view === 'coach-runner-detail' && selectedRunner && (
+            <div className="space-y-6 animate-in slide-in-from-right-10">
+              {/* Header */}
+              <div className="flex items-center gap-4 bg-white p-4 rounded-3xl shadow-sm">
+                <button onClick={() => setView('coach-roster')} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors">
+                  <ArrowLeft size={20} className="text-slate-600"/>
+                </button>
+                <h3 className="font-black text-lg text-slate-800">{selectedRunner.lastName} {selectedRunner.firstName}</h3>
+              </div>
+
+              {/* Profile Edit Card */}
+              <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4">
+                <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Settings size={14}/> Profile Settings</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 ml-1">苗字</label>
+                    <input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.lastName} onChange={e => setCoachEditFormData({...coachEditFormData, lastName: e.target.value})}/>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 ml-1">名前</label>
+                    <input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.firstName} onChange={e => setCoachEditFormData({...coachEditFormData, firstName: e.target.value})}/>
+                  </div>
+                </div>
+                <div>
+                   <label className="text-[10px] font-bold text-slate-400 ml-1">PIN (パスコード)</label>
+                   <div className="relative">
+                     <input type="tel" maxLength={4} className="w-full p-3 pl-10 bg-slate-50 rounded-xl font-mono font-bold text-lg outline-none border border-slate-100 focus:border-blue-500 tracking-widest" value={coachEditFormData.pin} onChange={e => setCoachEditFormData({...coachEditFormData, pin: e.target.value.replace(/[^0-9]/g, '')})}/>
+                     <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                   </div>
+                </div>
+                <button onClick={handleCoachSaveProfile} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+                  <Save size={16}/> 保存する
+                </button>
+                <button 
+                  onClick={() => setConfirmDialog({
+                    isOpen: true,
+                    message: `${selectedRunner.lastName}選手を引退させますか？`,
+                    onConfirm: async () => {
+                      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), { status: 'retired' });
+                      setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
+                      setView('coach-roster');
+                    }
+                  })}
+                  className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
+                >
+                  引退へ移動
+                </button>
+              </div>
+
+              {/* Logs Management */}
+              <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100">
+                <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
+                   <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Activity size={14}/> Activity Logs</h4>
+                   <span className="text-[10px] font-bold text-slate-400">{allLogs.filter(l => l.runnerId === selectedRunner.id).length} records</span>
+                </div>
+                {/* 修正: 表示領域を拡大 (max-h-[60vh]) し、スクロールバーを表示 */}
+                <div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">
+                  {allLogs.filter(l => l.runnerId === selectedRunner.id).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(l => (
+                    <div key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{l.date}</span>
+                          <span className="text-[10px] font-bold text-slate-500">{l.category}</span>
+                        </div>
+                        <div className="flex items-end gap-1">
+                           <span className="text-lg font-black text-slate-800">{l.distance}</span>
+                           <span className="text-[10px] font-bold text-slate-400 mb-1">km</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{l.menuDetail}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        {/* 監督用編集機能（削除のみ） */}
+                        <button 
+                          onClick={() => setConfirmDialog({
+                            isOpen: true,
+                            message: `${l.date}の記録(${l.distance}km)を削除しますか？`,
+                            onConfirm: async () => {
+                              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id));
+                              setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
+                            }
+                          })}
+                          className="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"
+                        >
+                          <Trash2 size={16}/>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {allLogs.filter(l => l.runnerId === selectedRunner.id).length === 0 && (
+                    <div className="p-8 text-center text-xs text-slate-400 font-bold">記録がありません</div>
                   )}
                 </div>
               </div>
