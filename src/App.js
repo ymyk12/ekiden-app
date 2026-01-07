@@ -137,7 +137,7 @@ const App = () => {
   // Print Styles
   const printStyles = `
     @media print {
-      @page { size: A4 landscape; margin: 10mm; }
+      @page { size: landscape; margin: 10mm; }
       body { background-color: white !important; -webkit-print-color-adjust: exact; }
       body * { visibility: hidden; }
       #printable-report, #printable-report * { visibility: visible; }
@@ -151,26 +151,7 @@ const App = () => {
         background-color: white !important;
       }
       .no-print { display: none !important; }
-      
-      /* グラフレイアウト修正: 印刷時は縦積み・改ページ禁止 */
-      .print-chart-container {
-        width: 100% !important;
-        page-break-inside: avoid;
-        margin-bottom: 30px;
-        display: block !important;
-      }
-      
-      /* グラフの高さを確保 */
-      .recharts-responsive-container {
-        width: 100% !important;
-        height: 350px !important;
-      }
-      
-      /* グリッドレイアウトを解除 */
-      .print-block {
-        display: block !important;
-        grid-template-columns: none !important;
-      }
+      .recharts-responsive-container { width: 100% !important; height: auto !important; }
     }
   `;
 
@@ -274,7 +255,6 @@ const App = () => {
     return appSettings.quarters || [];
   }, [appSettings]);
 
-  // Filter for active runners only
   const activeRunners = useMemo(() => {
     return allRunners.filter(r => r.status !== 'retired');
   }, [allRunners]);
@@ -349,24 +329,16 @@ const App = () => {
     const matrix = reportDates.map(date => {
       const row = { date };
       runnerIds.forEach(id => {
-        // Find logs for this runner and date
         const logs = allLogs.filter(l => l.runnerId === id && l.date === date);
-        
         if (logs.length === 0) {
-          // 未入力
           row[id] = '未';
         } else {
-          // ログがある場合
           const total = logs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
-          
           if (logs.some(l => l.category === '完全休養')) {
-            // 休養タグがある場合（優先）
             row[id] = '休';
           } else if (total === 0) {
-            // 距離0だが休養タグがない場合（念のため）
             row[id] = '0';
           } else {
-            // 通常の走行距離
             row[id] = Math.round(total * 10) / 10;
           }
         }
@@ -396,22 +368,17 @@ const App = () => {
     return { matrix, totals, qTotals };
   }, [reportDates, activeRunners, allLogs, activeQuarters]);
 
-  // --- Calculate Cumulative Data for Line Chart ---
   const cumulativeData = useMemo(() => {
     const data = [];
-    // Initialize with dates
     reportDates.forEach(date => {
-      data.push({ date: date.slice(5).replace('-', '/') }); // Format MM/DD
+      data.push({ date: date.slice(5).replace('-', '/') }); 
     });
-
-    // Calculate cumulative distance for each runner
     activeRunners.forEach(r => {
       let sum = 0;
       reportDates.forEach((date, idx) => {
         const dayLog = allLogs.find(l => l.runnerId === r.id && l.date === date);
         const dist = dayLog ? (Number(dayLog.distance) || 0) : 0;
         sum += dist;
-        // Add runner's cumulative data to the day's record
         if (data[idx]) {
           data[idx][r.id] = Math.round(sum * 10) / 10;
         }
@@ -420,7 +387,6 @@ const App = () => {
     return data;
   }, [reportDates, activeRunners, allLogs]);
 
-  // --- Check List Data for Coach (Unsubmitted vs Rest vs Active) ---
   const checkListData = useMemo(() => {
     return activeRunners.map(runner => {
       const log = allLogs.find(l => l.runnerId === runner.id && l.date === checkDate);
@@ -441,20 +407,16 @@ const App = () => {
   }, [activeRunners, allLogs, checkDate]);
 
 
-  // --- Coach Stats Calculations ---
   const coachStats = useMemo(() => {
-    // 1. Reporting Rate for Today
     const todayStr = new Date().toLocaleDateString('sv-SE');
     const reportedCount = activeRunners.filter(r => {
       return allLogs.some(l => l.runnerId === r.id && l.date === todayStr);
     }).length;
     const reportRate = activeRunners.length > 0 ? Math.round((reportedCount / activeRunners.length) * 100) : 0;
 
-    // 2. Pain Alert (Latest log has pain >= 3)
     const painAlertCount = activeRunners.filter(r => {
       const runnerLogs = allLogs.filter(l => l.runnerId === r.id);
       if (runnerLogs.length === 0) return false;
-      // Sort by date desc
       runnerLogs.sort((a,b) => new Date(b.date) - new Date(a.date));
       return runnerLogs[0].pain >= 3;
     }).length;
@@ -489,7 +451,7 @@ const App = () => {
     const dataRows = reportMatrix.matrix.map(row => {
       const rowData = [row.date.slice(5).replace('-','/')];
       runnerIds.forEach(id => {
-        rowData.push(row[id] !== '-' ? row[id] : ''); // CSV export also supports new string values
+        rowData.push(row[id] !== '-' ? row[id] : ''); 
       });
       return rowData;
     });
@@ -558,7 +520,6 @@ const App = () => {
     setIsMenuOpen(false); 
   };
 
-  // --- 新規登録（上書き防止チェック付き） ---
   const handleRegister = async () => {
     setErrorMsg(''); 
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -617,7 +578,6 @@ const App = () => {
     }
   };
 
-  // --- ログイン（上書き防止チェック付き） ---
   const handleLogin = async () => {
     setErrorMsg('');
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -689,6 +649,25 @@ const App = () => {
     }
   };
 
+  // --- 修正箇所: handleEditLog関数の復活 ---
+  const handleEditLog = (log) => {
+    setFormData({
+      date: log.date,
+      distance: log.distance,
+      category: log.category,
+      menuDetail: log.menuDetail || '',
+      rpe: log.rpe,
+      pain: log.pain,
+      achieved: log.achieved,
+      lastName: '', 
+      firstName: '',
+      teamPass: ''
+    });
+    setEditingLogId(log.id);
+    setView('entry');
+  };
+  // ------------------------------------
+
   const handleCoachEditRunner = (runner) => {
     setSelectedRunner(runner);
     setCoachEditFormData({
@@ -757,7 +736,7 @@ const App = () => {
       </div>
     );
   }
-
+  
   if (role === 'registering') {
     const isReady = formData.lastName && formData.firstName && formData.teamPass && formData.personalPin.length === 4;
     return (
@@ -1325,12 +1304,7 @@ const App = () => {
               <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border border-slate-100">
                 <div className="p-6 bg-slate-100 text-[10px] font-black uppercase tracking-widest border-b">Recent Activity</div>
                 <div className="divide-y divide-slate-50 max-h-[30rem] overflow-y-auto no-scrollbar">
-                  {/* 修正: 現役選手のIDリストに含まれるログのみをフィルタリングして表示 */}
-                  {allLogs
-                    .filter(l => activeRunners.some(r => r.id === l.runnerId))
-                    .sort((a,b)=>new Date(b.date)-new Date(a.date))
-                    .slice(0, 50)
-                    .map(l => (
+                  {allLogs.filter(l => !activeRunners.find(r => r.id === l.runnerId)?.status === 'retired').sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, 50).map(l => (
                     <div key={l.id} className="p-6 flex flex-col gap-2">
                       <div className="flex justify-between items-start">
                         <div className="flex gap-4 items-center">
