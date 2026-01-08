@@ -134,12 +134,12 @@ const App = () => {
   const [menuInput, setMenuInput] = useState({ date: new Date().toLocaleDateString('sv-SE'), text: '' });
   const [goalInput, setGoalInput] = useState({ monthly: '', period: '', q1: '', q2: '', q3: '', q4: '' });
 
-  // Print Styles - 超強化版（1グラフ1ページ・最大化）
+  // Print Styles - 1グラフ1ページ・完全最大化
   const printStyles = `
     @media print {
       @page { 
         size: A4 landscape; 
-        margin: 5mm; 
+        margin: 0mm; 
       }
       body { 
         background-color: white !important; 
@@ -148,19 +148,27 @@ const App = () => {
         margin: 0;
         padding: 0;
       }
+      
+      /* 印刷時、基本は全て非表示 */
       body * { 
         visibility: hidden; 
+        height: 0;
+        overflow: hidden;
       }
       
+      /* レポートエリアのみ表示 */
       #printable-report, #printable-report * { 
         visibility: visible; 
+        height: auto;
+        overflow: visible;
       }
       
       #printable-report {
         position: absolute;
         left: 0;
         top: 0;
-        width: 100%;
+        width: 100vw;
+        min-height: 100vh;
         margin: 0;
         padding: 0;
         background-color: white !important;
@@ -169,42 +177,61 @@ const App = () => {
       
       .no-print { display: none !important; }
       
-      /* データテーブルは最初のページに */
+      /* ページヘッダー（タイトルなど） */
+      .print-header {
+        padding: 10mm;
+        page-break-after: always;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      /* データテーブルは独立ページに */
       .print-table-container {
         width: 100%;
+        height: 100vh; 
         page-break-after: always;
-        margin-bottom: 0;
-        padding: 20px;
+        padding: 10mm;
+        box-sizing: border-box;
       }
 
       /* グラフコンテナ: 1つにつき1ページ使い切る */
       .print-chart-container {
-        width: 100% !important;
-        height: 95vh !important; /* ほぼ1ページ分 */
+        width: 100vw !important;
+        height: 100vh !important; 
+        page-break-before: always; 
         page-break-inside: avoid;
-        page-break-after: always; /* 必ず改ページ */
         display: flex !important;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding: 20px !important;
+        padding: 10mm !important;
         box-sizing: border-box;
+        background: white; 
       }
 
       /* グラフタイトル */
       .print-chart-container h3 {
-        font-size: 24px !important;
+        font-size: 24pt !important;
         font-weight: 900 !important;
         margin-bottom: 20px !important;
         color: #1e293b !important;
         text-align: center;
+        width: 100%;
+      }
+
+      /* 画面表示用の高さ指定を無効化 */
+      .h-64, .h-96 {
+        height: auto !important;
+        flex-grow: 1;
+        width: 100%;
       }
 
       /* Rechartsコンテナ: 領域いっぱいに広げる */
       .recharts-responsive-container {
         width: 100% !important;
         height: 100% !important;
-        max-height: 85vh !important; /* はみ出し防止 */
         min-height: 500px !important;
       }
       
@@ -216,11 +243,11 @@ const App = () => {
       /* 表の調整 */
       table {
         width: 100% !important;
-        font-size: 9px !important;
+        font-size: 10pt !important;
       }
       th, td {
-        padding: 4px !important;
-        border: 1px solid #ccc !important;
+        padding: 6px !important;
+        border: 1px solid #94a3b8 !important;
       }
     }
   `;
@@ -482,18 +509,15 @@ const App = () => {
 
   // --- Coach Stats Calculations ---
   const coachStats = useMemo(() => {
-    // 1. Reporting Rate for Today
     const todayStr = new Date().toLocaleDateString('sv-SE');
     const reportedCount = activeRunners.filter(r => {
       return allLogs.some(l => l.runnerId === r.id && l.date === todayStr);
     }).length;
     const reportRate = activeRunners.length > 0 ? Math.round((reportedCount / activeRunners.length) * 100) : 0;
 
-    // 2. Pain Alert (Latest log has pain >= 3)
     const painAlertCount = activeRunners.filter(r => {
       const runnerLogs = allLogs.filter(l => l.runnerId === r.id);
       if (runnerLogs.length === 0) return false;
-      // Sort by date desc
       runnerLogs.sort((a,b) => new Date(b.date) - new Date(a.date));
       return runnerLogs[0].pain >= 3;
     }).length;
@@ -597,6 +621,7 @@ const App = () => {
     setIsMenuOpen(false); 
   };
 
+  // --- 新規登録（上書き防止チェック付き） ---
   const handleRegister = async () => {
     setErrorMsg(''); 
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -655,6 +680,7 @@ const App = () => {
     }
   };
 
+  // --- ログイン（上書き防止チェック付き） ---
   const handleLogin = async () => {
     setErrorMsg('');
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -1054,6 +1080,201 @@ const App = () => {
             </>
           )}
 
+          {view === 'goal' && (
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl text-center space-y-8 animate-in fade-in">
+              <h3 className="font-black text-slate-400 uppercase text-xs tracking-widest">目標設定</h3>
+              <div className="space-y-6">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest mb-2 block text-left">Monthly (km)</label>
+                  <input type="number" className="w-full text-4xl font-black text-blue-600 bg-slate-50 rounded-2xl p-5 outline-none border-2 border-transparent focus:border-blue-100" placeholder={profile.goalMonthly} onChange={e => setGoalInput({...goalInput, monthly: e.target.value})} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-emerald-400 ml-1 uppercase tracking-widest mb-2 block text-left">Period Total (km)</label>
+                  <input type="number" className="w-full text-4xl font-black text-emerald-600 bg-slate-50 rounded-2xl p-5 outline-none border-2 border-transparent focus:border-emerald-100" placeholder={profile.goalPeriod} onChange={e => setGoalInput({...goalInput, period: e.target.value})} />
+                </div>
+                
+                {/* Quarter Goals Input */}
+                {activeQuarters.length > 0 && (
+                  <div className="bg-slate-50 p-4 rounded-3xl">
+                    {/* 修正箇所: 安全な文字列操作 */}
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-left">Quarter Goals ({appSettings.startDate ? appSettings.startDate.slice(5) : ''}〜)</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      {activeQuarters.map((q, idx) => (
+                        <div key={idx} className="text-left">
+                          {/* 修正箇所: 安全な文字列操作 */}
+                          <label className="text-[8px] font-bold text-slate-400 ml-1 block mb-1 truncate">
+                            Q{idx+1} ({q.start ? q.start.slice(5).replace('-','/') : ''}〜)
+                          </label>
+                          <input 
+                            type="number" 
+                            className="w-full p-3 rounded-xl text-sm font-black text-slate-700 outline-none border border-slate-200 focus:border-emerald-400"
+                            placeholder={profile[`goalQ${idx+1}`] || 0}
+                            onChange={e => setGoalInput(prev => ({...prev, [`q${idx+1}`]: e.target.value}))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-4">
+                <button onClick={() => changeView('menu')} className="flex-1 py-5 bg-slate-100 rounded-2xl font-black text-slate-400">戻る</button>
+                <button onClick={updateGoals} className="flex-1 py-5 bg-blue-600 text-white rounded-2xl font-black shadow-lg">保存</button>
+              </div>
+            </div>
+          )}
+
+          {view === 'team' && (
+            <div className="bg-white p-7 rounded-[2.5rem] shadow-xl space-y-6 animate-in slide-in-from-right-10">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-black text-xs uppercase tracking-widest flex items-center gap-2"><Trophy size={16} className="text-orange-500"/> Team Ranking</h3>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{appSettings.startDate.slice(5).replace('-','/')} - {appSettings.endDate.slice(5).replace('-','/')}</span>
+              </div>
+              
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 50 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11, fontWeight: 'bold', fill: '#1e293b'}} axisLine={false} tickLine={false}/>
+                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
+                    <Bar dataKey="total" radius={[0, 8, 8, 0]} barSize={20}>
+                      {rankingData.map((_, i) => (
+                        <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
+                      ))}
+                      <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '10px', fontWeight: 'black', fill: '#475569'}} offset={10} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Leaderboard</p>
+                <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">
+                  {rankingData.map((r, i) => (
+                    <div key={r.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${i < 3 ? 'bg-yellow-400 text-white shadow-sm' : 'bg-slate-200 text-slate-500'}`}>
+                          {i + 1}
+                        </div>
+                        <span className="font-bold text-sm text-slate-700">{r.name}</span>
+                      </div>
+                      <span className="font-black text-blue-600 text-sm">{r.total} <span className="text-[9px] text-slate-400 font-normal">km</span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {view === 'entry' && (
+            <div className="bg-white p-7 rounded-[2.5rem] shadow-xl space-y-6 animate-in slide-in-from-bottom-8 pb-10">
+              <h2 className="text-xl font-black flex items-center gap-2">
+                {editingLogId ? <Edit className="text-blue-600" /> : <Plus className="text-blue-600"/>} 
+                {editingLogId ? "記録の編集" : "練習記録"}
+              </h2>
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">日付</label>
+                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-xs outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
+                  </div>
+                  <div className="space-y-1">
+                     {/* 修正: 「今日は休み」ボタンを日付の横などに配置すると収まりが良い */}
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">休憩</label>
+                    <button onClick={() => setConfirmDialog({
+                      isOpen: true,
+                      message: '今日を「完全休養」として記録しますか？',
+                      onConfirm: async () => {
+                        setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
+                        setIsSubmitting(true);
+                        try {
+                          const dataToSave = {
+                            date: formData.date, 
+                            distance: 0,
+                            category: '完全休養',
+                            menuDetail: 'オフ',
+                            rpe: 1,
+                            pain: 1,
+                            achieved: true,
+                            runnerId: user.uid,
+                            runnerName: `${profile.lastName} ${profile.firstName}`,
+                          };
+                          
+                          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+                              ...dataToSave,
+                              createdAt: new Date().toISOString()
+                          });
+                          setSuccessMsg('休養日として記録しました');
+                          resetForm();
+                          setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500);
+                        } catch(e) {
+                          console.error(e);
+                          setSuccessMsg("保存エラー");
+                        } finally {
+                          setIsSubmitting(false);
+                        }
+                      }
+                    })} disabled={isSubmitting} className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm border border-emerald-100 active:scale-95 transition-all">
+                      休養
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">距離 (km)</label>
+                    <input type="number" step="0.1" className="w-full p-4 bg-slate-50 rounded-2xl font-black text-2xl text-blue-600 outline-none" value={formData.distance} onChange={e => setFormData({...formData, distance: e.target.value})} placeholder="0.0"/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">練習区分</label>
+                    <div className="grid grid-rows-3 gap-1 h-full">
+                       {['朝練', '午前練', '午後練'].map(cat => (
+                        <button key={cat} onClick={() => setFormData({...formData, category: cat})} className={`h-full rounded-lg font-bold text-[9px] uppercase transition-all ${formData.category === cat ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 flex items-center gap-1"><BookOpen size={12}/> メニュー詳細</label>
+                  <textarea 
+                    className="w-full p-4 bg-slate-50 rounded-2xl h-24 outline-none font-bold text-slate-700 resize-none shadow-inner text-sm" 
+                    placeholder="例: 1000m × 5 (3'00), 20kmジョグ 等" 
+                    value={formData.menuDetail} 
+                    onChange={e => setFormData({...formData, menuDetail: e.target.value})}
+                  />
+                </div>
+
+                <div className="p-6 bg-slate-50 rounded-[2rem] space-y-5">
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span>練習強度 (RPE)</span>
+                    <span className="text-blue-600">Lv: {formData.rpe}</span>
+                  </div>
+                  <input type="range" min="1" max="10" className="w-full accent-blue-600" value={formData.rpe} onChange={e => setFormData({...formData, rpe: parseInt(e.target.value)})}/>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">足の痛み (1-5)</label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[1, 2, 3, 4, 5].map(v => (
+                        <button key={v} onClick={() => setFormData({...formData, pain: v})} className={`py-3 rounded-[1.1rem] text-sm font-black transition-all ${formData.pain === v ? 'bg-rose-500 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>{v}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <button onClick={handleSaveLog} disabled={isSubmitting || !formData.distance} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black text-lg active:scale-95 transition-all shadow-xl shadow-blue-100 disabled:opacity-50">
+                    {isSubmitting ? '保存中...' : (editingLogId ? '更新する' : '記録を保存する')}
+                  </button>
+                  {editingLogId && (
+                    <button onClick={resetForm} className="w-full py-4 text-slate-400 font-bold text-sm">編集をキャンセル</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {view === 'stats' && (
             <div className="space-y-6 pb-16 animate-in slide-in-from-right-10">
               <div className="bg-white p-7 rounded-[2.5rem] shadow-lg">
@@ -1216,7 +1437,12 @@ const App = () => {
               <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border border-slate-100">
                 <div className="p-6 bg-slate-100 text-[10px] font-black uppercase tracking-widest border-b">Recent Activity</div>
                 <div className="divide-y divide-slate-50 max-h-[30rem] overflow-y-auto no-scrollbar">
-                  {allLogs.filter(l => !activeRunners.find(r => r.id === l.runnerId)?.status === 'retired').sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, 50).map(l => (
+                  {/* 修正: 現役選手のIDリストに含まれるログのみをフィルタリングして表示 */}
+                  {allLogs
+                    .filter(l => activeRunners.some(r => r.id === l.runnerId))
+                    .sort((a,b)=>new Date(b.date)-new Date(a.date))
+                    .slice(0, 50)
+                    .map(l => (
                     <div key={l.id} className="p-6 flex flex-col gap-2">
                       <div className="flex justify-between items-start">
                         <div className="flex gap-4 items-center">
