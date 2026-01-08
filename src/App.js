@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { 
   Home, Plus, BarChart2, Users, Settings, LogOut, ChevronRight, 
-  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList, List
+  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -509,15 +509,18 @@ const App = () => {
 
   // --- Coach Stats Calculations ---
   const coachStats = useMemo(() => {
+    // 1. Reporting Rate for Today
     const todayStr = new Date().toLocaleDateString('sv-SE');
     const reportedCount = activeRunners.filter(r => {
       return allLogs.some(l => l.runnerId === r.id && l.date === todayStr);
     }).length;
     const reportRate = activeRunners.length > 0 ? Math.round((reportedCount / activeRunners.length) * 100) : 0;
 
+    // 2. Pain Alert (Latest log has pain >= 3)
     const painAlertCount = activeRunners.filter(r => {
       const runnerLogs = allLogs.filter(l => l.runnerId === r.id);
       if (runnerLogs.length === 0) return false;
+      // Sort by date desc
       runnerLogs.sort((a,b) => new Date(b.date) - new Date(a.date));
       return runnerLogs[0].pain >= 3;
     }).length;
@@ -621,6 +624,7 @@ const App = () => {
     setIsMenuOpen(false); 
   };
 
+  // --- 新規登録（上書き防止チェック付き） ---
   const handleRegister = async () => {
     setErrorMsg(''); 
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -679,6 +683,7 @@ const App = () => {
     }
   };
 
+  // --- ログイン（上書き防止チェック付き） ---
   const handleLogin = async () => {
     setErrorMsg('');
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -832,15 +837,17 @@ const App = () => {
            <p className="text-sm font-bold text-slate-400 tracking-widest uppercase mt-2">Distance Records</p>
         </div>
 
-        {/* ボタンエリア */}
+        {/* ボタンエリア: 修正箇所 - 配色を逆に */}
         <div className="w-full max-w-xs space-y-4 relative z-10">
-           {/* 修正: ログインを青、新規登録を白に変更 */}
-           <button onClick={() => setRole('login')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3">
-            <LogIn size={22}/> ログイン <span className="text-xs font-normal opacity-80">(2回目以降)</span>
+           
+          {/* 新規登録：青色（メイン） */}
+          <button onClick={() => setRole('registering')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3">
+            <UserPlus size={22}/> 新規登録 <span className="text-xs font-normal opacity-80">(初めての方)</span>
           </button>
           
-          <button onClick={() => setRole('registering')} className="w-full bg-white hover:bg-blue-50 text-blue-600 py-5 rounded-2xl font-bold text-lg shadow-lg shadow-slate-100 active:scale-95 transition-all flex items-center justify-center gap-3 border-2 border-blue-100">
-            <UserPlus size={22}/> 新規登録 <span className="text-xs font-normal opacity-60">(初めての方)</span>
+          {/* ログイン：白ベース（サブ） */}
+          <button onClick={() => setRole('login')} className="w-full bg-white hover:bg-blue-50 text-blue-600 py-5 rounded-2xl font-bold text-lg shadow-lg shadow-slate-100 active:scale-95 transition-all flex items-center justify-center gap-3 border-2 border-blue-100">
+            <LogIn size={22}/> ログイン <span className="text-xs font-normal opacity-80">(2回目以降)</span>
           </button>
           
           <div className="pt-10 pb-12">
@@ -855,7 +862,7 @@ const App = () => {
     );
   }
 
-  // ... (Other views logic same as before, no changes needed for this specific request)
+  // (Coach Auth, Registering, Login, Runner View are same as before)
   if (role === 'coach-auth') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
@@ -1383,76 +1390,115 @@ const App = () => {
   // --- COACH VIEW ---
   if (role === 'coach') {
     return (
-      <div className="min-h-screen bg-slate-50 pb-20 print:bg-white print:pb-0 print:h-auto">
-        <header className="bg-slate-950 text-white p-7 sticky top-0 z-50 flex justify-between items-center shadow-xl print:hidden">
-          <h1 className="font-black italic text-xl flex items-center gap-2 tracking-tighter"><Users size={20} className="text-blue-400"/> COACH TERMINAL</h1>
-          <button onClick={handleLogout} className="opacity-40 hover:opacity-100"><LogOut size={20}/></button>
+      <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 print:bg-white print:pb-0 print:h-auto md:flex">
+        {/* Header / Sidebar for PC */}
+        <header className="bg-slate-950 text-white p-5 sticky top-0 z-50 md:h-screen md:w-64 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
+          <div>
+             <h1 className="font-black italic text-xl flex items-center gap-2 tracking-tighter mb-8 md:mb-10"><Users size={20} className="text-blue-400"/> COACH TERMINAL</h1>
+             
+             {/* PC Navigation */}
+             <nav className="hidden md:flex flex-col gap-2">
+               {['stats', 'report', 'check', 'menu', 'roster', 'settings'].map(t => (
+                 <button 
+                   key={t} 
+                   onClick={() => setView(`coach-${t}`)} 
+                   className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold uppercase tracking-widest transition-all ${view === `coach-${t}` ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800'}`}
+                 >
+                   {t === 'stats' && <LayoutDashboard size={18}/>}
+                   {t === 'report' && <FileText size={18}/>}
+                   {t === 'check' && <ClipboardList size={18}/>}
+                   {t === 'menu' && <Calendar size={18}/>}
+                   {t === 'roster' && <Users size={18}/>}
+                   {t === 'settings' && <Settings size={18}/>}
+                   {t}
+                 </button>
+               ))}
+             </nav>
+          </div>
+          <button onClick={handleLogout} className="opacity-60 hover:opacity-100 flex items-center gap-2 font-bold text-sm"><LogOut size={18}/> Logout</button>
         </header>
 
-        <main className="p-5 space-y-6 max-w-md mx-auto print:max-w-none print:p-0 print:w-full">
-          <div className="flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-hidden print:hidden">
+        {/* Main Content Area - Layout fixed for PC/Print */}
+        <main className="flex-1 p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none md:overflow-y-auto md:h-screen print:max-w-none print:p-0 print:w-full print:overflow-visible">
+          
+          {/* Mobile Navigation Tabs */}
+          <div className="md:hidden flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-hidden print:hidden mb-6">
             {['stats', 'report', 'check', 'menu', 'roster', 'settings'].map(t => (
-              <button key={t} onClick={() => setView(`coach-${t}`)} className={`flex-1 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${view === `coach-${t}` ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-400'}`}>{t}</button>
+              <button key={t} onClick={() => setView(`coach-${t}`)} className={`flex-1 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${view === `coach-${t}` ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-400'}`}>{t.slice(0,3)}</button>
             ))}
           </div>
 
           {(view === 'coach-stats' || !view.startsWith('coach-')) && (
-            <div className="space-y-5 animate-in fade-in">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border-b-4 border-blue-500"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">Runners</p><p className="text-4xl font-black text-slate-800 text-center">{activeRunners.length}</p></div>
-                <div className={`bg-white p-6 rounded-[2.5rem] shadow-sm border-b-4 ${coachStats.painAlertCount > 0 ? 'border-rose-500 bg-rose-50' : 'border-emerald-500'}`}>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">痛みアラート</p>
-                  <p className={`text-3xl font-black text-center ${coachStats.painAlertCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{coachStats.painAlertCount}<span className="text-xs text-slate-400 font-bold tracking-normal uppercase">名</span></p>
+            <div className="space-y-6 animate-in fade-in">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-slate-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Members</p>
+                   <p className="text-3xl md:text-4xl font-black text-slate-800">{activeRunners.length}<span className="text-xs ml-1">名</span></p>
+                </div>
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-blue-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Today's Report</p>
+                   <div className="flex items-baseline gap-1">
+                     <p className="text-3xl md:text-4xl font-black text-blue-600">{coachStats.reportRate}</p>
+                     <span className="text-sm font-black text-slate-400">%</span>
+                   </div>
+                </div>
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-emerald-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Distance</p>
+                   <p className="text-2xl md:text-3xl font-black text-emerald-600">{reportMatrix.totals['TOTAL'] || 0}<span className="text-xs ml-1 text-slate-400">km</span></p>
+                </div>
+                <div className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 ${coachStats.painAlertCount > 0 ? 'border-rose-500 bg-rose-50' : 'border-emerald-500'}`}>
+                  <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Pain Alert</p>
+                  <p className={`text-3xl md:text-4xl font-black ${coachStats.painAlertCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{coachStats.painAlertCount}<span className="text-xs ml-1 text-slate-400">名</span></p>
                 </div>
               </div>
 
-              <div className="bg-white p-7 rounded-[3rem] shadow-sm">
-                <div className="flex justify-between items-center mb-8 border-b border-slate-50 pb-4">
-                  <h3 className="font-black text-[10px] uppercase tracking-[0.3em] flex items-center gap-2"><Trophy size={16} className="text-orange-500"/> Team Ranking</h3>
-                  <button onClick={exportCSV} className="text-blue-600 p-2.5 bg-blue-50 rounded-2xl"><Download size={20}/></button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] flex flex-col">
+                   <div className="flex justify-between items-center mb-6">
+                     <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2"><Trophy size={18} className="text-orange-500"/> Team Ranking</h3>
+                     <button onClick={exportCSV} className="text-blue-600 p-2 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"><Download size={20}/></button>
+                   </div>
+                   <div className="flex-1 w-full min-h-0">
+                     <ResponsiveContainer width="100%" height="100%">
+                       <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 60 }}>
+                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
+                         <XAxis type="number" hide />
+                         <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12, fontWeight: 'bold', fill: '#1e293b'}} axisLine={false} tickLine={false}/>
+                         <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
+                         <Bar dataKey="total" radius={[0, 10, 10, 0]} barSize={24}>
+                           {rankingData.map((_, i) => (
+                             <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
+                           ))}
+                           <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={10} />
+                         </Bar>
+                       </BarChart>
+                     </ResponsiveContainer>
+                   </div>
                 </div>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 60 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
-                      <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11, fontWeight: 'bold', fill: '#1e293b'}} axisLine={false} tickLine={false}/>
-                      <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
-                      <Bar dataKey="total" radius={[0, 10, 10, 0]} barSize={20}>
-                        {rankingData.map((_, i) => (
-                          <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
-                        ))}
-                        <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '10px', fontWeight: 'black', fill: '#475569'}} offset={10} />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4 p-4 bg-slate-50 rounded-2xl text-center">
-                  <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em]">Period: {appSettings.startDate || 'START'} 〜 {appSettings.endDate || 'END'}</p>
-                </div>
-              </div>
 
-              <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border border-slate-100">
-                <div className="p-6 bg-slate-100 text-[10px] font-black uppercase tracking-widest border-b">Recent Activity</div>
-                <div className="divide-y divide-slate-50 max-h-[30rem] overflow-y-auto no-scrollbar">
-                  {/* 修正: 現役選手のIDリストに含まれるログのみをフィルタリングして表示 */}
-                  {allLogs
-                    .filter(l => activeRunners.some(r => r.id === l.runnerId))
-                    .sort((a,b)=>new Date(b.date)-new Date(a.date))
-                    .slice(0, 50)
-                    .map(l => (
-                    <div key={l.id} className="p-6 flex flex-col gap-2">
-                      <div className="flex justify-between items-start">
-                        <div className="flex gap-4 items-center">
-                          <div className={`w-2.5 h-2.5 rounded-full ${l.pain > 3 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'}`}></div>
-                          <div><p className="font-black text-slate-800 text-base">{l.runnerName}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{l.date} · {l.category}</p></div>
+                <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 h-[28rem] flex flex-col">
+                  <div className="p-6 bg-slate-50 border-b flex items-center gap-2">
+                    <Activity size={16} className="text-slate-400"/>
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Recent Activity</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {allLogs.filter(l => activeRunners.some(r => r.id === l.runnerId)).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, 50).map(l => (
+                      <div key={l.id} className="p-4 mb-2 bg-white rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors">
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="flex items-center gap-3">
+                             <div className={`w-2 h-2 rounded-full ${l.pain > 3 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'}`}></div>
+                             <span className="font-bold text-slate-700 text-sm">{l.runnerName}</span>
+                          </div>
+                          <span className="font-black text-blue-600">{l.distance}km</span>
                         </div>
-                        <p className="font-black text-blue-600 text-lg">{l.distance}km</p>
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-5">
+                           <span>{l.date} · {l.category}</span>
+                           <span>RPE: {l.rpe}</span>
+                        </div>
+                        {l.menuDetail && <p className="mt-2 ml-5 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg italic">"{l.menuDetail}"</p>}
                       </div>
-                      {l.menuDetail && <p className="text-[11px] font-bold text-slate-500 italic bg-slate-50 p-2.5 rounded-xl">"{l.menuDetail}"</p>}
-                      <div className="flex justify-between items-center pt-1"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">RPE: {l.rpe}</span>{l.pain > 3 && <span className="text-[9px] font-black text-rose-500 uppercase flex items-center gap-1"><AlertCircle size={10}/> PAIN LEVEL {l.pain}</span>}</div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1461,421 +1507,97 @@ const App = () => {
           {view === 'coach-report' && (
             <>
               <style>{printStyles}</style>
-              <div id="printable-report" className="space-y-6 animate-in fade-in bg-white p-6 rounded-[2.5rem] shadow-sm overflow-hidden print:shadow-none print:rounded-none print:p-4 print:overflow-visible">
-                <div className="flex justify-between items-center pb-4 border-b border-slate-100 print:border-slate-800">
+              <div id="printable-report" className="space-y-8 animate-in fade-in bg-white p-8 rounded-[2.5rem] shadow-sm overflow-hidden print:shadow-none print:rounded-none print:p-4 print:overflow-visible">
+                 <div className="flex justify-between items-center pb-6 border-b border-slate-100 print:border-slate-800">
                   <div>
-                    <h2 className="font-black text-lg text-slate-800 flex items-center gap-2 uppercase tracking-tighter"><FileText className="text-blue-600 print:text-black"/> KSWC EKIDEN TEAM REPORT</h2>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest print:text-slate-600">
+                    <h2 className="font-black text-2xl text-slate-800 flex items-center gap-3 uppercase tracking-tighter"><FileText className="text-blue-600 print:text-black"/> KSWC EKIDEN TEAM REPORT</h2>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
                       Target Period: {appSettings.startDate.replace(/-/g, '/')} - {appSettings.endDate.replace(/-/g, '/')}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 no-print">
-                    <button onClick={handleExportMatrixCSV} className="bg-emerald-600 text-white p-3 rounded-xl hover:bg-emerald-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2">
-                      <FileSpreadsheet size={20}/>
-                      <span className="text-xs font-bold">CSV</span>
-                    </button>
-                    <button onClick={handlePrint} className="bg-slate-900 text-white p-3 rounded-xl hover:bg-slate-700 transition-colors active:scale-95 shadow-lg">
-                      <Printer size={20}/>
-                    </button>
+                    <button onClick={handleExportMatrixCSV} className="bg-emerald-600 text-white px-4 py-3 rounded-xl hover:bg-emerald-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><FileSpreadsheet size={18}/> CSV出力</button>
+                    <button onClick={handlePrint} className="bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><Printer size={18}/> 印刷 / PDF</button>
                   </div>
                 </div>
 
-                {/* Data Matrix - Modified for Status Display */}
                 <div className="overflow-x-auto pb-4">
                   <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="p-2 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[80px]">DATE</th>
-                        {activeRunners.map(r => (
-                          <th key={r.id} className="p-2 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[60px] whitespace-nowrap">
-                            {r.lastName} {r.firstName.charAt(0)}.
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
+                    <thead><tr><th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">DATE</th>{activeRunners.map(r => (<th key={r.id} className="p-3 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[80px] whitespace-nowrap text-center bg-slate-50/50">{r.lastName} {r.firstName.charAt(0)}.</th>))}</tr></thead>
                     <tbody>
                       {reportMatrix.matrix.map((row, i) => (
-                        <tr key={row.date} className={i % 2 === 0 ? 'bg-slate-50/50' : ''}>
-                          <td className="p-2 border-b border-slate-50 font-bold text-slate-500 whitespace-nowrap">{row.date.slice(5).replace('-','/')}</td>
+                        <tr key={row.date} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">{row.date.slice(5).replace('-','/')}</td>
                           {activeRunners.map(r => {
                             const val = row[r.id];
-                            // セルの内容に応じた色分け
-                            let cellClass = "p-2 border-b border-slate-50 text-center font-bold ";
-                            if (val === '未') cellClass += "text-rose-400 bg-rose-50/50";
-                            else if (val === '休') cellClass += "text-emerald-500";
+                            let cellClass = "p-2 border-b border-slate-100 text-center font-bold text-sm ";
+                            if (val === '未') cellClass += "text-rose-400 bg-rose-50/30";
+                            else if (val === '休') cellClass += "text-emerald-500 bg-emerald-50/30";
                             else if (val === '0') cellClass += "text-slate-300";
                             else cellClass += "text-blue-600";
-
-                            return (
-                              <td key={r.id} className={cellClass}>
-                                {val}
-                              </td>
-                            );
+                            return (<td key={r.id} className={cellClass}>{val}</td>);
                           })}
                         </tr>
                       ))}
-                      {/* Footer: Totals */}
-                      <tr className="bg-slate-100 border-t-2 border-slate-200">
-                        <td className="p-2 font-black text-slate-800">TOTAL</td>
-                        {activeRunners.map(r => (
-                          <td key={r.id} className="p-2 font-black text-center text-blue-700">
-                            {reportMatrix.totals[r.id] || 0}
-                          </td>
-                        ))}
-                      </tr>
-                      {/* Quarter Totals */}
-                      {reportMatrix.qTotals.map((qRow, i) => (
-                        <tr key={qRow.date} className="bg-slate-50 border-t border-slate-200">
-                          <td className="p-2 font-bold text-slate-500 text-[10px] uppercase">Q{i + 1} Total</td>
-                          {activeRunners.map(r => (
-                            <td key={r.id} className="p-2 font-bold text-center text-emerald-600 text-[10px]">
-                              {qRow[r.id] || 0}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
+                      <tr className="bg-slate-100 font-bold"><td className="p-3 sticky left-0 bg-slate-100">TOTAL</td>{activeRunners.map(r => (<td key={r.id} className="p-3 text-center text-blue-700">{reportMatrix.totals[r.id] || 0}</td>))}</tr>
                     </tbody>
                   </table>
                 </div>
 
-                {/* Charts Section for Report */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t-4 border-slate-100 print:block">
-                  <div className="print-chart-container">
-                    <h3 className="font-black text-xs uppercase tracking-widest mb-4 text-center">Total Distance</h3>
-                    <div className="h-64">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pt-8 border-t-4 border-slate-100 print:block">
+                   <div className="print-chart-container h-80">
+                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center">Total Distance</h3>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={rankingData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false}/>
-                          <XAxis dataKey="name" tick={{fontSize: 8}} interval={0} angle={-45} textAnchor="end" height={60}/>
-                          <YAxis tick={{fontSize: 10}}/>
-                          <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                        </BarChart>
+                        <BarChart data={rankingData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fontSize: 10}} interval={0} angle={-45} textAnchor="end" height={60}/><YAxis tick={{fontSize: 10}}/><Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} /></BarChart>
                       </ResponsiveContainer>
-                    </div>
-                  </div>
-                  {/* Quarter Charts */}
-                  {activeQuarters.map((q, idx) => {
-                    // Generate Q specific data
-                    const qData = activeRunners.map(r => {
-                      const total = allLogs
-                        .filter(l => l.runnerId === r.id && l.date >= q.start && l.date <= q.end)
-                        .reduce((s, l) => s + (Number(l.distance) || 0), 0);
-                      return { name: r.lastName, total: Math.round(total * 10) / 10 };
-                    });
-                    return (
-                      <div key={idx} className="print-chart-container">
-                        <h3 className="font-black text-xs uppercase tracking-widest mb-4 text-center">Q{idx + 1} ({q.start.slice(5)} - {q.end.slice(5)})</h3>
-                        <div className="h-64">
+                   </div>
+                   {activeQuarters.map((q, idx) => {
+                      const qData = activeRunners.map(r => { const total = allLogs.filter(l => l.runnerId === r.id && l.date >= q.start && l.date <= q.end).reduce((s, l) => s + (Number(l.distance) || 0), 0); return { name: r.lastName, total: Math.round(total * 10) / 10 }; });
+                      return (
+                        <div key={idx} className="print-chart-container h-80">
+                          <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center">Q{idx + 1} ({q.start.slice(5)} - {q.end.slice(5)})</h3>
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={qData}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false}/>
-                              <XAxis dataKey="name" tick={{fontSize: 8}} interval={0} angle={-45} textAnchor="end" height={60}/>
-                              <YAxis tick={{fontSize: 10}}/>
-                              <Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} />
-                            </BarChart>
+                            <BarChart data={qData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fontSize: 10}} interval={0} angle={-45} textAnchor="end" height={60}/><YAxis tick={{fontSize: 10}}/><Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} /></BarChart>
                           </ResponsiveContainer>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                   })}
+                   <div className="print-chart-container h-96 col-span-2">
+                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center">Cumulative Distance Trends</h3>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={cumulativeData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/><XAxis dataKey="date" tick={{fontSize: 10}} /><YAxis tick={{fontSize: 10}} /><Tooltip /><Legend />{activeRunners.map((r, i) => (<Line key={r.id} type="monotone" dataKey={r.id} name={`${r.lastName} ${r.firstName}`} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 6 }} />))}</LineChart>
+                      </ResponsiveContainer>
+                   </div>
                 </div>
-
-                {/* Cumulative Distance Trends */}
-                <div className="mt-8 pt-8 border-t-4 border-slate-100 page-break print-chart-container">
-                  <h3 className="font-black text-xs uppercase tracking-widest mb-4 text-center">Cumulative Distance Trends</h3>
-                  <div className="h-96 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={cumulativeData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
-                        <XAxis dataKey="date" tick={{fontSize: 10}} />
-                        <YAxis tick={{fontSize: 10}} />
-                        <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
-                        <Legend wrapperStyle={{fontSize: '10px', paddingTop: '10px'}} />
-                        {activeRunners.map((r, i) => (
-                          <Line 
-                            key={r.id} 
-                            type="monotone" 
-                            dataKey={r.id} 
-                            name={`${r.lastName} ${r.firstName}`}
-                            stroke={COLORS[i % COLORS.length]} 
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 6 }}
-                          />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
               </div>
             </>
           )}
 
-          {view === 'coach-check' && (
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Status Check</h3>
-              
-              <div className="flex flex-col items-center mb-6 gap-4">
-                 <input type="date" className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500" value={checkDate} onChange={e => setCheckDate(e.target.value)} />
-                 
-                 {/* 報告率表示エリア */}
-                 <div className="grid grid-cols-2 gap-4 w-full">
-                    <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center">
-                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出率</span>
-                       <div className="flex items-end gap-1">
-                          <span className="text-3xl font-black text-blue-600">
-                            {checkListData.length > 0 
-                              ? Math.round((checkListData.filter(r => r.status !== 'unsubmitted').length / checkListData.length) * 100) 
-                              : 0}
-                          </span>
-                          <span className="text-xs font-bold text-slate-400 mb-1">%</span>
-                       </div>
-                    </div>
-                    <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center">
-                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span>
-                       <div className="flex items-end gap-1">
-                          <span className="text-3xl font-black text-emerald-600">{checkListData.filter(r => r.status !== 'unsubmitted').length}</span>
-                          <span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span>
-                       </div>
-                    </div>
-                 </div>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                {checkListData.map(r => (
-                  <div key={r.id} className="py-4 flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${r.status === 'active' ? 'bg-blue-500' : r.status === 'rest' ? 'bg-emerald-400' : 'bg-rose-400'}`}>
-                        {r.lastName.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p>
-                      </div>
-                    </div>
-                    <div>
-                      {r.status === 'active' && (
-                        <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
-                          <Check size={12}/> {r.detail}
-                        </span>
-                      )}
-                      {r.status === 'rest' && (
-                        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
-                          {/* 修正箇所: コーヒーアイコンを削除 */}
-                          {r.detail}
-                        </span>
-                      )}
-                      {r.status === 'unsubmitted' && (
-                        <span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
-                          <AlertTriangle size={12}/> 未提出
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {view === 'coach-menu' && (
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6">
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">Board Update</h3>
-              <div className="space-y-4">
-                <input type="date" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-black text-sm" value={menuInput.date} onChange={e=>setMenuInput({...menuInput, date: e.target.value})}/>
-                <textarea placeholder="指示を入力..." className="w-full p-6 bg-slate-50 rounded-[2.5rem] h-48 outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-500 text-lg leading-relaxed shadow-inner resize-none" value={menuInput.text} onChange={e=>setMenuInput({...menuInput, text: e.target.value})} />
-                <button onClick={async() => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menus', menuInput.date), menuInput); setSuccessMsg('掲示しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95 transition-all">掲示板を更新</button>
-              </div>
-            </div>
-          )}
-
-          {view === 'coach-roster' && (
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in">
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Team Roster</h3>
-              
-              {/* Active Members */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><UserCheck size={16}/> Active Members ({activeRunners.length})</h4>
-                <div className="divide-y divide-slate-100">
-                  {activeRunners.map(r => (
-                    <div key={r.id} className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2" onClick={() => handleCoachEditRunner(r)}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">{r.lastName.charAt(0)}</div>
-                        <div>
-                          <p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p>
-                          <p className="text-[10px] text-slate-400 font-bold">Goal: {r.goalMonthly}km/mo</p>
-                          {/* 監督用: PIN表示 */}
-                          <p className="text-[10px] text-slate-300 font-mono">PIN: {r.pin || '未設定'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <ChevronRight className="text-slate-300" size={20}/>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Retired Members */}
-              <div className="space-y-4 pt-8 border-t border-slate-100">
-                <h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><Archive size={16}/> Retired / Inactive</h4>
-                <div className="divide-y divide-slate-100 opacity-60 hover:opacity-100 transition-opacity">
-                  {allRunners.filter(r => r.status === 'retired').map(r => (
-                    <div key={r.id} className="py-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3 grayscale">
-                        <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">{r.lastName.charAt(0)}</div>
-                        <div>
-                          <p className="font-bold text-slate-600">{r.lastName} {r.firstName}</p>
-                          <p className="text-[10px] text-slate-400 font-bold">Retired</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => setConfirmDialog({
-                            isOpen: true,
-                            message: `${r.lastName}選手を現役復帰させますか？`,
-                            onConfirm: async () => {
-                              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id), { status: 'active' });
-                              setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                            }
-                          })}
-                          className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 transition-colors"
-                          title="現役復帰"
-                        >
-                          <UserCheck size={18}/>
-                        </button>
-                        <button 
-                          onClick={() => setConfirmDialog({
-                            isOpen: true,
-                            message: `警告: ${r.lastName}選手のデータを完全に削除します。元に戻せません。よろしいですか？`,
-                            onConfirm: async () => {
-                              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id));
-                              setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                            }
-                          })}
-                          className="bg-rose-50 text-rose-600 p-2 rounded-xl hover:bg-rose-100 transition-colors"
-                          title="完全削除"
-                        >
-                          <Trash2 size={18}/>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {allRunners.filter(r => r.status === 'retired').length === 0 && (
-                    <p className="text-[10px] text-slate-300 italic py-2">引退した選手はいません</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {view === 'coach-runner-detail' && selectedRunner && (
-            <div className="space-y-6 animate-in slide-in-from-right-10">
-              {/* Header */}
-              <div className="flex items-center gap-4 bg-white p-4 rounded-3xl shadow-sm">
-                <button onClick={() => setView('coach-roster')} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors">
-                  <ArrowLeft size={20} className="text-slate-600"/>
-                </button>
-                <h3 className="font-black text-lg text-slate-800">{selectedRunner.lastName} {selectedRunner.firstName}</h3>
-              </div>
-
-              {/* Profile Edit Card */}
-              <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4">
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Settings size={14}/> Profile Settings</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 ml-1">苗字</label>
-                    <input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.lastName} onChange={e => setCoachEditFormData({...coachEditFormData, lastName: e.target.value})}/>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 ml-1">名前</label>
-                    <input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.firstName} onChange={e => setCoachEditFormData({...coachEditFormData, firstName: e.target.value})}/>
-                  </div>
-                </div>
-                <div>
-                   <label className="text-[10px] font-bold text-slate-400 ml-1">PIN (パスコード)</label>
-                   <div className="relative">
-                     <input type="tel" maxLength={4} className="w-full p-3 pl-10 bg-slate-50 rounded-xl font-mono font-bold text-lg outline-none border border-slate-100 focus:border-blue-500 tracking-widest" value={coachEditFormData.pin} onChange={e => setCoachEditFormData({...coachEditFormData, pin: e.target.value.replace(/[^0-9]/g, '')})}/>
-                     <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-                   </div>
-                </div>
-                <button onClick={handleCoachSaveProfile} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
-                  <Save size={16}/> 保存する
-                </button>
-                <button 
-                  onClick={() => setConfirmDialog({
-                    isOpen: true,
-                    message: `${selectedRunner.lastName}選手を引退させますか？`,
-                    onConfirm: async () => {
-                      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), { status: 'retired' });
-                      setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                      setView('coach-roster');
-                    }
-                  })}
-                  className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
-                >
-                  引退へ移動
-                </button>
-              </div>
-
-              {/* Logs Management */}
-              <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100">
-                <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
-                   <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Activity size={14}/> Activity Logs</h4>
-                   <span className="text-[10px] font-bold text-slate-400">{allLogs.filter(l => l.runnerId === selectedRunner.id).length} records</span>
-                </div>
-                {/* 修正: 表示領域を拡大 (max-h-[60vh]) し、スクロールバーを表示 */}
-                <div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">
-                  {allLogs.filter(l => l.runnerId === selectedRunner.id).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(l => (
-                    <div key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{l.date}</span>
-                          <span className="text-[10px] font-bold text-slate-500">{l.category}</span>
-                        </div>
-                        <div className="flex items-end gap-1">
-                           <span className="text-lg font-black text-slate-800">{l.distance}</span>
-                           <span className="text-[10px] font-bold text-slate-400 mb-1">km</span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{l.menuDetail}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        {/* 監督用編集機能（削除のみ） */}
-                        <button 
-                          onClick={() => setConfirmDialog({
-                            isOpen: true,
-                            message: `${l.date}の記録(${l.distance}km)を削除しますか？`,
-                            onConfirm: async () => {
-                              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id));
-                              setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                            }
-                          })}
-                          className="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"
-                        >
-                          <Trash2 size={16}/>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {allLogs.filter(l => l.runnerId === selectedRunner.id).length === 0 && (
-                    <div className="p-8 text-center text-xs text-slate-400 font-bold">記録がありません</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
+          {view === 'coach-check' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Status Check</h3><div className="flex flex-col md:flex-row items-center justify-center mb-6 gap-6"><input type="date" className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500" value={checkDate} onChange={e => setCheckDate(e.target.value)} /><div className="grid grid-cols-2 gap-4 w-full md:w-auto"><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出率</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-blue-600">{checkListData.length > 0 ? Math.round((checkListData.filter(r => r.status !== 'unsubmitted').length / checkListData.length) * 100) : 0}</span><span className="text-xs font-bold text-slate-400 mb-1">%</span></div></div><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-emerald-600">{checkListData.filter(r => r.status !== 'unsubmitted').length}</span><span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span></div></div></div></div><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2">{checkListData.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group"><div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${r.status === 'active' ? 'bg-blue-500' : r.status === 'rest' ? 'bg-emerald-400' : 'bg-rose-400'}`}>{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p></div></div><div>{r.status === 'active' && (<span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Check size={12}/> {r.detail}</span>)}{r.status === 'rest' && (<span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">{r.detail}</span>)}{r.status === 'unsubmitted' && (<span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><AlertTriangle size={12}/> 未提出</span>)}</div></div>))}</div></div>)}
+          {view === 'coach-menu' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">Board Update</h3><div className="space-y-4 max-w-2xl mx-auto"><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-black text-sm" value={menuInput.date} onChange={e=>setMenuInput({...menuInput, date: e.target.value})}/><textarea placeholder="指示を入力..." className="w-full p-6 bg-slate-50 rounded-[2.5rem] h-64 outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-500 text-lg leading-relaxed shadow-inner resize-none" value={menuInput.text} onChange={e=>setMenuInput({...menuInput, text: e.target.value})} /><button onClick={async() => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menus', menuInput.date), menuInput); setSuccessMsg('掲示しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95 transition-all">掲示板を更新</button></div></div>)}
+          {view === 'coach-roster' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Team Roster</h3><div className="space-y-4"><h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><UserCheck size={16}/> Active Members ({activeRunners.length})</h4><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">{activeRunners.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2" onClick={() => handleCoachEditRunner(r)}><div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Goal: {r.goalMonthly}km/mo</p><p className="text-[10px] text-slate-300 font-mono">PIN: {r.pin || '未設定'}</p></div></div><div className="flex items-center gap-2"><ChevronRight className="text-slate-300" size={20}/></div></div>))}</div></div><div className="space-y-4 pt-8 border-t border-slate-100"><h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><Archive size={16}/> Retired / Inactive</h4><div className="divide-y divide-slate-100 opacity-60 hover:opacity-100 transition-opacity grid md:grid-cols-2 gap-x-12 gap-y-0">{allRunners.filter(r => r.status === 'retired').map(r => (<div key={r.id} className="py-4 flex items-center justify-between"><div className="flex items-center gap-3 grayscale"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-600">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Retired</p></div></div><div className="flex items-center gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${r.lastName}選手を現役復帰させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id), { status: 'active' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 transition-colors" title="現役復帰"><UserCheck size={18}/></button><button onClick={() => setConfirmDialog({ isOpen: true, message: `警告: ${r.lastName}選手のデータを完全に削除します。元に戻せません。よろしいですか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-rose-50 text-rose-600 p-2 rounded-xl hover:bg-rose-100 transition-colors" title="完全削除"><Trash2 size={18}/></button></div></div>))}{allRunners.filter(r => r.status === 'retired').length === 0 && (<p className="text-[10px] text-slate-300 italic py-2">引退した選手はいません</p>)}</div></div></div>)}
+          {view === 'coach-runner-detail' && selectedRunner && (<div className="space-y-6 animate-in slide-in-from-right-10 max-w-3xl mx-auto"><div className="flex items-center gap-4 bg-white p-4 rounded-3xl shadow-sm"><button onClick={() => setView('coach-roster')} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft size={20} className="text-slate-600"/></button><h3 className="font-black text-lg text-slate-800">{selectedRunner.lastName} {selectedRunner.firstName}</h3></div><div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Settings size={14}/> Profile Settings</h4><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 ml-1">苗字</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.lastName} onChange={e => setCoachEditFormData({...coachEditFormData, lastName: e.target.value})}/></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">名前</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.firstName} onChange={e => setCoachEditFormData({...coachEditFormData, firstName: e.target.value})}/></div></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">PIN (パスコード)</label><div className="relative"><input type="tel" maxLength={4} className="w-full p-3 pl-10 bg-slate-50 rounded-xl font-mono font-bold text-lg outline-none border border-slate-100 focus:border-blue-500 tracking-widest" value={coachEditFormData.pin} onChange={e => setCoachEditFormData({...coachEditFormData, pin: e.target.value.replace(/[^0-9]/g, '')})}/><KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/></div></div><button onClick={handleCoachSaveProfile} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={16}/> 保存する</button><button onClick={() => setConfirmDialog({ isOpen: true, message: `${selectedRunner.lastName}選手を引退させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), { status: 'retired' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); setView('coach-roster'); } })} className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">引退へ移動</button></div><div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100"><div className="p-6 bg-slate-50 border-b flex justify-between items-center"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Activity size={14}/> Activity Logs</h4><span className="text-[10px] font-bold text-slate-400">{allLogs.filter(l => l.runnerId === selectedRunner.id).length} records</span></div><div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">{allLogs.filter(l => l.runnerId === selectedRunner.id).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(l => (<div key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"><div><div className="flex items-center gap-2 mb-1"><span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{l.date}</span><span className="text-[10px] font-bold text-slate-500">{l.category}</span></div><div className="flex items-end gap-1"><span className="text-lg font-black text-slate-800">{l.distance}</span><span className="text-[10px] font-bold text-slate-400 mb-1">km</span></div><p className="text-[10px] text-slate-400 truncate max-w-[150px]">{l.menuDetail}</p></div><div className="flex gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${l.date}の記録(${l.distance}km)を削除しますか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"><Trash2 size={16}/></button></div></div>))}{allLogs.filter(l => l.runnerId === selectedRunner.id).length === 0 && (<div className="p-8 text-center text-xs text-slate-400 font-bold">記録がありません</div>)}</div></div></div>)}
+          
+          {/* 修正箇所: ここでcoach-settingsのコンポーネントを閉じる */}
           {view === 'coach-settings' && (
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5">
+            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Settings</h3>
               <div className="space-y-6">
-                <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Passcode</label><input type="text" maxLength={4} className="w-full p-5 bg-slate-50 rounded-2xl font-black text-4xl text-center outline-none border-2 border-transparent focus:border-blue-500 font-mono tracking-[0.5em]" value={appSettings.coachPass} onChange={e=>setAppSettings({...appSettings, coachPass: e.target.value})}/></div>
-                
-                {/* Team Passcode Setting */}
-                <div className="space-y-2"><label className="text-[10px] font-black text-emerald-500 uppercase ml-3 tracking-widest">Team Join Passcode</label><input type="text" className="w-full p-5 bg-slate-50 rounded-2xl font-black text-2xl text-center outline-none border-2 border-transparent focus:border-emerald-500 tracking-widest text-emerald-600" value={appSettings.teamPass} onChange={e=>setAppSettings({...appSettings, teamPass: e.target.value})}/></div>
-
-                <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Period</label><div className="grid grid-cols-2 gap-4"><input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.startDate} onChange={e=>setAppSettings({...appSettings, startDate: e.target.value})}/><input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.endDate} onChange={e=>setAppSettings({...appSettings, endDate: e.target.value})}/></div></div>
-                
-                {/* Custom Quarters Settings */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Passcode</label>
+                  <input type="text" maxLength={4} className="w-full p-5 bg-slate-50 rounded-2xl font-black text-4xl text-center outline-none border-2 border-transparent focus:border-blue-500 font-mono tracking-[0.5em]" value={appSettings.coachPass} onChange={e=>setAppSettings({...appSettings, coachPass: e.target.value})}/>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-emerald-500 uppercase ml-3 tracking-widest">Team Join Passcode</label>
+                  <input type="text" className="w-full p-5 bg-slate-50 rounded-2xl font-black text-2xl text-center outline-none border-2 border-transparent focus:border-emerald-500 tracking-widest text-emerald-600" value={appSettings.teamPass} onChange={e=>setAppSettings({...appSettings, teamPass: e.target.value})}/>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Period</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.startDate} onChange={e=>setAppSettings({...appSettings, startDate: e.target.value})}/>
+                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.endDate} onChange={e=>setAppSettings({...appSettings, endDate: e.target.value})}/>
+                  </div>
+                </div>
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Quarter Intervals</label>
@@ -1893,25 +1615,12 @@ const App = () => {
                     ))}
                   </div>
                 </div>
-
                 <button onClick={() => { setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), appSettings); setSuccessMsg('保存しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95">設定保存</button>
               </div>
             </div>
           )}
         </main>
-        
-        {/* Custom Confirmation Dialog */}
-        {confirmDialog.isOpen && (
-          <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
-              <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">{confirmDialog.message}</p>
-              <div className="flex gap-3">
-                <button onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500 text-sm">キャンセル</button>
-                <button onClick={confirmDialog.onConfirm} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg">OK</button>
-              </div>
-            </div>
-          </div>
-        )}
+        {confirmDialog.isOpen && (<div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-in fade-in"><div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95"><p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">{confirmDialog.message}</p><div className="flex gap-3"><button onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500 text-sm">キャンセル</button><button onClick={confirmDialog.onConfirm} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg">OK</button></div></div></div>)}
       </div>
     );
   }
