@@ -134,30 +134,92 @@ const App = () => {
   const [menuInput, setMenuInput] = useState({ date: new Date().toLocaleDateString('sv-SE'), text: '' });
   const [goalInput, setGoalInput] = useState({ monthly: '', period: '', q1: '', q2: '', q3: '', q4: '' });
 
-  // Print Styles
+  // Print Styles - 強化版
   const printStyles = `
     @media print {
-      @page { size: landscape; margin: 10mm; }
-      body { background-color: white !important; -webkit-print-color-adjust: exact; }
-      body * { visibility: hidden; }
-      #printable-report, #printable-report * { visibility: visible; }
+      @page { 
+        size: A4 landscape; 
+        margin: 5mm; 
+      }
+      body { 
+        background-color: white !important; 
+        -webkit-print-color-adjust: exact; 
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      body * { 
+        visibility: hidden; 
+      }
+      
+      #printable-report, #printable-report * { 
+        visibility: visible; 
+      }
+      
       #printable-report {
         position: absolute;
         left: 0;
         top: 0;
         width: 100%;
         margin: 0;
-        padding: 0;
+        padding: 20px;
         background-color: white !important;
+        /* グリッドレイアウトを無効化 */
+        display: block !important;
       }
+      
       .no-print { display: none !important; }
-      .recharts-responsive-container { width: 100% !important; height: auto !important; }
+      
+      /* グラフコンテナの強制スタイル */
+      .print-chart-container {
+        width: 100% !important;
+        height: auto !important;
+        page-break-inside: avoid; /* グラフの途中での改ページを禁止 */
+        margin-bottom: 50px;      /* グラフ間の余白 */
+        display: block !important;
+      }
+      
+      /* グラフタイトルの調整 */
+      .print-chart-container h3 {
+        font-size: 18px !important;
+        margin-bottom: 10px !important;
+        text-align: center !important;
+        color: #000 !important;
+      }
+
+      /* Rechartsのコンテナサイズを強制的に大きくする */
+      .recharts-responsive-container {
+        width: 100% !important;
+        height: 400px !important; /* 高さを固定 */
+        min-height: 400px !important;
+      }
+
+      /* グリッドシステムを無効化して縦積みにする */
+      .grid {
+        display: block !important;
+      }
+      .grid-cols-2 {
+        grid-template-columns: none !important;
+      }
+      .md\\:grid-cols-2 {
+        grid-template-columns: none !important;
+      }
+      
+      /* 表の調整 */
+      table {
+        width: 100% !important;
+        font-size: 10px !important;
+      }
+      th, td {
+        padding: 4px !important;
+        border: 1px solid #ddd !important;
+      }
     }
   `;
 
   // 1. Auth & Initial Load
   useEffect(() => {
-    document.title = "KCTF-EkidenTeam";
+    document.title = "KCTF Ekiden Team";
 
     const initAuth = async () => {
       try {
@@ -255,6 +317,7 @@ const App = () => {
     return appSettings.quarters || [];
   }, [appSettings]);
 
+  // Filter for active runners only
   const activeRunners = useMemo(() => {
     return allRunners.filter(r => r.status !== 'retired');
   }, [allRunners]);
@@ -368,6 +431,7 @@ const App = () => {
     return { matrix, totals, qTotals };
   }, [reportDates, activeRunners, allLogs, activeQuarters]);
 
+  // --- Calculate Cumulative Data for Line Chart ---
   const cumulativeData = useMemo(() => {
     const data = [];
     reportDates.forEach(date => {
@@ -387,6 +451,7 @@ const App = () => {
     return data;
   }, [reportDates, activeRunners, allLogs]);
 
+  // --- Check List Data for Coach (Unsubmitted vs Rest vs Active) ---
   const checkListData = useMemo(() => {
     return activeRunners.map(runner => {
       const log = allLogs.find(l => l.runnerId === runner.id && l.date === checkDate);
@@ -407,16 +472,20 @@ const App = () => {
   }, [activeRunners, allLogs, checkDate]);
 
 
+  // --- Coach Stats Calculations ---
   const coachStats = useMemo(() => {
+    // 1. Reporting Rate for Today
     const todayStr = new Date().toLocaleDateString('sv-SE');
     const reportedCount = activeRunners.filter(r => {
       return allLogs.some(l => l.runnerId === r.id && l.date === todayStr);
     }).length;
     const reportRate = activeRunners.length > 0 ? Math.round((reportedCount / activeRunners.length) * 100) : 0;
 
+    // 2. Pain Alert (Latest log has pain >= 3)
     const painAlertCount = activeRunners.filter(r => {
       const runnerLogs = allLogs.filter(l => l.runnerId === r.id);
       if (runnerLogs.length === 0) return false;
+      // Sort by date desc
       runnerLogs.sort((a,b) => new Date(b.date) - new Date(a.date));
       return runnerLogs[0].pain >= 3;
     }).length;
@@ -451,7 +520,7 @@ const App = () => {
     const dataRows = reportMatrix.matrix.map(row => {
       const rowData = [row.date.slice(5).replace('-','/')];
       runnerIds.forEach(id => {
-        rowData.push(row[id] !== '-' ? row[id] : ''); 
+        rowData.push(row[id] !== '-' ? row[id] : ''); // CSV export also supports new string values
       });
       return rowData;
     });
@@ -520,6 +589,7 @@ const App = () => {
     setIsMenuOpen(false); 
   };
 
+  // --- 新規登録（上書き防止チェック付き） ---
   const handleRegister = async () => {
     setErrorMsg(''); 
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -578,6 +648,7 @@ const App = () => {
     }
   };
 
+  // --- ログイン（上書き防止チェック付き） ---
   const handleLogin = async () => {
     setErrorMsg('');
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -649,7 +720,6 @@ const App = () => {
     }
   };
 
-  // --- 修正箇所: handleEditLog関数の復活 ---
   const handleEditLog = (log) => {
     setFormData({
       date: log.date,
@@ -666,7 +736,6 @@ const App = () => {
     setEditingLogId(log.id);
     setView('entry');
   };
-  // ------------------------------------
 
   const handleCoachEditRunner = (runner) => {
     setSelectedRunner(runner);
@@ -706,25 +775,57 @@ const App = () => {
   // --- Initial Views ---
   if (!role) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 text-white">
-        <Trophy className="mb-6 text-blue-500 animate-bounce" size={60} />
-        <h1 className="text-4xl font-black italic tracking-tighter mb-12">KCTF-EkidenTeam</h1>
-        <div className="w-full max-w-xs space-y-4">
-          <button onClick={() => setRole('registering')} className="w-full bg-blue-600 py-5 rounded-3xl font-black text-lg shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
-            <UserPlus size={24}/> 初めての方 (新規登録)
-          </button>
-          <button onClick={() => setRole('login')} className="w-full bg-emerald-600 py-5 rounded-3xl font-black text-lg shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
-            <LogIn size={24}/> 2回目以降 (ログイン)
-          </button>
-          <button onClick={() => setRole('coach-auth')} className="w-full bg-slate-800 py-4 rounded-3xl font-bold text-slate-400 active:scale-95 transition-all mt-4">
-            監督ログイン
-          </button>
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        {/* 背景装飾（控えめに） */}
+        <div className="absolute top-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-blue-50 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-blue-50 rounded-full blur-3xl pointer-events-none"></div>
+
+        {/* ロゴエリア */}
+        <div className="mb-16 relative z-10 flex flex-col items-center animate-in fade-in zoom-in duration-700">
+           <div className="w-48 h-48 mb-6 relative">
+              <img 
+                src="team-logo.png"
+                alt="Team Logo" 
+                className="w-full h-full object-contain drop-shadow-md"
+                onError={(e) => {
+                  e.target.onerror = null; 
+                  e.target.style.display = 'none'; 
+                  document.getElementById('logo-placeholder').style.display = 'flex';
+                }}
+              />
+              <div id="logo-placeholder" className="hidden absolute inset-0 w-full h-full bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
+                 <Trophy size={80} />
+              </div>
+           </div>
+           
+           <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-blue-900 text-center">KCTF Ekiden Team</h1>
+           <p className="text-sm font-bold text-slate-400 tracking-widest uppercase mt-2">Distance Records</p>
         </div>
+
+        {/* ボタンエリア */}
+        <div className="w-full max-w-xs space-y-4 relative z-10">
+           {/* 修正: ログインを青、新規登録を白に変更 */}
+           <button onClick={() => setRole('login')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3">
+            <LogIn size={22}/> ログイン <span className="text-xs font-normal opacity-80">(2回目以降)</span>
+          </button>
+          
+          <button onClick={() => setRole('registering')} className="w-full bg-white hover:bg-blue-50 text-blue-600 py-5 rounded-2xl font-bold text-lg shadow-lg shadow-slate-100 active:scale-95 transition-all flex items-center justify-center gap-3 border-2 border-blue-100">
+            <UserPlus size={22}/> 新規登録 <span className="text-xs font-normal opacity-60">(初めての方)</span>
+          </button>
+          
+          <div className="pt-10 pb-12">
+            <button onClick={() => setRole('coach-auth')} className="text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-blue-600 transition-colors flex items-center gap-1 mx-auto">
+              <Lock size={12}/> Coach Login
+            </button>
+          </div>
+        </div>
+        
+        <p className="absolute bottom-6 text-[10px] text-slate-300 font-mono">© 2026 KCTF EKIDEN TEAM</p>
       </div>
     );
   }
 
-  // (Coach Auth, Registering, Login, Runner View are same as before)
+  // ... (Other views logic same as before, no changes needed for this specific request)
   if (role === 'coach-auth') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
@@ -742,7 +843,7 @@ const App = () => {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="w-full max-w-sm bg-white p-10 rounded-[3rem] shadow-2xl space-y-6">
-          <h2 className="text-2xl font-black text-blue-600 text-center uppercase italic">New Member</h2>
+          <h2 className="text-2xl font-black text-slate-900 text-center uppercase italic">New Member</h2>
           <div className="space-y-4">
             <input placeholder="苗字 (例: 佐藤)" className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
             <input placeholder="名前 (例: 太郎)" className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
@@ -786,7 +887,7 @@ const App = () => {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="w-full max-w-sm bg-white p-10 rounded-[3rem] shadow-2xl space-y-6">
-          <h2 className="text-2xl font-black text-emerald-600 text-center uppercase italic">Login</h2>
+          <h2 className="text-2xl font-black text-slate-900 text-center uppercase italic">Login</h2>
           <p className="text-xs text-center text-slate-400 font-bold">以前のデータを引き継ぎます</p>
           <div className="space-y-4">
             <input placeholder="苗字 (例: 佐藤)" className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
@@ -1304,7 +1405,12 @@ const App = () => {
               <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border border-slate-100">
                 <div className="p-6 bg-slate-100 text-[10px] font-black uppercase tracking-widest border-b">Recent Activity</div>
                 <div className="divide-y divide-slate-50 max-h-[30rem] overflow-y-auto no-scrollbar">
-                  {allLogs.filter(l => !activeRunners.find(r => r.id === l.runnerId)?.status === 'retired').sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, 50).map(l => (
+                  {/* 修正: 現役選手のIDリストに含まれるログのみをフィルタリングして表示 */}
+                  {allLogs
+                    .filter(l => activeRunners.some(r => r.id === l.runnerId))
+                    .sort((a,b)=>new Date(b.date)-new Date(a.date))
+                    .slice(0, 50)
+                    .map(l => (
                     <div key={l.id} className="p-6 flex flex-col gap-2">
                       <div className="flex justify-between items-start">
                         <div className="flex gap-4 items-center">
@@ -1344,7 +1450,7 @@ const App = () => {
                   </div>
                 </div>
 
-                {/* Data Matrix - Modified for Status Display */}
+                {/* Data Matrix */}
                 <div className="overflow-x-auto pb-4">
                   <table className="w-full text-xs border-collapse">
                     <thead>
