@@ -10,6 +10,9 @@ import {
   Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList
 } from 'lucide-react';
 
+// --- App Version ---
+const APP_LAST_UPDATED = '2026.01.10 17:25';
+
 // --- Firebase Configuration ---
 const firebaseConfig = {
   apiKey: "AIzaSyAVvrlLTsioEuloE11hzykIz8rSk6qMJrk",
@@ -134,12 +137,12 @@ const App = () => {
   const [menuInput, setMenuInput] = useState({ date: new Date().toLocaleDateString('sv-SE'), text: '' });
   const [goalInput, setGoalInput] = useState({ monthly: '', period: '', q1: '', q2: '', q3: '', q4: '' });
 
-  // Print Styles - 1グラフ1ページ・完全最大化
+  // Print Styles - 1グラフ1ページ・完全最大化・横向き強制
   const printStyles = `
     @media print {
       @page { 
-        size: A4 landscape; 
-        margin: 0mm; 
+        size: landscape; 
+        margin: 0; 
       }
       body { 
         background-color: white !important; 
@@ -148,16 +151,21 @@ const App = () => {
         margin: 0;
         padding: 0;
       }
+      
+      /* 印刷時、基本は全て非表示 */
       body * { 
         visibility: hidden; 
         height: 0;
         overflow: hidden;
       }
+      
+      /* レポートエリアのみ表示 */
       #printable-report, #printable-report * { 
         visibility: visible; 
         height: auto;
         overflow: visible;
       }
+      
       #printable-report {
         position: absolute;
         left: 0;
@@ -169,8 +177,29 @@ const App = () => {
         background-color: white !important;
         display: block !important;
       }
+      
       .no-print { display: none !important; }
       
+      /* ページヘッダー（タイトルなど） */
+      .print-header {
+        padding: 10mm;
+        page-break-after: always;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      /* データテーブルは独立ページに */
+      .print-table-container {
+        width: 100%;
+        height: 100vh; 
+        page-break-after: always;
+        padding: 10mm;
+        box-sizing: border-box;
+      }
+
+      /* グラフコンテナ: 1つにつき1ページ使い切る */
       .print-chart-container {
         width: 100vw !important;
         height: 100vh !important; 
@@ -185,6 +214,7 @@ const App = () => {
         background: white; 
       }
 
+      /* グラフタイトル */
       .print-chart-container h3 {
         font-size: 24pt !important;
         font-weight: 900 !important;
@@ -194,16 +224,26 @@ const App = () => {
         width: 100%;
       }
 
+      /* 画面表示用の高さ指定を無効化 */
+      .h-64, .h-96 {
+        height: auto !important;
+        flex-grow: 1;
+        width: 100%;
+      }
+
+      /* Rechartsコンテナ: 領域いっぱいに広げる */
       .recharts-responsive-container {
         width: 100% !important;
         height: 100% !important;
         min-height: 500px !important;
       }
       
+      /* グリッドレイアウトを無効化 */
       .grid {
         display: block !important;
       }
       
+      /* 表の調整 */
       table {
         width: 100% !important;
         font-size: 10pt !important;
@@ -818,12 +858,15 @@ const App = () => {
           </div>
         </div>
         
-        <p className="absolute bottom-6 text-[10px] text-slate-300 font-mono">© 2026 KCTF EKIDEN TEAM</p>
+        <div className="absolute bottom-6 flex flex-col items-center">
+          <p className="text-[10px] text-slate-300 font-mono">© 2026 KCTF EKIDEN TEAM</p>
+          <p className="text-[8px] text-slate-200 font-mono mt-1">ver.{APP_LAST_UPDATED}</p>
+        </div>
       </div>
     );
   }
 
-  // ... (Other views logic same as before, no changes needed for this specific request)
+  // (Coach Auth, Registering, Login, Runner View are same as before)
   if (role === 'coach-auth') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
