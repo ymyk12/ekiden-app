@@ -148,21 +148,16 @@ const App = () => {
         margin: 0;
         padding: 0;
       }
-      
-      /* 印刷時、基本は全て非表示 */
       body * { 
         visibility: hidden; 
         height: 0;
         overflow: hidden;
       }
-      
-      /* レポートエリアのみ表示 */
       #printable-report, #printable-report * { 
         visibility: visible; 
         height: auto;
         overflow: visible;
       }
-      
       #printable-report {
         position: absolute;
         left: 0;
@@ -174,29 +169,8 @@ const App = () => {
         background-color: white !important;
         display: block !important;
       }
-      
       .no-print { display: none !important; }
       
-      /* ページヘッダー（タイトルなど） */
-      .print-header {
-        padding: 10mm;
-        page-break-after: always;
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-      }
-
-      /* データテーブルは独立ページに */
-      .print-table-container {
-        width: 100%;
-        height: 100vh; 
-        page-break-after: always;
-        padding: 10mm;
-        box-sizing: border-box;
-      }
-
-      /* グラフコンテナ: 1つにつき1ページ使い切る */
       .print-chart-container {
         width: 100vw !important;
         height: 100vh !important; 
@@ -211,7 +185,6 @@ const App = () => {
         background: white; 
       }
 
-      /* グラフタイトル */
       .print-chart-container h3 {
         font-size: 24pt !important;
         font-weight: 900 !important;
@@ -221,26 +194,16 @@ const App = () => {
         width: 100%;
       }
 
-      /* 画面表示用の高さ指定を無効化 */
-      .h-64, .h-96 {
-        height: auto !important;
-        flex-grow: 1;
-        width: 100%;
-      }
-
-      /* Rechartsコンテナ: 領域いっぱいに広げる */
       .recharts-responsive-container {
         width: 100% !important;
         height: 100% !important;
         min-height: 500px !important;
       }
       
-      /* グリッドレイアウトを無効化 */
       .grid {
         display: block !important;
       }
       
-      /* 表の調整 */
       table {
         width: 100% !important;
         font-size: 10pt !important;
@@ -624,7 +587,6 @@ const App = () => {
     setIsMenuOpen(false); 
   };
 
-  // --- 新規登録（上書き防止チェック付き） ---
   const handleRegister = async () => {
     setErrorMsg(''); 
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -683,7 +645,6 @@ const App = () => {
     }
   };
 
-  // --- ログイン（上書き防止チェック付き） ---
   const handleLogin = async () => {
     setErrorMsg('');
     if (!formData.lastName.trim() || !formData.firstName.trim()) return;
@@ -840,13 +801,13 @@ const App = () => {
         {/* ボタンエリア: 修正箇所 - 配色を逆に */}
         <div className="w-full max-w-xs space-y-4 relative z-10">
            
-          {/* 新規登録：青色（メイン） */}
-          <button onClick={() => setRole('registering')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3">
-            <UserPlus size={22}/> 新規登録 <span className="text-xs font-normal opacity-80">(初めての方)</span>
+          {/* 新規登録：白ベース（サブ） */}
+           <button onClick={() => setRole('registering')} className="w-full bg-white hover:bg-blue-50 text-blue-600 py-5 rounded-2xl font-bold text-lg shadow-lg shadow-slate-100 active:scale-95 transition-all flex items-center justify-center gap-3 border-2 border-blue-100">
+            <UserPlus size={22}/> 新規登録 <span className="text-xs font-normal opacity-60">(初めての方)</span>
           </button>
           
-          {/* ログイン：白ベース（サブ） */}
-          <button onClick={() => setRole('login')} className="w-full bg-white hover:bg-blue-50 text-blue-600 py-5 rounded-2xl font-bold text-lg shadow-lg shadow-slate-100 active:scale-95 transition-all flex items-center justify-center gap-3 border-2 border-blue-100">
+          {/* ログイン：青色（メイン） */}
+         <button onClick={() => setRole('login')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3">
             <LogIn size={22}/> ログイン <span className="text-xs font-normal opacity-80">(2回目以降)</span>
           </button>
           
@@ -862,7 +823,7 @@ const App = () => {
     );
   }
 
-  // (Coach Auth, Registering, Login, Runner View are same as before)
+  // ... (Other views logic same as before, no changes needed for this specific request)
   if (role === 'coach-auth') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
@@ -1136,37 +1097,67 @@ const App = () => {
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{appSettings.startDate.slice(5).replace('-','/')} - {appSettings.endDate.slice(5).replace('-','/')}</span>
               </div>
               
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 50 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11, fontWeight: 'bold', fill: '#1e293b'}} axisLine={false} tickLine={false}/>
-                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
-                    <Bar dataKey="total" radius={[0, 8, 8, 0]} barSize={20}>
-                      {rankingData.map((_, i) => (
-                        <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
-                      ))}
-                      <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '10px', fontWeight: 'black', fill: '#475569'}} offset={10} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* 修正箇所: グラフの高さを動的に設定 (Runner view) */}
+              <div className="w-full overflow-y-auto pr-2" style={{ maxHeight: '60vh' }}>
+                <div style={{ height: Math.max(300, rankingData.length * 50) }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 50 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" width={110} tick={{fontSize: 11, fontWeight: 'bold', fill: '#1e293b', interval: 0}} axisLine={false} tickLine={false}/>
+                      <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
+                      <Bar dataKey="total" radius={[0, 8, 8, 0]} barSize={20}>
+                        {rankingData.map((_, i) => (
+                          <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
+                        ))}
+                        <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '10px', fontWeight: 'black', fill: '#475569'}} offset={10} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
 
-              <div className="border-t border-slate-100 pt-4">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Leaderboard</p>
-                <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">
-                  {rankingData.map((r, i) => (
-                    <div key={r.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${i < 3 ? 'bg-yellow-400 text-white shadow-sm' : 'bg-slate-200 text-slate-500'}`}>
-                          {i + 1}
-                        </div>
-                        <span className="font-bold text-sm text-slate-700">{r.name}</span>
+              {/* Leaderboard廃止 -> Recent Activity追加 */}
+              <div className="border-t border-slate-100 pt-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <Activity size={14}/> Everyone's Activity
+                </p>
+                <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                  {allLogs
+                    .filter(l => activeRunners.some(r => r.id === l.runnerId)) // 現役部員のみ
+                    .sort((a, b) => {
+                       // 実施日(date)で降順ソート
+                       const dateDiff = new Date(b.date) - new Date(a.date);
+                       if (dateDiff !== 0) return dateDiff;
+                       // 同日の場合、作成日時が新しい順
+                       return (b.createdAt || '').localeCompare(a.createdAt || '');
+                    })
+                    .slice(0, 30) // 最新30件
+                    .map((l) => (
+                      <div key={l.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-2xl">
+                         {/* アイコン */}
+                         <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-black text-xs text-blue-600 shadow-sm shrink-0 border border-slate-100">
+                            {l.runnerName.charAt(0)}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-baseline mb-0.5">
+                               <span className="text-xs font-bold text-slate-700 truncate">{l.runnerName}</span>
+                               <span className="text-[10px] font-black text-slate-400">{l.date.slice(5).replace('-','/')}</span>
+                            </div>
+                            <div className="flex items-end gap-1 mb-1">
+                               <span className="text-lg font-black text-blue-600 leading-none">{l.distance}</span>
+                               <span className="text-[9px] font-bold text-slate-400">km</span>
+                               <span className="text-[9px] font-bold text-slate-400 ml-2 bg-white px-1.5 py-0.5 rounded border border-slate-100">{l.category}</span>
+                            </div>
+                            {l.menuDetail && (
+                              <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed bg-white/50 p-1.5 rounded-lg border border-slate-100/50 italic">
+                                {l.menuDetail}
+                              </p>
+                            )}
+                         </div>
                       </div>
-                      <span className="font-black text-blue-600 text-sm">{r.total} <span className="text-[9px] text-slate-400 font-normal">km</span></span>
-                    </div>
-                  ))}
+                    ))}
+                    {allLogs.length === 0 && <p className="text-center text-xs text-slate-400 py-4">まだ記録がありません</p>}
                 </div>
               </div>
             </div>
@@ -1458,21 +1449,23 @@ const App = () => {
                      <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2"><Trophy size={18} className="text-orange-500"/> Team Ranking</h3>
                      <button onClick={exportCSV} className="text-blue-600 p-2 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"><Download size={20}/></button>
                    </div>
-                   <div className="flex-1 w-full min-h-0">
-                     <ResponsiveContainer width="100%" height="100%">
-                       <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 60 }}>
-                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
-                         <XAxis type="number" hide />
-                         <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12, fontWeight: 'bold', fill: '#1e293b'}} axisLine={false} tickLine={false}/>
-                         <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
-                         <Bar dataKey="total" radius={[0, 10, 10, 0]} barSize={24}>
-                           {rankingData.map((_, i) => (
-                             <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
-                           ))}
-                           <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={10} />
-                         </Bar>
-                       </BarChart>
-                     </ResponsiveContainer>
+                   <div className="flex-1 w-full min-h-0 overflow-y-auto pr-2">
+                     <div style={{ height: Math.max(300, rankingData.length * 50) }}>
+                       <ResponsiveContainer width="100%" height="100%">
+                         <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 60 }}>
+                           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
+                           <XAxis type="number" hide />
+                           <YAxis dataKey="name" type="category" width={110} tick={{fontSize: 12, fontWeight: 'bold', fill: '#1e293b', interval: 0}} axisLine={false} tickLine={false}/>
+                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
+                           <Bar dataKey="total" radius={[0, 10, 10, 0]} barSize={24}>
+                             {rankingData.map((_, i) => (
+                               <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
+                             ))}
+                             <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={10} />
+                           </Bar>
+                         </BarChart>
+                       </ResponsiveContainer>
+                     </div>
                    </div>
                 </div>
 
@@ -1548,7 +1541,7 @@ const App = () => {
                    <div className="print-chart-container h-80">
                       <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center">Total Distance</h3>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={rankingData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fontSize: 10}} interval={0} angle={-45} textAnchor="end" height={60}/><YAxis tick={{fontSize: 10}}/><Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} /></BarChart>
+                        <BarChart data={rankingData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fontSize: 10, interval: 0}} interval={0} angle={-45} textAnchor="end" height={60}/><YAxis tick={{fontSize: 10}}/><Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} /></BarChart>
                       </ResponsiveContainer>
                    </div>
                    {activeQuarters.map((q, idx) => {
@@ -1557,7 +1550,7 @@ const App = () => {
                         <div key={idx} className="print-chart-container h-80">
                           <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center">Q{idx + 1} ({q.start.slice(5)} - {q.end.slice(5)})</h3>
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={qData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fontSize: 10}} interval={0} angle={-45} textAnchor="end" height={60}/><YAxis tick={{fontSize: 10}}/><Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} /></BarChart>
+                            <BarChart data={qData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fontSize: 10, interval: 0}} interval={0} angle={-45} textAnchor="end" height={60}/><YAxis tick={{fontSize: 10}}/><Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} /></BarChart>
                           </ResponsiveContainer>
                         </div>
                       );
@@ -1577,8 +1570,6 @@ const App = () => {
           {view === 'coach-menu' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">Board Update</h3><div className="space-y-4 max-w-2xl mx-auto"><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-black text-sm" value={menuInput.date} onChange={e=>setMenuInput({...menuInput, date: e.target.value})}/><textarea placeholder="指示を入力..." className="w-full p-6 bg-slate-50 rounded-[2.5rem] h-64 outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-500 text-lg leading-relaxed shadow-inner resize-none" value={menuInput.text} onChange={e=>setMenuInput({...menuInput, text: e.target.value})} /><button onClick={async() => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menus', menuInput.date), menuInput); setSuccessMsg('掲示しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95 transition-all">掲示板を更新</button></div></div>)}
           {view === 'coach-roster' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Team Roster</h3><div className="space-y-4"><h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><UserCheck size={16}/> Active Members ({activeRunners.length})</h4><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">{activeRunners.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2" onClick={() => handleCoachEditRunner(r)}><div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Goal: {r.goalMonthly}km/mo</p><p className="text-[10px] text-slate-300 font-mono">PIN: {r.pin || '未設定'}</p></div></div><div className="flex items-center gap-2"><ChevronRight className="text-slate-300" size={20}/></div></div>))}</div></div><div className="space-y-4 pt-8 border-t border-slate-100"><h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><Archive size={16}/> Retired / Inactive</h4><div className="divide-y divide-slate-100 opacity-60 hover:opacity-100 transition-opacity grid md:grid-cols-2 gap-x-12 gap-y-0">{allRunners.filter(r => r.status === 'retired').map(r => (<div key={r.id} className="py-4 flex items-center justify-between"><div className="flex items-center gap-3 grayscale"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-600">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Retired</p></div></div><div className="flex items-center gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${r.lastName}選手を現役復帰させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id), { status: 'active' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 transition-colors" title="現役復帰"><UserCheck size={18}/></button><button onClick={() => setConfirmDialog({ isOpen: true, message: `警告: ${r.lastName}選手のデータを完全に削除します。元に戻せません。よろしいですか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-rose-50 text-rose-600 p-2 rounded-xl hover:bg-rose-100 transition-colors" title="完全削除"><Trash2 size={18}/></button></div></div>))}{allRunners.filter(r => r.status === 'retired').length === 0 && (<p className="text-[10px] text-slate-300 italic py-2">引退した選手はいません</p>)}</div></div></div>)}
           {view === 'coach-runner-detail' && selectedRunner && (<div className="space-y-6 animate-in slide-in-from-right-10 max-w-3xl mx-auto"><div className="flex items-center gap-4 bg-white p-4 rounded-3xl shadow-sm"><button onClick={() => setView('coach-roster')} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft size={20} className="text-slate-600"/></button><h3 className="font-black text-lg text-slate-800">{selectedRunner.lastName} {selectedRunner.firstName}</h3></div><div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Settings size={14}/> Profile Settings</h4><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 ml-1">苗字</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.lastName} onChange={e => setCoachEditFormData({...coachEditFormData, lastName: e.target.value})}/></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">名前</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.firstName} onChange={e => setCoachEditFormData({...coachEditFormData, firstName: e.target.value})}/></div></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">PIN (パスコード)</label><div className="relative"><input type="tel" maxLength={4} className="w-full p-3 pl-10 bg-slate-50 rounded-xl font-mono font-bold text-lg outline-none border border-slate-100 focus:border-blue-500 tracking-widest" value={coachEditFormData.pin} onChange={e => setCoachEditFormData({...coachEditFormData, pin: e.target.value.replace(/[^0-9]/g, '')})}/><KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/></div></div><button onClick={handleCoachSaveProfile} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={16}/> 保存する</button><button onClick={() => setConfirmDialog({ isOpen: true, message: `${selectedRunner.lastName}選手を引退させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), { status: 'retired' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); setView('coach-roster'); } })} className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">引退へ移動</button></div><div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100"><div className="p-6 bg-slate-50 border-b flex justify-between items-center"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Activity size={14}/> Activity Logs</h4><span className="text-[10px] font-bold text-slate-400">{allLogs.filter(l => l.runnerId === selectedRunner.id).length} records</span></div><div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">{allLogs.filter(l => l.runnerId === selectedRunner.id).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(l => (<div key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"><div><div className="flex items-center gap-2 mb-1"><span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{l.date}</span><span className="text-[10px] font-bold text-slate-500">{l.category}</span></div><div className="flex items-end gap-1"><span className="text-lg font-black text-slate-800">{l.distance}</span><span className="text-[10px] font-bold text-slate-400 mb-1">km</span></div><p className="text-[10px] text-slate-400 truncate max-w-[150px]">{l.menuDetail}</p></div><div className="flex gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${l.date}の記録(${l.distance}km)を削除しますか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"><Trash2 size={16}/></button></div></div>))}{allLogs.filter(l => l.runnerId === selectedRunner.id).length === 0 && (<div className="p-8 text-center text-xs text-slate-400 font-bold">記録がありません</div>)}</div></div></div>)}
-          
-          {/* 修正箇所: ここでcoach-settingsのコンポーネントを閉じる */}
           {view === 'coach-settings' && (
             <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Settings</h3>
@@ -1594,8 +1585,7 @@ const App = () => {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Period</label>
                   <div className="grid grid-cols-2 gap-4">
-                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.startDate} onChange={e=>setAppSettings({...appSettings, startDate: e.target.value})}/>
-                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.endDate} onChange={e=>setAppSettings({...appSettings, endDate: e.target.value})}/>
+                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.startDate} onChange={e=>setAppSettings({...appSettings, startDate: e.target.value})}/><input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.endDate} onChange={e=>setAppSettings({...appSettings, endDate: e.target.value})}/>
                   </div>
                 </div>
                 <div className="space-y-2 pt-2 border-t border-slate-100">
@@ -1603,17 +1593,7 @@ const App = () => {
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Quarter Intervals</label>
                     <button onClick={handleAutoFillQuarters} className="text-[9px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black flex items-center gap-1"><RefreshCw size={10}/> Auto</button>
                   </div>
-                  <div className="space-y-3">
-                    {appSettings.quarters.map((q, idx) => (
-                      <div key={q.id} className="bg-slate-50 p-3 rounded-2xl">
-                        <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Quarter {q.id}</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <input type="date" className="w-full p-2 bg-white rounded-xl text-[10px] font-black outline-none border border-slate-100" value={q.start} onChange={e => handleQuarterChange(idx, 'start', e.target.value)}/>
-                          <input type="date" className="w-full p-2 bg-white rounded-xl text-[10px] font-black outline-none border border-slate-100" value={q.end} onChange={e => handleQuarterChange(idx, 'end', e.target.value)}/>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="space-y-3">{appSettings.quarters.map((q, idx) => (<div key={q.id} className="bg-slate-50 p-3 rounded-2xl"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Quarter {q.id}</p><div className="grid grid-cols-2 gap-3"><input type="date" className="w-full p-2 bg-white rounded-xl text-[10px] font-black outline-none border border-slate-100" value={q.start} onChange={e => handleQuarterChange(idx, 'start', e.target.value)}/><input type="date" className="w-full p-2 bg-white rounded-xl text-[10px] font-black outline-none border border-slate-100" value={q.end} onChange={e => handleQuarterChange(idx, 'end', e.target.value)}/></div></div>))}</div>
                 </div>
                 <button onClick={() => { setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), appSettings); setSuccessMsg('保存しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95">設定保存</button>
               </div>
