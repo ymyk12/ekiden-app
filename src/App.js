@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 // --- App Version ---
-const APP_LAST_UPDATED = '2026.01.12 08:35';
+const APP_LAST_UPDATED = '2026.01.12 12:30';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -697,7 +697,6 @@ const App = () => {
     if (formData.lastName.trim() === 'admin') {
       setIsSubmitting(true);
       try {
-        const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners');
         const adminProfile = {
           lastName: 'admin',
           firstName: formData.firstName || 'User',
@@ -705,11 +704,12 @@ const App = () => {
           goalPeriod: 0,
           status: 'active',
           pin: formData.personalPin || '0000',
-          registeredAt: new Date().toISOString()
+          registeredAt: new Date().toISOString(),
+          id: 'admin_temp_id' // 一時的なIDを使用
         };
-        // AdminはDB保存しない
+        
         setProfile(adminProfile);
-        setRole('admin-runner');
+        setRole('admin-runner'); 
         setView('menu');
         setSuccessMsg('管理者モード（保存なし）で開始');
         setTimeout(() => setSuccessMsg(''), 3000);
@@ -840,6 +840,12 @@ const App = () => {
   const handleQuarterChange = (index, field, value) => { const newQuarters = [...appSettings.quarters]; newQuarters[index] = { ...newQuarters[index], [field]: value }; setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
   const handleAutoFillQuarters = () => { const newQuarters = calculateAutoQuarters(appSettings.startDate, appSettings.endDate); setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
   const isCurrentQuarter = (q) => { if (!q || !q.start || !q.end) return false; const now = new Date().toLocaleDateString('sv-SE'); return now >= q.start && now <= q.end; };
+
+  // プレビュー機能用ハンドラ
+  const handleStartPreview = (runner) => {
+    setPreviewRunner(runner);
+    window.scrollTo(0,0);
+  };
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div></div>;
 
@@ -1219,12 +1225,11 @@ const App = () => {
                  {rankingData.length === 0 && <p className="text-center text-xs text-slate-400 py-8">データがありません</p>}
               </div>
 
-              {/* PC用: Recharts グラフ表示 (md:block) - 修正: 縦棒グラフに変更 + マージン修正 */}
+              {/* PC用: Recharts グラフ表示 (md:block) - 修正: 縦棒グラフに変更 */}
               <div className="w-full overflow-y-auto pr-2 hidden md:block" style={{ maxHeight: '60vh' }}>
                 <div style={{ height: '400px', width: `${Math.max(100, rankingData.length * 15)}%` }}> {/* 幅を人数に応じて広げる */}
                   <ResponsiveContainer width="100%" height="100%">
-                    {/* 修正: マージン left: 20 */}
-                    <BarChart data={rankingData} margin={{ left: 20, right: 20, bottom: 30 }}>
+                    <BarChart data={rankingData} margin={{ left: 0, right: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
                       <XAxis 
                          dataKey="name" 
@@ -1293,6 +1298,114 @@ const App = () => {
             </div>
           )}
 
+          {view === 'entry' && (
+            <div className="bg-white p-7 rounded-[2.5rem] shadow-xl space-y-6 animate-in slide-in-from-bottom-8 pb-10">
+              <h2 className="text-xl font-black flex items-center gap-2">
+                {editingLogId ? <Edit className="text-blue-600" /> : <Plus className="text-blue-600"/>} 
+                {editingLogId ? "記録の編集" : "練習記録"}
+              </h2>
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">日付</label>
+                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-xs outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
+                  </div>
+                  <div className="space-y-1">
+                     {/* 修正: 「今日は休み」ボタンを日付の横などに配置すると収まりが良い */}
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">休憩</label>
+                    <button onClick={() => setConfirmDialog({
+                      isOpen: true,
+                      message: '今日を「完全休養」として記録しますか？',
+                      onConfirm: async () => {
+                        setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
+                        setIsSubmitting(true);
+                        try {
+                          const dataToSave = {
+                            date: formData.date, 
+                            distance: 0,
+                            category: '完全休養',
+                            menuDetail: 'オフ',
+                            rpe: 1,
+                            pain: 1,
+                            achieved: true,
+                            runnerId: currentUserId,
+                            runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
+                          };
+                          
+                          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+                              ...dataToSave,
+                              createdAt: new Date().toISOString()
+                          });
+                          setSuccessMsg('休養日として記録しました');
+                          resetForm();
+                          setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500);
+                        } catch(e) {
+                          console.error(e);
+                          setSuccessMsg("保存エラー");
+                        } finally {
+                          setIsSubmitting(false);
+                        }
+                      }
+                    })} disabled={isSubmitting} className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm border border-emerald-100 active:scale-95 transition-all">
+                      休養
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">距離 (km)</label>
+                    <input type="number" step="0.1" className="w-full p-4 bg-slate-50 rounded-2xl font-black text-2xl text-blue-600 outline-none" value={formData.distance} onChange={e => setFormData({...formData, distance: e.target.value})} placeholder="0.0"/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">練習区分</label>
+                    <div className="grid grid-rows-3 gap-1 h-full">
+                       {['朝練', '午前練', '午後練'].map(cat => (
+                        <button key={cat} onClick={() => setFormData({...formData, category: cat})} className={`h-full rounded-lg font-bold text-[9px] uppercase transition-all ${formData.category === cat ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 flex items-center gap-1"><BookOpen size={12}/> メニュー詳細</label>
+                  <textarea 
+                    className="w-full p-4 bg-slate-50 rounded-2xl h-24 outline-none font-bold text-slate-700 resize-none shadow-inner text-sm" 
+                    placeholder="例: 1000m × 5 (3'00), 20kmジョグ 等" 
+                    value={formData.menuDetail} 
+                    onChange={e => setFormData({...formData, menuDetail: e.target.value})}
+                  />
+                </div>
+
+                <div className="p-6 bg-slate-50 rounded-[2rem] space-y-5">
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span>練習強度 (RPE)</span>
+                    <span className="text-blue-600">Lv: {formData.rpe}</span>
+                  </div>
+                  <input type="range" min="1" max="10" className="w-full accent-blue-600" value={formData.rpe} onChange={e => setFormData({...formData, rpe: parseInt(e.target.value)})}/>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">足の痛み (1-5)</label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[1, 2, 3, 4, 5].map(v => (
+                        <button key={v} onClick={() => setFormData({...formData, pain: v})} className={`py-3 rounded-[1.1rem] text-sm font-black transition-all ${formData.pain === v ? 'bg-rose-500 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>{v}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <button onClick={handleSaveLog} disabled={isSubmitting || !formData.distance} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black text-lg active:scale-95 transition-all shadow-xl shadow-blue-100 disabled:opacity-50">
+                    {isSubmitting ? '保存中...' : (editingLogId ? '更新する' : '記録を保存する')}
+                  </button>
+                  {editingLogId && (
+                    <button onClick={resetForm} className="w-full py-4 text-slate-400 font-bold text-sm">編集をキャンセル</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {view === 'stats' && (
             <div className="space-y-6 pb-16 animate-in slide-in-from-right-10">
               <div className="bg-white p-7 rounded-[2.5rem] shadow-lg">
@@ -1301,10 +1414,11 @@ const App = () => {
                 </h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={personalStats.daily} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
+                    {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
+                    <BarChart data={personalStats.daily} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
                       <XAxis dataKey="label" tick={{fontSize: 9, fontWeight: 'bold', fill: '#cbd5e1'}} axisLine={false} tickLine={false} />
-                      <YAxis tick={{fontSize: 9, fontWeight: 'bold', fill: '#cbd5e1'}} axisLine={false} tickLine={false} />
+                      <YAxis tick={{fontSize: 9, fontWeight: 'bold', fill: '#cbd5e1'}} width={30} axisLine={false} tickLine={false} />
                       <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 'bold'}} />
                       <Bar dataKey="distance" radius={[5, 5, 0, 0]}>
                         {personalStats.daily.map((entry, index) => (
@@ -1574,7 +1688,7 @@ const App = () => {
                       <div className="h-96 w-full print-chart-content">
                         <ResponsiveContainer width="99%" height="100%">
                           {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                          <LineChart data={cumulativeData} margin={{ top: 10, right: 20, left: 20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/><XAxis dataKey="date" tick={{fontSize: 10}} /><YAxis tick={{fontSize: 10}} width={30} /><Tooltip /><Legend />{activeRunners.map((r, i) => (<Line key={r.id} type="monotone" dataKey={r.id} name={`${r.lastName} ${r.firstName}`} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 6 }} />))}</LineChart>
+                          <LineChart data={cumulativeData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/><XAxis dataKey="date" tick={{fontSize: 10}} /><YAxis tick={{fontSize: 10}} width={30} /><Tooltip /><Legend />{activeRunners.map((r, i) => (<Line key={r.id} type="monotone" dataKey={r.id} name={`${r.lastName} ${r.firstName}`} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 6 }} />))}</LineChart>
                         </ResponsiveContainer>
                       </div>
                    </div>
@@ -1586,7 +1700,7 @@ const App = () => {
                          <div style={{ width: `${Math.max(100, rankingData.length * 15)}%`, height: '100%', minWidth: '100%' }}>
                             <ResponsiveContainer width="100%" height="100%">
                               {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                              <BarChart data={rankingData} margin={{ top: 10, right: 20, left: 20, bottom: 20 }}>
+                              <BarChart data={rankingData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false}/>
                                 <XAxis 
                                   dataKey="name" 
@@ -1621,7 +1735,7 @@ const App = () => {
                              <div style={{ width: `${Math.max(100, qData.length * 15)}%`, height: '100%', minWidth: '100%' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                   {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                                  <BarChart data={qData} margin={{ top: 10, right: 20, left: 20, bottom: 20 }}>
+                                  <BarChart data={qData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false}/>
                                     <XAxis 
                                       dataKey="name" 
@@ -1655,7 +1769,14 @@ const App = () => {
             <button onClick={(e) => { e.stopPropagation(); handleStartPreview(r); }} className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors" title="本人視点でプレビュー"><Eye size={18}/></button>
             <ChevronRight className="text-slate-300" size={20}/>
           </div></div>))}</div></div><div className="space-y-4 pt-8 border-t border-slate-100"><h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><Archive size={16}/> Retired / Inactive</h4><div className="divide-y divide-slate-100 opacity-60 hover:opacity-100 transition-opacity grid md:grid-cols-2 gap-x-12 gap-y-0">{allRunners.filter(r => r.status === 'retired').map(r => (<div key={r.id} className="py-4 flex items-center justify-between"><div className="flex items-center gap-3 grayscale"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-600">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Retired</p></div></div><div className="flex items-center gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${r.lastName}選手を現役復帰させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id), { status: 'active' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 transition-colors" title="現役復帰"><UserCheck size={18}/></button><button onClick={() => setConfirmDialog({ isOpen: true, message: `警告: ${r.lastName}選手のデータを完全に削除します。元に戻せません。よろしいですか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-rose-50 text-rose-600 p-2 rounded-xl hover:bg-rose-100 transition-colors" title="完全削除"><Trash2 size={18}/></button></div></div>))}{allRunners.filter(r => r.status === 'retired').length === 0 && (<p className="text-[10px] text-slate-300 italic py-2">引退した選手はいません</p>)}</div></div></div>)}
-          {view === 'coach-runner-detail' && selectedRunner && (<div className="space-y-6 animate-in slide-in-from-right-10 max-w-3xl mx-auto"><div className="flex items-center gap-4 bg-white p-4 rounded-3xl shadow-sm"><button onClick={() => setView('coach-roster')} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft size={20} className="text-slate-600"/></button><h3 className="font-black text-lg text-slate-800">{selectedRunner.lastName} {selectedRunner.firstName}</h3></div><div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Settings size={14}/> Profile Settings</h4><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 ml-1">苗字</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.lastName} onChange={e => setCoachEditFormData({...coachEditFormData, lastName: e.target.value})}/></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">名前</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.firstName} onChange={e => setCoachEditFormData({...coachEditFormData, firstName: e.target.value})}/></div></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">PIN (パスコード)</label><div className="relative"><input type="tel" maxLength={4} className="w-full p-3 pl-10 bg-slate-50 rounded-xl font-mono font-bold text-lg outline-none border border-slate-100 focus:border-blue-500 tracking-widest" value={coachEditFormData.pin} onChange={e => setCoachEditFormData({...coachEditFormData, pin: e.target.value.replace(/[^0-9]/g, '')})}/><KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/></div></div><button onClick={handleCoachSaveProfile} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={16}/> 保存する</button><button onClick={() => setConfirmDialog({ isOpen: true, message: `${selectedRunner.lastName}選手を引退させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), { status: 'retired' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); setView('coach-roster'); } })} className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">引退へ移動</button></div><div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100"><div className="p-6 bg-slate-50 border-b flex justify-between items-center"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Activity size={14}/> Activity Logs</h4><span className="text-[10px] font-bold text-slate-400">{allLogs.filter(l => l.runnerId === selectedRunner.id).length} records</span></div><div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">{allLogs.filter(l => l.runnerId === selectedRunner.id).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(l => (<div key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"><div><div className="flex items-center gap-2 mb-1"><span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{l.date}</span><span className="text-[10px] font-bold text-slate-500">{l.category}</span></div><div className="flex items-end gap-1"><span className="text-lg font-black text-slate-800">{l.distance}</span><span className="text-[10px] font-bold text-slate-400 mb-1">km</span></div><p className="text-[10px] text-slate-400 truncate max-w-[150px]">{l.menuDetail}</p></div><div className="flex gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${l.date}の記録(${l.distance}km)を削除しますか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"><Trash2 size={16}/></button></div></div>))}{allLogs.filter(l => l.runnerId === selectedRunner.id).length === 0 && (<div className="p-8 text-center text-xs text-slate-400 font-bold">記録がありません</div>)}</div></div></div>)}
+          {view === 'coach-runner-detail' && selectedRunner && (<div className="space-y-6 animate-in slide-in-from-right-10 max-w-3xl mx-auto"><div className="flex items-center gap-4 bg-white p-4 rounded-3xl shadow-sm"><button onClick={() => setView('coach-roster')} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft size={20} className="text-slate-600"/></button><h3 className="font-black text-lg text-slate-800">{selectedRunner.lastName} {selectedRunner.firstName}</h3></div>
+          
+          {/* Detail画面にもプレビューボタン追加 */}
+          <div className="flex justify-end">
+             <button onClick={() => handleStartPreview(selectedRunner)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-lg hover:bg-slate-700 transition-colors"><Eye size={16}/> この選手の画面をプレビュー</button>
+          </div>
+
+          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Settings size={14}/> Profile Settings</h4><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 ml-1">苗字</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.lastName} onChange={e => setCoachEditFormData({...coachEditFormData, lastName: e.target.value})}/></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">名前</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.firstName} onChange={e => setCoachEditFormData({...coachEditFormData, firstName: e.target.value})}/></div></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">PIN (パスコード)</label><div className="relative"><input type="tel" maxLength={4} className="w-full p-3 pl-10 bg-slate-50 rounded-xl font-mono font-bold text-lg outline-none border border-slate-100 focus:border-blue-500 tracking-widest" value={coachEditFormData.pin} onChange={e => setCoachEditFormData({...coachEditFormData, pin: e.target.value.replace(/[^0-9]/g, '')})}/><KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/></div></div><button onClick={handleCoachSaveProfile} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={16}/> 保存する</button><button onClick={() => setConfirmDialog({ isOpen: true, message: `${selectedRunner.lastName}選手を引退させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), { status: 'retired' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); setView('coach-roster'); } })} className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">引退へ移動</button></div><div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100"><div className="p-6 bg-slate-50 border-b flex justify-between items-center"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Activity size={14}/> Activity Logs</h4><span className="text-[10px] font-bold text-slate-400">{allLogs.filter(l => l.runnerId === selectedRunner.id).length} records</span></div><div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">{allLogs.filter(l => l.runnerId === selectedRunner.id).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(l => (<div key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"><div><div className="flex items-center gap-2 mb-1"><span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{l.date}</span><span className="text-[10px] font-bold text-slate-500">{l.category}</span></div><div className="flex items-end gap-1"><span className="text-lg font-black text-slate-800">{l.distance}</span><span className="text-[10px] font-bold text-slate-400 mb-1">km</span></div><p className="text-[10px] text-slate-400 truncate max-w-[150px]">{l.menuDetail}</p></div><div className="flex gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${l.date}の記録(${l.distance}km)を削除しますか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"><Trash2 size={16}/></button></div></div>))}{allLogs.filter(l => l.runnerId === selectedRunner.id).length === 0 && (<div className="p-8 text-center text-xs text-slate-400 font-bold">記録がありません</div>)}</div></div></div>)}
           {view === 'coach-settings' && (
             <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Settings</h3>
