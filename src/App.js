@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 // --- App Version ---
-const APP_LAST_UPDATED = '2026.01.13 01:10';
+const APP_LAST_UPDATED = '2026.01.13 08:45';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -150,8 +150,8 @@ const App = () => {
   const printStyles = `
     @media print {
       @page { 
-        size: landscape; 
-        margin: 0; 
+        size: A4 portrait; /* 縦向きに変更 */
+        margin: 10mm; 
       }
       body { 
         background-color: white !important; 
@@ -189,16 +189,18 @@ const App = () => {
 
       .print-page-wrapper {
         width: 100% !important;
-        height: 100vh !important;
-        padding: 10mm !important;
+        /* height: 100vh;  高さを固定せず、内容に応じて伸ばす */
+        padding: 5mm !important;
         box-sizing: border-box;
-        page-break-after: always;
+        page-break-after: always; /* 表の後に必ず改ページ */
+        display: block;
       }
       
       .print-chart-block {
-        width: 100vw !important;
-        height: 100vh !important; 
-        page-break-before: always; 
+        width: 100% !important; /* 全幅 */
+        height: auto !important; 
+        min-height: 400px;
+        page-break-before: always; /* グラフごとに新しいページで開始 */
         page-break-inside: avoid;
         display: flex !important;
         flex-direction: column;
@@ -207,14 +209,10 @@ const App = () => {
         padding: 10mm !important;
         box-sizing: border-box;
         background: white; 
-        /* 印刷時はmin-widthなどの制約を解除 */
-        min-width: auto !important;
-        min-height: auto !important;
-        max-width: none !important; /* 印刷時は最大幅制限を解除 */
       }
 
       .print-chart-block h3 {
-        font-size: 24pt !important;
+        font-size: 18pt !important;
         font-weight: 900 !important;
         margin-bottom: 20px !important;
         color: #1e293b !important;
@@ -225,7 +223,7 @@ const App = () => {
       /* 印刷時のグラフコンテナ */
       .print-chart-content {
         width: 100% !important;
-        height: 90% !important;
+        height: 400px !important; /* 高さを固定 */
       }
 
       .recharts-responsive-container {
@@ -237,14 +235,15 @@ const App = () => {
       .chart-scroll-area {
          overflow: visible !important;
          width: 100% !important;
+         display: block !important;
       }
 
       table {
         width: 100% !important;
-        font-size: 10pt !important;
+        font-size: 9pt !important;
       }
       th, td {
-        padding: 6px !important;
+        padding: 4px !important;
         border: 1px solid #94a3b8 !important;
       }
     }
@@ -1234,7 +1233,7 @@ const App = () => {
               <div className="w-full overflow-y-auto pr-2 hidden md:block" style={{ maxHeight: '60vh' }}>
                 <div style={{ height: '400px', width: `${Math.max(100, rankingData.length * 8)}%` }}> {/* 幅を人数に応じて広げる */}
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={rankingData} margin={{ left: 0, right: 0, bottom: 30 }}>
+                    <BarChart data={rankingData} margin={{ left: 10, right: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
                       <XAxis 
                          dataKey="name" 
@@ -1244,7 +1243,7 @@ const App = () => {
                          height={60} 
                          tick={{fontSize: 10, fontWeight: 'bold', fill: '#1e293b'}} 
                       />
-                      <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#cbd5e1'}} axisLine={false} tickLine={false} />
+                      <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#cbd5e1'}} width={30} axisLine={false} tickLine={false} />
                       <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
                       <Bar dataKey="total" radius={[4, 4, 0, 0]} barSize={40}>
                         {rankingData.map((_, i) => (
@@ -1422,7 +1421,6 @@ const App = () => {
                     <BarChart data={personalStats.daily} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
                       <XAxis dataKey="label" tick={{fontSize: 9, fontWeight: 'bold', fill: '#cbd5e1'}} axisLine={false} tickLine={false} />
-                      {/* 修正: Y軸を細くしてスペース確保 */}
                       <YAxis tick={{fontSize: 9, fontWeight: 'bold', fill: '#cbd5e1'}} width={30} axisLine={false} tickLine={false} />
                       <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 'bold'}} />
                       <Bar dataKey="distance" radius={[5, 5, 0, 0]}>
@@ -1693,7 +1691,7 @@ const App = () => {
                       <div className="h-96 w-full print-chart-content">
                         <ResponsiveContainer width="99%" height="100%">
                           {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                          <LineChart data={cumulativeData} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/><XAxis dataKey="date" tick={{fontSize: 10}} /><YAxis tick={{fontSize: 10}} width={30} /><Tooltip /><Legend />{activeRunners.map((r, i) => (<Line key={r.id} type="monotone" dataKey={r.id} name={`${r.lastName} ${r.firstName}`} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 6 }} />))}</LineChart>
+                          <LineChart data={cumulativeData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/><XAxis dataKey="date" tick={{fontSize: 10}} /><YAxis tick={{fontSize: 10}} width={30} /><Tooltip /><Legend />{activeRunners.map((r, i) => (<Line key={r.id} type="monotone" dataKey={r.id} name={`${r.lastName} ${r.firstName}`} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 6 }} />))}</LineChart>
                         </ResponsiveContainer>
                       </div>
                    </div>
@@ -1705,7 +1703,7 @@ const App = () => {
                          <div style={{ width: `${Math.max(100, rankingData.length * 8)}%`, height: '100%', minWidth: '100%' }}>
                             <ResponsiveContainer width="100%" height="100%">
                               {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                              <BarChart data={rankingData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                              <BarChart data={rankingData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false}/>
                                 <XAxis 
                                   dataKey="name" 
@@ -1740,7 +1738,7 @@ const App = () => {
                              <div style={{ width: `${Math.max(100, qData.length * 8)}%`, height: '100%', minWidth: '100%' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                   {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                                  <BarChart data={qData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                                  <BarChart data={qData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false}/>
                                     <XAxis 
                                       dataKey="name" 
