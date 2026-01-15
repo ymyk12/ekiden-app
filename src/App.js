@@ -7,11 +7,11 @@ import {
 } from 'recharts';
 import { 
   Home, Plus, BarChart2, Users, Settings, LogOut, ChevronRight, 
-  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList, Eye
+  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList, Eye, X
 } from 'lucide-react';
 
 // --- App Version ---
-const APP_LAST_UPDATED = '2026.01.13 09:30';
+const APP_LAST_UPDATED = '2026.01.15 13:35';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -122,6 +122,8 @@ const App = () => {
   
   // 監督用: プレビュー機能
   const [previewRunner, setPreviewRunner] = useState(null);
+  // 監督用: 印刷プレビューモード
+  const [isPrintPreview, setIsPrintPreview] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -159,108 +161,164 @@ const App = () => {
 
   // Print Styles
   const printStyles = `
+    /* === 1. 通常モード（画面表示）のスタイル === */
+    .report-card-base {
+      background: white;
+      padding: 20px;
+      border-radius: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      width: 100%;
+    }
+    
+    .report-chart-container {
+      height: 400px;
+      width: 100%;
+      overflow-x: auto; /* 横スクロールを許可 */
+      display: block;
+    }
+
+    /* === 2. プレビューモード（isPrintPreview=true）のスタイル === */
+    .preview-mode-wrapper {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #525659; /* アプリ背景を隠すダークグレー */
+      z-index: 9999;
+      overflow-y: auto;
+      padding: 20px;
+      display: block;
+    }
+    
+    /* プレビュー時はカードをA4用紙(横向き)に見立てる */
+    .preview-mode-wrapper .report-card-base {
+      width: 297mm; /* A4横幅 */
+      min-height: 210mm; /* A4縦幅 */
+      padding: 10mm; 
+      margin: 0 auto 30px auto; /* 中央寄せ + 下マージン */
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border-radius: 0;
+      box-sizing: border-box;
+      position: relative;
+      overflow: hidden; /* A4内でははみ出し許可（または制御） */
+      page-break-after: always;
+    }
+
+    /* プレビュー時はグラフのスクロールを無効化して全体表示 */
+    .preview-mode-wrapper .report-chart-container {
+      overflow: hidden !important;
+      height: 160mm !important; /* 横向き用紙に合わせて高さを調整 */
+      width: 100% !important;
+    }
+    
+    /* プレビュー時の表のスタイル強制 */
+    .preview-mode-wrapper table {
+      width: 100% !important;
+      table-layout: fixed !important;
+      font-size: 8px !important;
+    }
+    .preview-mode-wrapper th, 
+    .preview-mode-wrapper td {
+      padding: 2px !important;
+      word-wrap: break-word !important;
+      overflow-wrap: break-word !important;
+      white-space: normal !important;
+      border: 1px solid #ccc !important;
+    }
+    
+    /* 左端（日付・項目列）の調整 - 幅を広げて折り返し防止 */
+    .preview-mode-wrapper th:first-child, 
+    .preview-mode-wrapper td:first-child {
+      width: 80px !important; /* 幅を拡張 */
+      white-space: nowrap !important; /* 折り返し禁止 */
+    }
+
+    /* === 3. 印刷時（@media print）のスタイル === */
     @media print {
       @page { 
-        size: A4 portrait; /* 縦向き */
-        margin: 5mm; /* 余白を狭くして領域確保 */
+        size: A4 landscape; /* 横向き */
+        margin: 0; 
       }
+      
       body { 
         background-color: white !important; 
-        -webkit-print-color-adjust: exact; 
-        width: 100%;
+        -webkit-print-color-adjust: exact;
         margin: 0;
         padding: 0;
       }
       
-      body * { 
-        visibility: hidden; 
-        height: 0;
-        overflow: hidden;
+      /* UI要素を隠す */
+      .no-print, header, nav, .fixed-ui, .coach-menu-bar { 
+        display: none !important; 
       }
-      
-      #printable-report, #printable-report * { 
-        visibility: visible; 
-        height: auto;
+
+      /* プレビューラッパーのリセット */
+      .preview-mode-wrapper {
+        position: static;
+        background: white;
+        padding: 0;
         overflow: visible;
-      }
-      
-      #printable-report {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        min-height: 100vh;
-        margin: 0;
-        padding: 0;
-        background-color: white !important;
+        z-index: auto;
         display: block !important;
       }
-      
-      .no-print { display: none !important; }
 
-      .print-page-wrapper {
+      /* カードを印刷用ページとしてリセット */
+      .report-card-base {
         width: 100% !important;
-        height: 100vh !important;
+        height: 100vh !important; /* 1ページ1枚 */
+        min-height: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
         padding: 10mm !important;
-        box-sizing: border-box;
         page-break-after: always;
-      }
-      
-      .print-chart-block {
-        width: 100% !important; /* 全幅 */
-        height: auto !important; 
-        min-height: 400px;
-        page-break-before: always; 
         page-break-inside: avoid;
-        display: flex !important;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        padding: 5mm !important;
         box-sizing: border-box;
-        background: white; 
-        min-width: auto !important;
-        min-height: auto !important;
-        max-width: none !important; 
-      }
-
-      .print-chart-block h3 {
-        font-size: 18pt !important;
-        font-weight: 900 !important;
-        margin-bottom: 20px !important;
-        color: #1e293b !important;
-        text-align: center;
-        width: 100%;
       }
       
-      /* 印刷時のグラフコンテナ */
-      .print-chart-content {
-        width: 100% !important;
-        height: 400px !important; 
+      /* 最後のページの余分な改ページを防ぐ */
+      .report-card-base:last-child {
+        page-break-after: auto;
+      }
+      
+      /* グラフコンテナの印刷時調整 */
+      .report-chart-container {
+         overflow: visible !important;
+         width: 100% !important;
+         height: 90% !important; /* ページ内で大きく表示 */
+         display: block !important;
+      }
+      
+      /* 内部のdiv幅を強制的に100%にする */
+      .chart-inner-wrapper {
+         width: 100% !important;
       }
 
       .recharts-responsive-container {
         width: 100% !important;
         height: 100% !important;
       }
-      
-      /* 印刷時はスクロールしない & 幅を100%に強制して用紙に収める */
-      .chart-scroll-area {
-         overflow: visible !important;
-         width: 100% !important;
-         display: block !important;
-      }
-      .chart-scroll-area > div {
-         width: 100% !important; /* インラインスタイルの幅設定を上書き */
-      }
 
-      table {
-        width: 100% !important;
-        font-size: 9pt !important;
+      /* 印刷時の表調整 */
+      table { 
+        width: 100% !important; 
+        font-size: 8px !important; 
+        table-layout: fixed !important;
       }
-      th, td {
-        padding: 4px !important;
-        border: 1px solid #94a3b8 !important;
+      th, td { 
+        padding: 2px !important; 
+        border: 1px solid #94a3b8 !important; 
+        white-space: normal !important; 
+        word-wrap: break-word !important; 
+        overflow: hidden;
+      }
+      
+      /* 左端（日付・項目列）の調整 - 幅を広げて折り返し防止 */
+      th:first-child, td:first-child {
+        width: 80px !important; /* 幅を拡張 */
+        white-space: nowrap !important; /* 折り返し禁止 */
       }
     }
   `;
@@ -461,6 +519,7 @@ const App = () => {
     const matrix = reportDates.map(date => {
       const row = { date };
       runnerIds.forEach(id => {
+        // 表の集計ロジック（修正なし：もともとfilter使用で正しかった）
         const logs = allLogs.filter(l => l.runnerId === id && l.date === date);
         if (logs.length === 0) {
           row[id] = '未';
@@ -478,13 +537,17 @@ const App = () => {
       return row;
     });
     
+    // --- 修正箇所: チーム全員の総合計を計算 ---
+    let grandTotal = 0;
     const totals = { date: 'TOTAL' };
     runnerIds.forEach(id => {
       const sum = allLogs
         .filter(l => l.runnerId === id && reportDates.includes(l.date))
         .reduce((s, l) => s + (Number(l.distance) || 0), 0);
       totals[id] = Math.round(sum * 10) / 10;
+      grandTotal += totals[id];
     });
+    totals.grandTotal = Math.round(grandTotal * 10) / 10; // 総合計を格納
 
     const qTotals = activeQuarters.map((q, idx) => {
       const row = { date: `${idx + 1}期合計` };
@@ -508,9 +571,13 @@ const App = () => {
     activeRunners.forEach(r => {
       let sum = 0;
       reportDates.forEach((date, idx) => {
-        const dayLog = allLogs.find(l => l.runnerId === r.id && l.date === date);
-        const dist = dayLog ? (Number(dayLog.distance) || 0) : 0;
-        sum += dist;
+        // --- 修正箇所: find から filter + reduce に変更 ---
+        // 1日複数回練習した場合も全て加算する
+        const dayLogs = allLogs.filter(l => l.runnerId === r.id && l.date === date);
+        const dayDist = dayLogs.reduce((acc, log) => acc + (Number(log.distance) || 0), 0);
+        
+        sum += dayDist;
+        
         if (data[idx]) {
           data[idx][r.id] = Math.round(sum * 10) / 10;
         }
@@ -853,7 +920,7 @@ const App = () => {
     }
   };
 
-  const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, updatedAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
+  const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
   const confirmRestRegister = () => { setConfirmDialog({ isOpen: true, message: '今日を「完全休養」として記録しますか？', onConfirm: async () => { setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); await handleRestRegister(); } }); };
   const handleRestRegister = async () => { setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: 0, category: '完全休養', menuDetail: 'オフ', rpe: 1, pain: 1, achieved: true, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('休養日として記録しました'); resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch(e) { console.error(e); setSuccessMsg("保存エラー"); } finally { setIsSubmitting(false); } };
 
@@ -1227,7 +1294,7 @@ const App = () => {
                             <div className="flex items-center gap-3">
                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${i < 3 ? 'bg-yellow-400 text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
                                   {i + 1}
-                               </div>
+                                </div>
                                <span className="font-bold text-sm text-slate-700 truncate max-w-[150px]">{r.name}</span>
                             </div>
                             <span className="font-black text-blue-600 text-sm">{r.total} <span className="text-[9px] text-slate-400 font-normal">km</span></span>
@@ -1250,19 +1317,19 @@ const App = () => {
                 <div style={{ height: '400px', width: `${Math.max(100, rankingData.length * chartWidthFactor)}%` }}> {/* 幅を人数に応じて広げる */}
                   <ResponsiveContainer width="100%" height="100%">
                     {/* 修正: マージン調整 (left:10 -> 0) */}
-                    <BarChart data={rankingData} margin={{ left: 10, right: 30, bottom: 30 }}>
+                    <BarChart data={rankingData} margin={{ left: 30, right: 30, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
                       <XAxis 
                          dataKey="name" 
                          interval={0} 
-                         angle={-45} 
+                         angle={-60} 
                          textAnchor="end" 
                          height={60} 
                          tick={{fontSize: 10, fontWeight: 'bold', fill: '#1e293b'}} 
                       />
                       {/* 修正: Y軸幅を30pxに固定して余白を詰める */}
                       <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#cbd5e1'}} width={30} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
+                      <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', fontWeight: 'bold'}} />
                       <Bar dataKey="total" radius={[4, 4, 0, 0]}>
                         {rankingData.map((_, i) => (
                           <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
@@ -1593,7 +1660,7 @@ const App = () => {
                 </div>
                 <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-emerald-500">
                    <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Distance</p>
-                   <p className="text-2xl md:text-3xl font-black text-emerald-600">{reportMatrix.totals['TOTAL'] || 0}<span className="text-xs ml-1 text-slate-400">km</span></p>
+                   <p className="text-2xl md:text-3xl font-black text-emerald-600">{reportMatrix.totals.grandTotal || 0}<span className="text-xs ml-1 text-slate-400">km</span></p>
                 </div>
                 <div className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 ${coachStats.painAlertCount > 0 ? 'border-rose-500 bg-rose-50' : 'border-emerald-500'}`}>
                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Pain Alert</p>
@@ -1616,7 +1683,7 @@ const App = () => {
                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
                            <XAxis type="number" hide />
                            <YAxis dataKey="name" type="category" width={110} tick={{fontSize: 12, fontWeight: 'bold', fill: '#1e293b', interval: 0}} axisLine={false} tickLine={false}/>
-                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}} />
+                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', fontWeight: 'bold'}} />
                            <Bar dataKey="total" radius={[0, 10, 10, 0]} barSize={24}>
                              {rankingData.map((_, i) => (
                                <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
@@ -1659,81 +1726,179 @@ const App = () => {
 
           {view === 'coach-report' && (
             <>
-              <style>{printStyles}</style>
-              <div id="printable-report" className="space-y-8 animate-in fade-in bg-white p-8 rounded-[2.5rem] shadow-sm overflow-hidden print:shadow-none print:rounded-none print:p-4 print:overflow-visible">
-                 
-                 {/* 印刷用ラッパーで囲む */}
-                 <div className="space-y-8 print-page-wrapper">
-                     <div className="flex justify-between items-center pb-6 border-b border-slate-100 print:border-slate-800">
-                      <div>
-                        <h2 className="font-black text-2xl text-slate-800 flex items-center gap-3 uppercase tracking-tighter"><FileText className="text-blue-600 print:text-black"/> KSWC EKIDEN TEAM REPORT</h2>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
-                          Target Period: {appSettings.startDate.replace(/-/g, '/')} - {appSettings.endDate.replace(/-/g, '/')}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 no-print">
-                        <button onClick={handleExportMatrixCSV} className="bg-emerald-600 text-white px-4 py-3 rounded-xl hover:bg-emerald-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><FileSpreadsheet size={18}/> CSV出力</button>
-                        <button onClick={handlePrint} className="bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><Printer size={18}/> 印刷 / PDF</button>
-                      </div>
-                    </div>
+              {/* 印刷プレビューモードのトグル */}
+              <div className="flex justify-end mb-4 no-print">
+                 <button onClick={() => setIsPrintPreview(!isPrintPreview)} className={`px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center gap-2 ${isPrintPreview ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                    {isPrintPreview ? <X size={16}/> : <Eye size={16}/>}
+                    {isPrintPreview ? 'プレビューを閉じる' : '印刷レイアウト確認'}
+                 </button>
+              </div>
 
-                    <div className="overflow-x-auto pb-4">
-                      <table className="w-full text-xs border-collapse">
-                        <thead><tr><th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">DATE</th>{activeRunners.map(r => (<th key={r.id} className="p-3 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[80px] whitespace-nowrap text-center bg-slate-50/50">{r.lastName} {r.firstName.charAt(0)}.</th>))}</tr></thead>
-                        <tbody>
-                          {reportMatrix.matrix.map((row, i) => (
-                            <tr key={row.date} className="hover:bg-slate-50 transition-colors">
-                              <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">{row.date.slice(5).replace('-','/')}</td>
-                              {activeRunners.map(r => {
-                                const val = row[r.id];
-                                let cellClass = "p-2 border-b border-slate-100 text-center font-bold text-sm ";
-                                if (val === '未') cellClass += "text-rose-400 bg-rose-50/30";
-                                else if (val === '休') cellClass += "text-emerald-500 bg-emerald-50/30";
-                                else if (val === '0') cellClass += "text-slate-300";
-                                else cellClass += "text-blue-600";
-                                return (<td key={r.id} className={cellClass}>{val}</td>);
-                              })}
+              {/* isPrintPreview が true の場合は画面上でプレビュー用CSSを適用するラッパーを表示 */}
+              <div className={isPrintPreview ? "preview-mode-wrapper" : ""}>
+                {isPrintPreview && (
+                   <div className="flex justify-end mb-4 max-w-5xl mx-auto no-print">
+                      <button onClick={() => setIsPrintPreview(false)} className="bg-white text-slate-800 px-6 py-3 rounded-full font-bold shadow-xl hover:bg-slate-100 transition-colors">閉じる</button>
+                   </div>
+                )}
+                
+                <style>{printStyles}</style>
+                <div id="printable-report" className={`${isPrintPreview ? 'max-w-5xl mx-auto shadow-2xl scale-100 origin-top' : ''}`}>
+                   
+                   {/* 1ページ目: 表紙 & テーブル */}
+                   <div className="report-card-base">
+                       <div className="flex justify-between items-center pb-6 border-b border-slate-100 print:border-slate-800">
+                        <div>
+                          <h2 className="font-black text-2xl text-slate-800 flex items-center gap-3 uppercase tracking-tighter"><FileText className="text-blue-600 print:text-black"/> KSWC EKIDEN TEAM REPORT</h2>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
+                            Target Period: {appSettings.startDate.replace(/-/g, '/')} - {appSettings.endDate.replace(/-/g, '/')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 no-print">
+                          <button onClick={handleExportMatrixCSV} className="bg-emerald-600 text-white px-4 py-3 rounded-xl hover:bg-emerald-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><FileSpreadsheet size={18}/> CSV出力</button>
+                          <button onClick={handlePrint} className="bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><Printer size={18}/> 印刷 / PDF</button>
+                        </div>
+                      </div>
+  
+                      <div className={`pb-4 ${isPrintPreview ? 'overflow-visible' : 'overflow-x-auto'}`}>
+                        <table className="w-full text-xs border-collapse">
+                          <thead><tr><th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">DATE</th>{activeRunners.map(r => (<th key={r.id} className="p-3 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[80px] whitespace-nowrap text-center bg-slate-50/50">{r.lastName} {r.firstName.charAt(0)}.</th>))}</tr></thead>
+                          <tbody>
+                            {reportMatrix.matrix.map((row, i) => (
+                              <tr key={row.date} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">{row.date.slice(5).replace('-','/')}</td>
+                                {activeRunners.map(r => {
+                                  const val = row[r.id];
+                                  let cellClass = "p-2 border-b border-slate-100 text-center font-bold text-sm ";
+                                  if (val === '未') cellClass += "text-rose-400 bg-rose-50/30";
+                                  else if (val === '休') cellClass += "text-emerald-500 bg-emerald-50/30";
+                                  else if (val === '0') cellClass += "text-slate-300";
+                                  else cellClass += "text-blue-600";
+                                  return (<td key={r.id} className={cellClass}>{val}</td>);
+                                })}
+                              </tr>
+                            ))}
+                            
+                            {/* ここに追加: 区間合計 (Q1-Q4) - 修正: 項目列の幅確保 */}
+                            {reportMatrix.qTotals.map((row, i) => (
+                              <tr key={`qtotal-${i}`} className="bg-slate-50 font-bold text-slate-600">
+                                {/* 修正: 幅指定を追加して折り返しを防ぐ */}
+                                <td className="p-3 border-b border-slate-200 sticky left-0 bg-slate-50 whitespace-nowrap" style={{ minWidth: '80px' }}>
+                                  Q{i+1} Total
+                                </td>
+                                {activeRunners.map(r => {
+                                  const goalKey = `goalQ${i+1}`;
+                                  const goal = r[goalKey] || 0;
+                                  return (
+                                    <td key={r.id} className="p-3 text-center border-b border-slate-200">
+                                      {/* 実績 / 目標 の形で表示 */}
+                                      <span style={{ fontSize: '1em' }}>{row[r.id] || 0}</span>
+                                      <span style={{ fontSize: '0.7em', color: '#94a3b8' }}> / {goal}</span>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+
+                            {/* 総合計 */}
+                            <tr className="bg-slate-100 font-black text-slate-800">
+                                <td className="p-3 sticky left-0 bg-slate-100 border-t-2 border-slate-300">TOTAL</td>
+                                {activeRunners.map(r => (
+                                    <td key={r.id} className="p-3 text-center text-blue-700 border-t-2 border-slate-300">
+                                      <span style={{ fontSize: '1.1em' }}>{reportMatrix.totals[r.id] || 0}</span>
+                                      <span style={{ fontSize: '0.8em', color: '#64748b' }}> / {r.goalPeriod || 0}</span>
+                                    </td>
+                                ))}
                             </tr>
-                          ))}
-                          <tr className="bg-slate-100 font-bold"><td className="p-3 sticky left-0 bg-slate-100">TOTAL</td>{activeRunners.map(r => (<td key={r.id} className="p-3 text-center text-blue-700">{reportMatrix.totals[r.id] || 0}</td>))}</tr>
-                        </tbody>
-                      </table>
-                    </div>
-                 </div>
-
-                {/* 修正: グリッドではなくシンプルなブロック配置に変更して表示崩れを防ぐ */}
-                <div className="space-y-10 pt-8 border-t-4 border-slate-100 print:block">
+                          </tbody>
+                        </table>
+                      </div>
+                   </div>
+  
+                   {/* 2ページ目以降: グラフ (カード形式) */}
                    
                    {/* 1. Cumulative Distance Trends */}
-                   <div className="print-chart-block bg-white p-4 max-w-5xl mx-auto">
-                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center">Cumulative Distance Trends</h3>
-                      <div className="h-96 w-full print-chart-content">
-                        <ResponsiveContainer width="99%" height="100%">
-                          {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                          <LineChart data={cumulativeData} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/><XAxis dataKey="date" tick={{fontSize: 10}} /><YAxis tick={{fontSize: 10}} width={30} /><Tooltip /><Legend />{activeRunners.map((r, i) => (<Line key={r.id} type="monotone" dataKey={r.id} name={`${r.lastName} ${r.firstName}`} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 6 }} />))}</LineChart>
-                        </ResponsiveContainer>
+                   <div className="report-card-base">
+                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Cumulative Distance Trends</h3>
+                      <div className="report-chart-container">
+                        <div className="chart-inner-wrapper" style={{ width: '100%', height: '100%' }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
+                            <LineChart data={cumulativeData} margin={{ top: 10, right: 50, left: 0, bottom: 0 }}>
+                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
+                               <XAxis dataKey="date" tick={{fontSize: 10}} />
+                               <YAxis tick={{fontSize: 10}} width={30} />
+                               <Tooltip />
+                               <Legend />
+                               {activeRunners.map((r, i) => (
+                                 <Line 
+                                   key={r.id} 
+                                   type="monotone" 
+                                   dataKey={r.id} 
+                                   name={`${r.lastName} ${r.firstName}`} 
+                                   stroke={COLORS[i % COLORS.length]} 
+                                   strokeWidth={2} 
+                                   dot={false} 
+                                   activeDot={{ r: 6 }}
+                                   // ここで最後の点に名前を表示
+                                   label={({ x, y, index, stroke }) => {
+                                      if (index === cumulativeData.length - 1) {
+                                        return (
+                                          <text x={x + 5} y={y} dy={4} fill={stroke} fontSize={10} fontWeight="bold" textAnchor="start">
+                                            {r.lastName}
+                                          </text>
+                                        );
+                                      }
+                                      return null;
+                                   }}
+                                 />
+                               ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
                       </div>
                    </div>
 
                    {/* 2. Total Distance */}
-                   <div className="print-chart-block bg-white p-4 max-w-5xl mx-auto">
-                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center">Total Distance</h3>
-                      <div className="chart-scroll-area h-96 w-full overflow-x-auto print-chart-content">
-                         <div style={{ width: `${Math.max(100, rankingData.length * chartWidthFactor)}%`, height: '100%', minWidth: '100%' }}>
+                   <div className="report-card-base">
+                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Total Distance</h3>
+                      <div className="report-chart-container">
+                         {/* プレビュー時および印刷時は強制的に100%にするロジック */}
+                         <div className="chart-inner-wrapper" style={{ width: isPrintPreview ? '100%' : `${Math.max(100, rankingData.length * chartWidthFactor)}%`, height: '100%', minWidth: '100%' }}>
                             <ResponsiveContainer width="100%" height="100%">
                               {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                              <BarChart data={rankingData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
+                              <BarChart data={rankingData} margin={{ top: 10, right: 30, left: 10, bottom: 50 }}> {/* bottomを増やしてX軸ラベルの切れ防止 */}
                                 <CartesianGrid strokeDasharray="3 3" vertical={false}/>
                                 <XAxis 
                                   dataKey="name" 
                                   interval={0} 
-                                  angle={-45} 
+                                  angle={-60} /* -45 -> -60 で重なり軽減 */
                                   textAnchor="end" 
-                                  height={60} 
-                                  tick={{fontSize: 10, fontWeight: 'bold', fill: '#1e293b'}} 
+                                  height={80} 
+                                  tick={({ x, y, payload }) => (
+                                    <g transform={`translate(${x},${y})`}>
+                                      <text
+                                        x={0}
+                                        y={0}
+                                        dy={16}
+                                        textAnchor="end"
+                                        fill="#1e293b"
+                                        transform="rotate(-60)"
+                                        style={{ fontSize: isPrintPreview ? '9px' : '10px', fontWeight: 'bold' }} /* 印刷時はフォント小さく */
+                                      >
+                                        {payload.value}
+                                      </text>
+                                    </g>
+                                  )}
                                 />
                                 <YAxis tick={{fontSize: 10}} width={30}/>
-                                <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40}>
+                                <Bar 
+                                  dataKey="total" 
+                                  fill="#3b82f6" 
+                                  radius={[4, 4, 0, 0]} 
+                                  // 印刷時は太さを自動(undefined)にして詰める
+                                  barSize={isPrintPreview ? undefined : 40} 
+                                >
                                   <LabelList dataKey="total" position="top" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={5} />
                                 </Bar>
                               </BarChart>
@@ -1744,31 +1909,50 @@ const App = () => {
 
                    {/* 3-6. Quarter Charts */}
                    {activeQuarters.map((q, idx) => {
-                      // 修正: フルネーム + ソート
                       const qData = activeRunners.map(r => {
                         const total = allLogs.filter(l => l.runnerId === r.id && l.date >= q.start && l.date <= q.end).reduce((s, l) => s + (Number(l.distance) || 0), 0);
                         return { name: `${r.lastName} ${r.firstName}`, total: Math.round(total * 10) / 10 };
-                      }).sort((a, b) => b.total - a.total); // 降順ソート
+                      }).sort((a, b) => b.total - a.total); 
                       
                       return (
-                        <div key={idx} className="print-chart-block bg-white p-4 max-w-5xl mx-auto">
-                          <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center">Q{idx + 1} ({q.start.slice(5)} - {q.end.slice(5)})</h3>
-                          <div className="chart-scroll-area h-96 w-full overflow-x-auto print-chart-content">
-                             <div style={{ width: `${Math.max(100, qData.length * chartWidthFactor)}%`, height: '100%', minWidth: '100%' }}>
+                        <div key={idx} className="report-card-base">
+                          <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Q{idx + 1} ({q.start.slice(5)} - {q.end.slice(5)})</h3>
+                          <div className="report-chart-container">
+                             <div className="chart-inner-wrapper" style={{ width: isPrintPreview ? '100%' : `${Math.max(100, qData.length * chartWidthFactor)}%`, height: '100%', minWidth: '100%' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                   {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                                  <BarChart data={qData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
+                                  <BarChart data={qData} margin={{ top: 10, right: 30, left: 10, bottom: 50 }}> {/* bottomを増やしてX軸ラベルの切れ防止 */}
                                     <CartesianGrid strokeDasharray="3 3" vertical={false}/>
                                     <XAxis 
                                       dataKey="name" 
                                       interval={0} 
-                                      angle={-45} 
+                                      angle={-60} /* -45 -> -60 で重なり軽減 */
                                       textAnchor="end" 
-                                      height={60} 
-                                      tick={{fontSize: 10, fontWeight: 'bold', fill: '#1e293b'}} 
+                                      height={80} 
+                                      tick={({ x, y, payload }) => (
+                                        <g transform={`translate(${x},${y})`}>
+                                          <text
+                                            x={0}
+                                            y={0}
+                                            dy={16}
+                                            textAnchor="end"
+                                            fill="#1e293b"
+                                            transform="rotate(-60)"
+                                            style={{ fontSize: isPrintPreview ? '9px' : '10px', fontWeight: 'bold' }} /* 印刷時はフォント小さく */
+                                          >
+                                            {payload.value}
+                                          </text>
+                                        </g>
+                                      )}
                                     />
                                     <YAxis tick={{fontSize: 10}} width={30}/>
-                                    <Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} barSize={40}>
+                                    <Bar 
+                                      dataKey="total" 
+                                      fill="#10b981" 
+                                      radius={[4, 4, 0, 0]} 
+                                      // 印刷時は太さを自動(undefined)にして詰める
+                                      barSize={isPrintPreview ? undefined : 40}
+                                    >
                                       <LabelList dataKey="total" position="top" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={5} />
                                     </Bar>
                                   </BarChart>
@@ -1783,7 +1967,7 @@ const App = () => {
               </div>
             </>
           )}
-
+          {/* ... (rest of coach views) */}
           {view === 'coach-check' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Status Check</h3><div className="flex flex-col md:flex-row items-center justify-center mb-6 gap-6"><input type="date" className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500" value={checkDate} onChange={e => setCheckDate(e.target.value)} /><div className="grid grid-cols-2 gap-4 w-full md:w-auto"><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出率</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-blue-600">{checkListData.length > 0 ? Math.round((checkListData.filter(r => r.status !== 'unsubmitted').length / checkListData.length) * 100) : 0}</span><span className="text-xs font-bold text-slate-400 mb-1">%</span></div></div><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-emerald-600">{checkListData.filter(r => r.status !== 'unsubmitted').length}</span><span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span></div></div></div></div><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2">{checkListData.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group"><div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${r.status === 'active' ? 'bg-blue-500' : r.status === 'rest' ? 'bg-emerald-400' : 'bg-rose-400'}`}>{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p></div></div><div>{r.status === 'active' && (<span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Check size={12}/> {r.detail}</span>)}{r.status === 'rest' && (<span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">{r.detail}</span>)}{r.status === 'unsubmitted' && (<span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><AlertTriangle size={12}/> 未提出</span>)}</div></div>))}</div></div>)}
           {view === 'coach-menu' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">Board Update</h3><div className="space-y-4 max-w-2xl mx-auto"><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-black text-sm" value={menuInput.date} onChange={e=>setMenuInput({...menuInput, date: e.target.value})}/><textarea placeholder="指示を入力..." className="w-full p-6 bg-slate-50 rounded-[2.5rem] h-64 outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-500 text-lg leading-relaxed shadow-inner resize-none" value={menuInput.text} onChange={e=>setMenuInput({...menuInput, text: e.target.value})} /><button onClick={async() => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menus', menuInput.date), menuInput); setSuccessMsg('掲示しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95 transition-all">掲示板を更新</button></div></div>)}
           {view === 'coach-roster' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Team Roster</h3><div className="space-y-4"><h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><UserCheck size={16}/> Active Members ({activeRunners.length})</h4><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">{activeRunners.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2" onClick={() => handleCoachEditRunner(r)}><div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Goal: {r.goalMonthly}km/mo</p><p className="text-[10px] text-slate-300 font-mono">PIN: {r.pin || '未設定'}</p></div></div><div className="flex items-center gap-2">
@@ -1791,14 +1975,6 @@ const App = () => {
             <button onClick={(e) => { e.stopPropagation(); handleStartPreview(r); }} className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors" title="本人視点でプレビュー"><Eye size={18}/></button>
             <ChevronRight className="text-slate-300" size={20}/>
           </div></div>))}</div></div><div className="space-y-4 pt-8 border-t border-slate-100"><h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><Archive size={16}/> Retired / Inactive</h4><div className="divide-y divide-slate-100 opacity-60 hover:opacity-100 transition-opacity grid md:grid-cols-2 gap-x-12 gap-y-0">{allRunners.filter(r => r.status === 'retired').map(r => (<div key={r.id} className="py-4 flex items-center justify-between"><div className="flex items-center gap-3 grayscale"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-600">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Retired</p></div></div><div className="flex items-center gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${r.lastName}選手を現役復帰させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id), { status: 'active' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 transition-colors" title="現役復帰"><UserCheck size={18}/></button><button onClick={() => setConfirmDialog({ isOpen: true, message: `警告: ${r.lastName}選手のデータを完全に削除します。元に戻せません。よろしいですか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-rose-50 text-rose-600 p-2 rounded-xl hover:bg-rose-100 transition-colors" title="完全削除"><Trash2 size={18}/></button></div></div>))}{allRunners.filter(r => r.status === 'retired').length === 0 && (<p className="text-[10px] text-slate-300 italic py-2">引退した選手はいません</p>)}</div></div></div>)}
-          {view === 'coach-runner-detail' && selectedRunner && (<div className="space-y-6 animate-in slide-in-from-right-10 max-w-3xl mx-auto"><div className="flex items-center gap-4 bg-white p-4 rounded-3xl shadow-sm"><button onClick={() => setView('coach-roster')} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft size={20} className="text-slate-600"/></button><h3 className="font-black text-lg text-slate-800">{selectedRunner.lastName} {selectedRunner.firstName}</h3></div>
-          
-          {/* Detail画面にもプレビューボタン追加 */}
-          <div className="flex justify-end">
-             <button onClick={() => handleStartPreview(selectedRunner)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-lg hover:bg-slate-700 transition-colors"><Eye size={16}/> この選手の画面をプレビュー</button>
-          </div>
-
-          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Settings size={14}/> Profile Settings</h4><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 ml-1">苗字</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.lastName} onChange={e => setCoachEditFormData({...coachEditFormData, lastName: e.target.value})}/></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">名前</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.firstName} onChange={e => setCoachEditFormData({...coachEditFormData, firstName: e.target.value})}/></div></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">PIN (パスコード)</label><div className="relative"><input type="tel" maxLength={4} className="w-full p-3 pl-10 bg-slate-50 rounded-xl font-mono font-bold text-lg outline-none border border-slate-100 focus:border-blue-500 tracking-widest" value={coachEditFormData.pin} onChange={e => setCoachEditFormData({...coachEditFormData, pin: e.target.value.replace(/[^0-9]/g, '')})}/><KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/></div></div><button onClick={handleCoachSaveProfile} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={16}/> 保存する</button><button onClick={() => setConfirmDialog({ isOpen: true, message: `${selectedRunner.lastName}選手を引退させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), { status: 'retired' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); setView('coach-roster'); } })} className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">引退へ移動</button></div><div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100"><div className="p-6 bg-slate-50 border-b flex justify-between items-center"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Activity size={14}/> Activity Logs</h4><span className="text-[10px] font-bold text-slate-400">{allLogs.filter(l => l.runnerId === selectedRunner.id).length} records</span></div><div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">{allLogs.filter(l => l.runnerId === selectedRunner.id).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(l => (<div key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"><div><div className="flex items-center gap-2 mb-1"><span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{l.date}</span><span className="text-[10px] font-bold text-slate-500">{l.category}</span></div><div className="flex items-end gap-1"><span className="text-lg font-black text-slate-800">{l.distance}</span><span className="text-[10px] font-bold text-slate-400 mb-1">km</span></div><p className="text-[10px] text-slate-400 truncate max-w-[150px]">{l.menuDetail}</p></div><div className="flex gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${l.date}の記録(${l.distance}km)を削除しますか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"><Trash2 size={16}/></button></div></div>))}{allLogs.filter(l => l.runnerId === selectedRunner.id).length === 0 && (<div className="p-8 text-center text-xs text-slate-400 font-bold">記録がありません</div>)}</div></div></div>)}
           {view === 'coach-settings' && (
             <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Settings</h3>
