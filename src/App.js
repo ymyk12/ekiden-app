@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 // --- App Version ---
-const APP_LAST_UPDATED = '2026.01.19 14:15';
+const APP_LAST_UPDATED = '2026.01.19 14:45';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -174,7 +174,7 @@ const App = () => {
     .report-chart-container {
       height: 400px;
       width: 100%;
-      overflow-x: auto; /* 横スクロールを許可 */
+      overflow-x: auto; 
       display: block;
     }
 
@@ -185,7 +185,7 @@ const App = () => {
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: #525659; /* アプリ背景を隠すダークグレー */
+      background-color: #525659; 
       z-index: 9999;
       overflow-y: auto;
       padding: 20px;
@@ -195,26 +195,22 @@ const App = () => {
     /* プレビュー時はカードをA4用紙(横向き)に見立てる */
     .preview-mode-wrapper .report-card-base {
       width: 297mm; /* A4横幅 */
-      height: 210mm; /* A4縦幅固定 */
+      min-height: 210mm; /* A4縦幅 */
       padding: 10mm; 
-      margin: 0 auto 30px auto; /* 中央寄せ + 下マージン */
+      margin: 0 auto 30px auto; 
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       border-radius: 0;
       box-sizing: border-box;
       position: relative;
       overflow: hidden; 
       page-break-after: always;
-      display: flex;
-      flex-direction: column;
     }
 
     /* プレビュー時はグラフのスクロールを無効化して全体表示 */
     .preview-mode-wrapper .report-chart-container {
       overflow: hidden !important;
-      flex: 1; /* 残りの高さを全て使う */
+      height: 160mm !important; 
       width: 100% !important;
-      display: flex;
-      align-items: center;
     }
     
     /* プレビュー時の表のスタイル強制 */
@@ -235,14 +231,14 @@ const App = () => {
     /* 左端（日付・項目列）の調整 */
     .preview-mode-wrapper th:first-child, 
     .preview-mode-wrapper td:first-child {
-      width: 80px !important; /* 幅を拡張 */
-      white-space: nowrap !important; /* 折り返し禁止 */
+      width: 80px !important; 
+      white-space: nowrap !important;
     }
 
     /* === 3. 印刷時（@media print）のスタイル === */
     @media print {
       @page { 
-        size: A4 landscape; /* 横向き */
+        size: A4 landscape; 
         margin: 0; 
       }
       
@@ -253,12 +249,10 @@ const App = () => {
         padding: 0;
       }
       
-      /* UI要素を隠す */
       .no-print, header, nav, .fixed-ui, .coach-menu-bar { 
         display: none !important; 
       }
 
-      /* プレビューラッパーのリセット */
       .preview-mode-wrapper {
         position: static;
         background: white;
@@ -268,10 +262,9 @@ const App = () => {
         display: block !important;
       }
 
-      /* カードを印刷用ページとしてリセット */
       .report-card-base {
         width: 100% !important;
-        height: 100vh !important; /* 1ページ1枚 */
+        height: 100vh !important; 
         min-height: 0 !important;
         box-shadow: none !important;
         border-radius: 0 !important;
@@ -280,27 +273,21 @@ const App = () => {
         page-break-after: always;
         page-break-inside: avoid;
         box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
       }
       
       .report-card-base:last-child {
         page-break-after: auto;
       }
       
-      /* グラフコンテナの印刷時調整 (重要: mm単位で高さを確保) */
       .report-chart-container {
          overflow: visible !important;
          width: 100% !important;
-         flex: 1; /* 残りの高さを埋める */
-         min-height: 150mm !important; 
+         height: 90% !important; 
          display: block !important;
       }
       
-      /* 内部のdiv幅を強制的に100%にする */
       .chart-inner-wrapper {
          width: 100% !important;
-         height: 100% !important;
       }
 
       .recharts-responsive-container {
@@ -308,7 +295,6 @@ const App = () => {
         height: 100% !important;
       }
 
-      /* 印刷時の表調整 */
       table { 
         width: 100% !important; 
         font-size: 8px !important; 
@@ -321,11 +307,9 @@ const App = () => {
         word-wrap: break-word !important; 
         overflow: hidden;
       }
-      
-      /* 左端（日付・項目列）の調整 */
       th:first-child, td:first-child {
-        width: 80px !important; /* 幅を拡張 */
-        white-space: nowrap !important; /* 折り返し禁止 */
+        width: 80px !important; 
+        white-space: nowrap !important; 
       }
     }
   `;
@@ -388,12 +372,10 @@ const App = () => {
       const myP = list.find(r => r.id === user.uid);
       if (myP) { 
         setProfile(myP); 
-        // 修正: 役割を保持するロジックはここではなく下のelseでカバーする
         if (role !== 'coach' && role !== 'admin-runner') {
           setRole('runner');
         }
       } else {
-        // DBにいない場合
         if (role !== 'coach' && role !== 'registering' && role !== 'login' && role !== 'coach-auth' && role !== 'admin-runner') {
            setProfile(null);
            setRole(null);
@@ -410,8 +392,6 @@ const App = () => {
     const unsubSettings = onSnapshot(settingsDoc, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        
-        // データの補正: quartersが足りない、または存在しない場合は自動計算で補完
         let quarters = data.quarters;
         const today = new Date().toLocaleDateString('sv-SE');
         if (!quarters || !Array.isArray(quarters) || quarters.length < 4) {
@@ -421,7 +401,7 @@ const App = () => {
         setAppSettings(prev => ({
           ...prev,
           ...data,
-          quarters: quarters, // 補正済みのデータを使用
+          quarters: quarters,
           startDate: data.startDate || '',
           endDate: data.endDate || ''
         }));
@@ -432,7 +412,6 @@ const App = () => {
       setPracticeMenus(snap.docs.map(d => d.data()));
     });
 
-    // 修正: role を依存配列に追加し、監督モード中のデータ更新でログアウトしないようにする
     return () => { unsubRunners(); unsubLogs(); unsubSettings(); unsubMenus(); clearTimeout(timeout); };
   }, [user, role]);
 
@@ -445,7 +424,6 @@ const App = () => {
     if (!qs || !Array.isArray(qs)) {
        qs = calculateAutoQuarters(appSettings.startDate, appSettings.endDate);
     }
-    // 不足分を埋める
     while (qs.length < 4) {
       qs.push({ id: qs.length + 1, start: '', end: '' });
     }
@@ -526,7 +504,6 @@ const App = () => {
     const matrix = reportDates.map(date => {
       const row = { date };
       runnerIds.forEach(id => {
-        // 表の集計ロジック（修正なし：もともとfilter使用で正しかった）
         const logs = allLogs.filter(l => l.runnerId === id && l.date === date);
         if (logs.length === 0) {
           row[id] = '未';
@@ -544,7 +521,6 @@ const App = () => {
       return row;
     });
     
-    // --- 修正箇所: チーム全員の総合計を計算 ---
     let grandTotal = 0;
     const totals = { date: 'TOTAL' };
     runnerIds.forEach(id => {
@@ -554,7 +530,7 @@ const App = () => {
       totals[id] = Math.round(sum * 10) / 10;
       grandTotal += totals[id];
     });
-    totals.grandTotal = Math.round(grandTotal * 10) / 10; // 総合計を格納
+    totals.grandTotal = Math.round(grandTotal * 10) / 10;
 
     const qTotals = activeQuarters.map((q, idx) => {
       const row = { date: `${idx + 1}期合計` };
@@ -578,13 +554,9 @@ const App = () => {
     activeRunners.forEach(r => {
       let sum = 0;
       reportDates.forEach((date, idx) => {
-        // --- 修正箇所: find から filter + reduce に変更 ---
-        // 1日複数回練習した場合も全て加算する
         const dayLogs = allLogs.filter(l => l.runnerId === r.id && l.date === date);
         const dayDist = dayLogs.reduce((acc, log) => acc + (Number(log.distance) || 0), 0);
-        
         sum += dayDist;
-        
         if (data[idx]) {
           data[idx][r.id] = Math.round(sum * 10) / 10;
         }
@@ -596,9 +568,8 @@ const App = () => {
   const checkListData = useMemo(() => {
     return activeRunners.map(runner => {
       const log = allLogs.find(l => l.runnerId === runner.id && l.date === checkDate);
-      let status = 'unsubmitted'; // Default
+      let status = 'unsubmitted';
       let detail = '-';
-      
       if (log) {
         if (log.category === '完全休養' || Number(log.distance) === 0) {
           status = 'rest';
@@ -618,14 +589,12 @@ const App = () => {
       return allLogs.some(l => l.runnerId === r.id && l.date === todayStr);
     }).length;
     const reportRate = activeRunners.length > 0 ? Math.round((reportedCount / activeRunners.length) * 100) : 0;
-
     const painAlertCount = activeRunners.filter(r => {
       const runnerLogs = allLogs.filter(l => l.runnerId === r.id);
       if (runnerLogs.length === 0) return false;
       runnerLogs.sort((a,b) => new Date(b.date) - new Date(a.date));
       return runnerLogs[0].pain >= 3;
     }).length;
-
     return { reportRate, painAlertCount, reportedCount };
   }, [activeRunners, allLogs]);
 
@@ -637,7 +606,6 @@ const App = () => {
     if (goalInput.q2) updates.goalQ2 = parseFloat(goalInput.q2);
     if (goalInput.q3) updates.goalQ3 = parseFloat(goalInput.q3);
     if (goalInput.q4) updates.goalQ4 = parseFloat(goalInput.q4);
-
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', currentUserId), updates);
     setView('menu');
   };
@@ -790,7 +758,6 @@ const App = () => {
     if (formData.lastName.trim() === 'admin') {
       setIsSubmitting(true);
       try {
-        // const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners'); // Removed unused var
         const adminProfile = {
           lastName: 'admin',
           firstName: formData.firstName || 'User',
@@ -928,8 +895,7 @@ const App = () => {
   };
 
   const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, updatedAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
-  
-  // Replaced unused inline function with this proper one for rest registration
+
   const handleRestRegister = async () => { 
     setIsSubmitting(true); 
     try { 
@@ -950,7 +916,6 @@ const App = () => {
   const handleAutoFillQuarters = () => { const newQuarters = calculateAutoQuarters(appSettings.startDate, appSettings.endDate); setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
   const isCurrentQuarter = (q) => { if (!q || !q.start || !q.end) return false; const now = new Date().toLocaleDateString('sv-SE'); return now >= q.start && now <= q.end; };
 
-  // プレビュー機能用ハンドラ
   const handleStartPreview = (runner) => {
     setPreviewRunner(runner);
     window.scrollTo(0,0);
@@ -962,7 +927,7 @@ const App = () => {
   if (!role) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
-        {/* 背景装飾（控えめに） */}
+        {/* 背景装飾 */}
         <div className="absolute top-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-blue-50 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-blue-50 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -988,15 +953,11 @@ const App = () => {
            <p className="text-sm font-bold text-slate-400 tracking-widest uppercase mt-2">Distance Records</p>
         </div>
 
-        {/* ボタンエリア: 修正箇所 - 配色を逆に */}
+        {/* ボタンエリア */}
         <div className="w-full max-w-xs space-y-4 relative z-10">
-           
-          {/* 新規登録：白ベース（サブ） */}
            <button onClick={() => setRole('registering')} className="w-full bg-white hover:bg-blue-50 text-blue-600 py-5 rounded-2xl font-bold text-lg shadow-lg shadow-slate-100 active:scale-95 transition-all flex items-center justify-center gap-3 border-2 border-blue-100">
             <UserPlus size={22}/> 新規登録 <span className="text-xs font-normal opacity-60">(初めての方)</span>
           </button>
-          
-          {/* ログイン：青色（メイン） */}
          <button onClick={() => setRole('login')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3">
             <LogIn size={22}/> ログイン <span className="text-xs font-normal opacity-80">(2回目以降)</span>
           </button>
@@ -1016,587 +977,304 @@ const App = () => {
     );
   }
 
-  // (Coach Auth, Registering, Login, Runner View are same as before)
-  if (role === 'coach-auth') {
+  // --- COACH VIEW ---
+  if (role === 'coach') {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-        <div className="w-full max-w-xs text-center">
-          <h2 className="text-white font-bold mb-8 uppercase tracking-widest text-xs opacity-50">Coach Passcode</h2>
-          <input type="password" maxLength={4} className="w-full bg-slate-800 text-white text-center text-5xl p-4 rounded-3xl outline-none border-2 border-transparent focus:border-blue-500 tracking-widest" onChange={e => { if (e.target.value === appSettings.coachPass) { setRole('coach'); setView('coach-stats'); }}} />
-          <button onClick={() => setRole(null)} className="text-slate-500 mt-8 text-sm font-bold uppercase">Back</button>
-        </div>
-      </div>
-    );
-  }
-  
-  if (role === 'registering') {
-    const isReady = formData.lastName && formData.firstName && formData.teamPass && formData.personalPin.length === 4;
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-sm bg-white p-10 rounded-[3rem] shadow-2xl space-y-6">
-          <h2 className="text-2xl font-black text-slate-900 text-center uppercase italic">New Member</h2>
-          <div className="space-y-4">
-            <input placeholder="苗字 (例: 佐藤)" className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
-            <input placeholder="名前 (例: 太郎)" className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
-            
-            <div className="space-y-2">
-              <div className="relative">
-                <input type="text" placeholder="チームパスコード" className={`w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ${errorMsg ? 'ring-rose-500' : 'ring-blue-500'}`} value={formData.teamPass} onChange={e => setFormData({...formData, teamPass: e.target.value})} />
-                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 ${errorMsg ? 'text-rose-500' : 'text-slate-400'}`} size={20}/>
-              </div>
-              
-              <div className="relative">
-                 <input type="tel" maxLength={4} placeholder="個人パスコード(数字4桁)" className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500" value={formData.personalPin} onChange={e => setFormData({...formData, personalPin: e.target.value.replace(/[^0-9]/g, '')})} />
-                 <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20}/>
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold ml-2">※ログイン時に必要になります。忘れないでください。</p>
-
-              {errorMsg && (
-                <div className="flex items-center gap-2 text-rose-500 px-2 animate-in slide-in-from-left-2">
-                  <AlertCircle size={14} />
-                  <span className="text-xs font-bold">{errorMsg}</span>
-                </div>
-              )}
-            </div>
-
-            <button 
-              onClick={handleRegister} 
-              disabled={!isReady || isSubmitting} 
-              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-xl transition-all ${isReady ? 'bg-blue-600 text-white active:scale-95' : 'bg-slate-200 text-slate-400'}`}
-            >
-              {isSubmitting ? '登録する' : '登録'}
-            </button>
-            <button onClick={() => setRole(null)} className="w-full text-slate-400 font-bold uppercase text-xs text-center">キャンセル</button>
+      <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 print:bg-white print:pb-0 print:h-auto md:flex">
+        {/* Header / Sidebar for PC */}
+        <header className="bg-slate-950 text-white p-5 sticky top-0 z-50 md:h-screen md:w-64 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
+          <div>
+             <h1 className="font-black italic text-xl flex items-center gap-2 tracking-tighter mb-8 md:mb-10"><Users size={20} className="text-blue-400"/> COACH TERMINAL</h1>
+             
+             {/* PC Navigation */}
+             <nav className="hidden md:flex flex-col gap-2">
+               {['stats', 'report', 'check', 'menu', 'roster', 'settings'].map(t => (
+                 <button 
+                   key={t} 
+                   onClick={() => setView(`coach-${t}`)} 
+                   className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold uppercase tracking-widest transition-all ${view === `coach-${t}` ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800'}`}
+                 >
+                   {t === 'stats' && <LayoutDashboard size={18}/>}
+                   {t === 'report' && <FileText size={18}/>}
+                   {t === 'check' && <ClipboardList size={18}/>}
+                   {t === 'menu' && <Calendar size={18}/>}
+                   {t === 'roster' && <Users size={18}/>}
+                   {t === 'settings' && <Settings size={18}/>}
+                   {t}
+                 </button>
+               ))}
+             </nav>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (role === 'login') {
-    // 修正: Adminログイン用に条件を緩和
-    const isReady = (formData.lastName === 'admin') || (formData.lastName && formData.firstName && formData.personalPin.length === 4);
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-sm bg-white p-10 rounded-[3rem] shadow-2xl space-y-6">
-          <h2 className="text-2xl font-black text-slate-900 text-center uppercase italic">Login</h2>
-          <p className="text-xs text-center text-slate-400 font-bold">以前のデータを引き継ぎます</p>
-          <div className="space-y-4">
-            <input placeholder="苗字 (例: 佐藤)" className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
-            <input placeholder="名前 (例: 太郎)" className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
-            
-            <div className="space-y-2">
-              <div className="relative">
-                 <input type="tel" maxLength={4} placeholder="個人パスコード(数字4桁)" className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500" value={formData.personalPin} onChange={e => setFormData({...formData, personalPin: e.target.value.replace(/[^0-9]/g, '')})} />
-                 <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20}/>
-              </div>
-
-              {errorMsg && (
-                <div className="flex items-center gap-2 text-rose-500 px-2 animate-in slide-in-from-left-2">
-                  <AlertCircle size={14} />
-                  <span className="text-xs font-bold">{errorMsg}</span>
-                </div>
-              )}
-            </div>
-
-            <button 
-              onClick={handleLogin} 
-              disabled={!isReady || isSubmitting} 
-              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-xl transition-all ${isReady ? 'bg-emerald-600 text-white active:scale-95' : 'bg-slate-200 text-slate-400'}`}
-            >
-              {isSubmitting ? '検索中...' : '開始'}
-            </button>
-            <button onClick={() => setRole(null)} className="w-full text-slate-400 font-bold uppercase text-xs text-center">キャンセル</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- RUNNER VIEW OR PREVIEW ---
-  // 通常の選手ログイン or 監督によるプレビュー
-  if ((role === 'runner' && profile) || (role === 'coach' && previewRunner) || (role === 'admin-runner' && profile)) {
-    // プレビュー時はデータを読み込み中なら待機させない（監督は既にデータを持っているため）
-    if (role === 'runner' && !profile) return <div className="h-screen flex items-center justify-center text-slate-400 font-bold">Loading...</div>;
-
-    const isPreview = role === 'coach' && previewRunner;
-
-    return (
-      <div className={`min-h-screen bg-slate-50 pb-28 ${isPreview ? 'border-4 border-amber-400' : ''}`}>
-        {successMsg && <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-blue-600 text-white px-8 py-4 rounded-full shadow-2xl font-bold animate-in fade-in slide-in-from-top-4">{successMsg}</div>}
-        
-        {/* Preview Banner */}
-        {isPreview && (
-          <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-400 text-slate-900 py-2 px-4 flex justify-between items-center shadow-lg">
-             <span className="font-black text-xs uppercase tracking-widest flex items-center gap-2"><Eye size={14}/> Preview Mode</span>
-             <button onClick={() => setPreviewRunner(null)} className="bg-slate-900 text-white px-4 py-1 rounded-full text-xs font-bold hover:bg-slate-800 transition-colors">終了する</button>
-          </div>
-        )}
-
-        {/* Mobile Menu Overlay */}
-        {isMenuOpen && (
-          <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in" onClick={() => setIsMenuOpen(false)}>
-            <div className="bg-white w-full max-w-sm p-6 rounded-[2.5rem] space-y-4 shadow-2xl animate-in slide-in-from-bottom-10" onClick={e => e.stopPropagation()}>
-              <h3 className="font-black text-center text-slate-400 uppercase tracking-widest text-xs">Menu</h3>
-              <button onClick={() => { setView('goal'); setIsMenuOpen(false); }} className="w-full py-4 bg-slate-100 rounded-2xl font-bold text-slate-700 flex items-center justify-center gap-2 active:scale-95 transition-all"><Target size={20}/> 目標設定</button>
-              <button onClick={handleLogout} className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"><LogOut size={20}/> {isPreview ? 'プレビュー終了' : 'ログアウト'}</button>
-              <button onClick={() => setIsMenuOpen(false)} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest">Close</button>
-            </div>
-          </div>
-        )}
-
-        <header className={`bg-blue-600 text-white pt-14 pb-28 px-8 rounded-b-[4rem] relative overflow-hidden ${isPreview ? 'mt-8' : ''}`}>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-          <div className="flex justify-between items-center relative z-10 max-w-md mx-auto">
-            {/* Left: Menu */}
-            <button onClick={() => setIsMenuOpen(true)} className="bg-white/20 p-2.5 rounded-2xl active:scale-90 transition-all text-white">
-              <Menu size={20}/>
-            </button>
-
-            {/* Center: Name */}
-            <div className="text-center">
-              <p className="text-blue-100 text-[10px] font-black tracking-widest uppercase mb-1">Athlete Dashboard</p>
-              <h1 className="text-2xl font-black tracking-tighter">{currentProfile.lastName} {currentProfile.firstName}</h1>
-            </div>
-
-            {/* Right: Spacer */}
-            <div className="w-10"></div>
-          </div>
+          <button onClick={handleLogout} className="opacity-60 hover:opacity-100 flex items-center gap-2 font-bold text-sm"><LogOut size={18}/> Logout</button>
         </header>
 
-        <main className="px-5 -mt-20 space-y-6 relative z-20 max-w-md mx-auto">
-          {view === 'menu' && (
-            <>
-              {/* Dual Goal Status Card */}
-              <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-blue-900/5 space-y-6">
-                {/* 1. Monthly Goal */}
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-widest">Monthly Mileage</h3>
-                  </div>
-                  <div className="flex justify-between items-end mb-2">
-                    <span className="text-3xl font-black text-blue-600 tracking-tighter">{personalStats.monthly} <span className="text-xs font-normal text-slate-400">km</span></span>
-                    <span className="text-xs font-bold text-slate-400 pb-1">/ {currentProfile.goalMonthly}km</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-1000" style={{ width: `${currentProfile.goalMonthly > 0 ? Math.min(100, (personalStats.monthly / currentProfile.goalMonthly) * 100) : 0}%` }}></div>
-                  </div>
+        {/* Main Content Area */}
+        <main className="flex-1 p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none md:overflow-y-auto md:h-screen print:max-w-none print:p-0 print:w-full print:overflow-visible">
+          
+          {/* Mobile Navigation Tabs */}
+          <div className="md:hidden flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-hidden print:hidden mb-6">
+            {['stats', 'report', 'check', 'menu', 'roster', 'settings'].map(t => (
+              <button key={t} onClick={() => setView(`coach-${t}`)} className={`flex-1 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${view === `coach-${t}` ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-400'}`}>{t.slice(0,3)}</button>
+            ))}
+          </div>
+
+          {(view === 'coach-stats' || !view.startsWith('coach-')) && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-slate-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Members</p>
+                   <p className="text-3xl md:text-4xl font-black text-slate-800">{activeRunners.length}<span className="text-xs ml-1">名</span></p>
                 </div>
-
-                {/* 2. Period Goal (Quarter Breakdown) */}
-                {appSettings.startDate && (
-                  <div className="pt-5 border-t border-slate-50">
-                    <h3 className="font-black text-emerald-500 text-[10px] uppercase tracking-widest mb-3 flex items-center gap-1">
-                      <Flag size={12}/> Focus Period ({appSettings.startDate.slice(5).replace('-','/')}〜)
-                    </h3>
-                    <div className="flex justify-between items-end mb-2">
-                      <span className="text-3xl font-black text-emerald-600 tracking-tighter">{personalStats.period} <span className="text-xs font-normal text-slate-400">km</span></span>
-                      <span className="text-xs font-bold text-slate-400 pb-1">/ {currentProfile.goalPeriod}km</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-4">
-                      <div className="bg-emerald-500 h-full" style={{ width: `${currentProfile.goalPeriod > 0 ? Math.min(100, (personalStats.period / currentProfile.goalPeriod) * 100) : 0}%` }}></div>
-                    </div>
-
-                    {/* Quarter Breakdown */}
-                    <div className="grid grid-cols-4 gap-2">
-                      {activeQuarters.map((q, idx) => {
-                        const goal = currentProfile[`goalQ${idx+1}`] || 0;
-                        const actual = personalStats.qs[idx] || 0;
-                        const isCurrent = isCurrentQuarter(q);
-                        const hasDate = q.start && q.end;
-                        
-                        return (
-                          <div key={idx} className={`p-2 rounded-xl flex flex-col items-center ${isCurrent ? 'bg-emerald-50 ring-2 ring-emerald-400' : 'bg-slate-50'}`}>
-                            <span className={`text-[8px] font-black uppercase mb-1 ${isCurrent ? 'text-emerald-600' : 'text-slate-400'}`}>Q{idx+1}</span>
-                            <div className="w-full h-12 bg-slate-200 rounded-lg relative overflow-hidden flex flex-col justify-end">
-                              <div 
-                                className={`w-full absolute bottom-0 transition-all duration-500 ${isCurrent ? 'bg-emerald-400' : 'bg-slate-400'}`}
-                                style={{ height: `${goal > 0 ? Math.min(100, (actual / goal) * 100) : 0}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-[9px] font-black mt-1 text-slate-600">{actual}</span>
-                            <span className="text-[7px] font-bold text-slate-400">/ {goal || '-'}</span>
-                            {/* 修正箇所: 安全な文字列操作 */}
-                            {hasDate && <span className="text-[6px] text-slate-300 mt-0.5">{q.start ? q.start.slice(5).replace('-','/') : ''}</span>}
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-blue-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Today's Report</p>
+                   <div className="flex items-baseline gap-1">
+                     <p className="text-3xl md:text-4xl font-black text-blue-600">{coachStats.reportRate}</p>
+                     <span className="text-sm font-black text-slate-400">%</span>
+                   </div>
+                </div>
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-emerald-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Distance</p>
+                   <p className="text-2xl md:text-3xl font-black text-emerald-600">{reportMatrix.totals['TOTAL'] || 0}<span className="text-xs ml-1 text-slate-400">km</span></p>
+                </div>
+                <div className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 ${coachStats.painAlertCount > 0 ? 'border-rose-500 bg-rose-50' : 'border-emerald-500'}`}>
+                  <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Pain Alert</p>
+                  <p className={`text-3xl md:text-4xl font-black ${coachStats.painAlertCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{coachStats.painAlertCount}<span className="text-xs ml-1 text-slate-400">名</span></p>
+                </div>
+              </div>
+              {/* Stats graphs ... */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] flex flex-col">
+                   <div className="flex justify-between items-center mb-6">
+                     <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2"><Trophy size={18} className="text-orange-500"/> Team Ranking</h3>
+                     <button onClick={exportCSV} className="text-blue-600 p-2 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"><Download size={20}/></button>
+                   </div>
+                   <div className="flex-1 w-full min-h-0 overflow-y-auto pr-2">
+                     <div style={{ height: Math.max(300, rankingData.length * 50) }}>
+                       <ResponsiveContainer width="100%" height="100%">
+                         <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 60 }}>
+                           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
+                           <XAxis type="number" hide />
+                           <YAxis dataKey="name" type="category" width={110} tick={{fontSize: 12, fontWeight: 'bold', fill: '#1e293b', interval: 0}} axisLine={false} tickLine={false}/>
+                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', fontWeight: 'bold'}} />
+                           <Bar dataKey="total" radius={[0, 10, 10, 0]} barSize={24}>
+                             {rankingData.map((_, i) => (
+                               <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
+                             ))}
+                             <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={10} />
+                           </Bar>
+                         </BarChart>
+                       </ResponsiveContainer>
+                     </div>
+                   </div>
+                </div>
+                {/* Activity Feed ... */}
+                <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 h-[28rem] flex flex-col">
+                  <div className="p-6 bg-slate-50 border-b flex items-center gap-2">
+                    <Activity size={16} className="text-slate-400"/>
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Recent Activity</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {allLogs.filter(l => activeRunners.some(r => r.id === l.runnerId)).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, 50).map(l => (
+                      <div key={l.id} className="p-4 mb-2 bg-white rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors">
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="flex items-center gap-3">
+                             <div className={`w-2 h-2 rounded-full ${l.pain > 3 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'}`}></div>
+                             <span className="font-bold text-slate-700 text-sm">{l.runnerName}</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                    {/* 修正箇所: 安全な文字列操作 */}
-                    <p className="text-[8px] text-center text-slate-300 font-bold mt-2">現在: {activeQuarters.findIndex(isCurrentQuarter) !== -1 ? `第${activeQuarters.findIndex(isCurrentQuarter)+1}クール` : '期間外'}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-slate-900 p-7 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-                <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2"><Calendar size={12}/> Today's Menu</p>
-                {practiceMenus.find(m => m.date === new Date().toLocaleDateString('sv-SE')) ? (
-                  <p className="font-bold text-lg leading-snug">{practiceMenus.find(m => m.date === new Date().toLocaleDateString('sv-SE')).text}</p>
-                ) : (
-                  <p className="text-slate-500 italic text-sm">指示はありません</p>
-                )}
-              </div>
-
-              <button onClick={() => changeView('entry')} className="w-full bg-white p-7 rounded-[2.5rem] shadow-md flex items-center justify-between group active:scale-95 transition-all">
-                <div className="flex items-center gap-5">
-                  <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-[1.2rem] flex items-center justify-center">
-                    <Plus size={30}/>
-                  </div>
-                  <div className="text-left">
-                    <p className="font-black text-xl tracking-tight">練習を入力する</p>
-                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Input Data</p>
+                          <span className="font-black text-blue-600">{l.distance}km</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-5">
+                           <span>{l.date} · {l.category}</span>
+                           <span>RPE: {l.rpe}</span>
+                        </div>
+                        {l.menuDetail && <p className="mt-2 ml-5 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg italic">"{l.menuDetail}"</p>}
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <ChevronRight size={24} className="text-slate-100"/>
-              </button>
+              </div>
+            </div>
+          )}
+
+          {view === 'coach-report' && (
+            <>
+              <div className="flex justify-end mb-4 no-print">
+                 <button onClick={() => setIsPrintPreview(!isPrintPreview)} className={`px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center gap-2 ${isPrintPreview ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                    {isPrintPreview ? <X size={16}/> : <Eye size={16}/>}
+                    {isPrintPreview ? 'プレビューを閉じる' : '印刷レイアウト確認'}
+                 </button>
+              </div>
+
+              <div className={isPrintPreview ? "preview-mode-wrapper" : ""}>
+                {isPrintPreview && (
+                   <div className="flex justify-end mb-4 max-w-5xl mx-auto no-print">
+                      <button onClick={() => setIsPrintPreview(false)} className="bg-white text-slate-800 px-6 py-3 rounded-full font-bold shadow-xl hover:bg-slate-100 transition-colors">閉じる</button>
+                   </div>
+                )}
+                
+                <style>{printStyles}</style>
+                <div id="printable-report" className={`${isPrintPreview ? 'max-w-5xl mx-auto shadow-2xl scale-100 origin-top' : ''}`}>
+                   <div className="report-card-base">
+                       <div className="flex justify-between items-center pb-6 border-b border-slate-100 print:border-slate-800">
+                        <div>
+                          <h2 className="font-black text-2xl text-slate-800 flex items-center gap-3 uppercase tracking-tighter"><FileText className="text-blue-600 print:text-black"/> KSWC EKIDEN TEAM REPORT</h2>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
+                            Target Period: {appSettings.startDate.replace(/-/g, '/')} - {appSettings.endDate.replace(/-/g, '/')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 no-print">
+                          <button onClick={handleExportMatrixCSV} className="bg-emerald-600 text-white px-4 py-3 rounded-xl hover:bg-emerald-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><FileSpreadsheet size={18}/> CSV出力</button>
+                          <button onClick={handlePrint} className="bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><Printer size={18}/> 印刷 / PDF</button>
+                        </div>
+                      </div>
+                      <div className={`pb-4 ${isPrintPreview ? 'overflow-visible' : 'overflow-x-auto'}`}>
+                        <table className="w-full text-xs border-collapse">
+                          <thead><tr><th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">DATE</th>{activeRunners.map(r => (<th key={r.id} className="p-3 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[80px] whitespace-nowrap text-center bg-slate-50/50">{r.lastName} {r.firstName.charAt(0)}.</th>))}</tr></thead>
+                          <tbody>
+                            {reportMatrix.matrix.map((row, i) => (
+                              <tr key={row.date} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">{row.date.slice(5).replace('-','/')}</td>
+                                {activeRunners.map(r => {
+                                  const val = row[r.id];
+                                  let cellClass = "p-2 border-b border-slate-100 text-center font-bold text-sm ";
+                                  if (val === '未') cellClass += "text-rose-400 bg-rose-50/30";
+                                  else if (val === '休') cellClass += "text-emerald-500 bg-emerald-50/30";
+                                  else if (val === '0') cellClass += "text-slate-300";
+                                  else cellClass += "text-blue-600";
+                                  return (<td key={r.id} className={cellClass}>{val}</td>);
+                                })}
+                              </tr>
+                            ))}
+                            {reportMatrix.qTotals.map((row, i) => (
+                              <tr key={`qtotal-${i}`} className="bg-slate-50 font-bold text-slate-600">
+                                <td className="p-3 border-b border-slate-200 sticky left-0 bg-slate-50 whitespace-nowrap" style={{ minWidth: '80px' }}>Q{i+1} Total</td>
+                                {activeRunners.map(r => {
+                                  const goalKey = `goalQ${i+1}`;
+                                  const goal = r[goalKey] || 0;
+                                  return (<td key={r.id} className="p-3 text-center border-b border-slate-200"><span style={{ fontSize: '1em' }}>{row[r.id] || 0}</span><span style={{ fontSize: '0.7em', color: '#94a3b8' }}> / {goal}</span></td>);
+                                })}
+                              </tr>
+                            ))}
+                            <tr className="bg-slate-100 font-black text-slate-800">
+                                <td className="p-3 sticky left-0 bg-slate-100 border-t-2 border-slate-300">TOTAL</td>
+                                {activeRunners.map(r => (
+                                    <td key={r.id} className="p-3 text-center text-blue-700 border-t-2 border-slate-300">
+                                      <span style={{ fontSize: '1.1em' }}>{reportMatrix.totals[r.id] || 0}</span>
+                                      <span style={{ fontSize: '0.8em', color: '#64748b' }}> / {r.goalPeriod || 0}</span>
+                                    </td>
+                                ))}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                   </div>
+  
+                   <div className="report-card-base">
+                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Cumulative Distance Trends</h3>
+                      <div className="report-chart-container">
+                        <div className="chart-inner-wrapper" style={{ width: '100%', height: '100%' }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={cumulativeData} margin={{ top: 10, right: 50, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/><XAxis dataKey="date" tick={{fontSize: 10}} /><YAxis tick={{fontSize: 10}} width={30} /><Tooltip /><Legend />{activeRunners.map((r, i) => (<Line key={r.id} type="monotone" dataKey={r.id} name={`${r.lastName} ${r.firstName}`} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 6 }} label={({ x, y, index, stroke }) => { if (index === cumulativeData.length - 1) { return (<text x={x + 5} y={y} dy={4} fill={stroke} fontSize={10} fontWeight="bold" textAnchor="start">{r.lastName}</text>); } return null; }} />))}</LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                   </div>
+
+                   <div className="report-card-base">
+                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Total Distance</h3>
+                      <div className="report-chart-container">
+                         <div className="chart-inner-wrapper" style={{ width: isPrintPreview ? '100%' : `${Math.max(100, rankingData.length * chartWidthFactor)}%`, height: '100%', minWidth: '100%' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={rankingData} margin={{ top: 10, right: 30, left: 10, bottom: 50 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false}/>
+                                <XAxis dataKey="name" interval={0} angle={-60} textAnchor="end" height={80} tick={({ x, y, payload }) => (<g transform={`translate(${x},${y})`}><text x={0} y={0} dy={16} textAnchor="end" fill="#1e293b" transform="rotate(-60)" style={{ fontSize: isPrintPreview ? '9px' : '10px', fontWeight: 'bold' }}>{payload.value}</text></g>)} />
+                                <YAxis tick={{fontSize: 10}} width={30}/>
+                                <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={isPrintPreview ? undefined : 40}>
+                                  <LabelList dataKey="total" position="top" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={5} />
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                         </div>
+                      </div>
+                   </div>
+
+                   {activeQuarters.map((q, idx) => {
+                      const qData = activeRunners.map(r => {
+                        const total = allLogs.filter(l => l.runnerId === r.id && l.date >= q.start && l.date <= q.end).reduce((s, l) => s + (Number(l.distance) || 0), 0);
+                        return { name: `${r.lastName} ${r.firstName}`, total: Math.round(total * 10) / 10 };
+                      }).sort((a, b) => b.total - a.total); 
+                      
+                      return (
+                        <div key={idx} className="report-card-base">
+                          <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Q{idx + 1} ({q.start.slice(5)} - {q.end.slice(5)})</h3>
+                          <div className="report-chart-container">
+                             <div className="chart-inner-wrapper" style={{ width: isPrintPreview ? '100%' : `${Math.max(100, qData.length * chartWidthFactor)}%`, height: '100%', minWidth: '100%' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={qData} margin={{ top: 10, right: 30, left: 10, bottom: 50 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false}/>
+                                    <XAxis dataKey="name" interval={0} angle={-60} textAnchor="end" height={80} tick={({ x, y, payload }) => (<g transform={`translate(${x},${y})`}><text x={0} y={0} dy={16} textAnchor="end" fill="#1e293b" transform="rotate(-60)" style={{ fontSize: isPrintPreview ? '9px' : '10px', fontWeight: 'bold' }}>{payload.value}</text></g>)} />
+                                    <YAxis tick={{fontSize: 10}} width={30}/>
+                                    <Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} barSize={isPrintPreview ? undefined : 40}>
+                                      <LabelList dataKey="total" position="top" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={5} />
+                                    </Bar>
+                                  </BarChart>
+                                </ResponsiveContainer>
+                             </div>
+                          </div>
+                        </div>
+                      );
+                   })}
+                </div>
+              </div>
             </>
           )}
 
-          {view === 'goal' && (
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl text-center space-y-8 animate-in fade-in">
-              <h3 className="font-black text-slate-400 uppercase text-xs tracking-widest">目標設定</h3>
+          {view === 'coach-check' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Status Check</h3><div className="flex flex-col md:flex-row items-center justify-center mb-6 gap-6"><input type="date" className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500" value={checkDate} onChange={e => setCheckDate(e.target.value)} /><div className="grid grid-cols-2 gap-4 w-full md:w-auto"><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出率</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-blue-600">{checkListData.length > 0 ? Math.round((checkListData.filter(r => r.status !== 'unsubmitted').length / checkListData.length) * 100) : 0}</span><span className="text-xs font-bold text-slate-400 mb-1">%</span></div></div><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-emerald-600">{checkListData.filter(r => r.status !== 'unsubmitted').length}</span><span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span></div></div></div></div><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2">{checkListData.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group"><div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${r.status === 'active' ? 'bg-blue-500' : r.status === 'rest' ? 'bg-emerald-400' : 'bg-rose-400'}`}>{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p></div></div><div>{r.status === 'active' && (<span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Check size={12}/> {r.detail}</span>)}{r.status === 'rest' && (<span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">{r.detail}</span>)}{r.status === 'unsubmitted' && (<span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><AlertTriangle size={12}/> 未提出</span>)}</div></div>))}</div></div>)}
+          {view === 'coach-menu' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">Board Update</h3><div className="space-y-4 max-w-2xl mx-auto"><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-black text-sm" value={menuInput.date} onChange={e=>setMenuInput({...menuInput, date: e.target.value})}/><textarea placeholder="指示を入力..." className="w-full p-6 bg-slate-50 rounded-[2.5rem] h-64 outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-500 text-lg leading-relaxed shadow-inner resize-none" value={menuInput.text} onChange={e=>setMenuInput({...menuInput, text: e.target.value})} /><button onClick={async() => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menus', menuInput.date), menuInput); setSuccessMsg('掲示しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95 transition-all">掲示板を更新</button></div></div>)}
+          {view === 'coach-roster' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Team Roster</h3><div className="space-y-4"><h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><UserCheck size={16}/> Active Members ({activeRunners.length})</h4><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">{activeRunners.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2" onClick={() => handleCoachEditRunner(r)}><div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Goal: {r.goalMonthly}km/mo</p><p className="text-[10px] text-slate-300 font-mono">PIN: {r.pin || '未設定'}</p></div></div><div className="flex items-center gap-2">
+            {/* プレビューボタンの追加 */}
+            <button onClick={(e) => { e.stopPropagation(); handleStartPreview(r); }} className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors" title="本人視点でプレビュー"><Eye size={18}/></button>
+            <ChevronRight className="text-slate-300" size={20}/>
+          </div></div>))}</div></div><div className="space-y-4 pt-8 border-t border-slate-100"><h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><Archive size={16}/> Retired / Inactive</h4><div className="divide-y divide-slate-100 opacity-60 hover:opacity-100 transition-opacity grid md:grid-cols-2 gap-x-12 gap-y-0">{allRunners.filter(r => r.status === 'retired').map(r => (<div key={r.id} className="py-4 flex items-center justify-between"><div className="flex items-center gap-3 grayscale"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-600">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Retired</p></div></div><div className="flex items-center gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${r.lastName}選手を現役復帰させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id), { status: 'active' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 transition-colors" title="現役復帰"><UserCheck size={18}/></button><button onClick={() => setConfirmDialog({ isOpen: true, message: `警告: ${r.lastName}選手のデータを完全に削除します。元に戻せません。よろしいですか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-rose-50 text-rose-600 p-2 rounded-xl hover:bg-rose-100 transition-colors" title="完全削除"><Trash2 size={18}/></button></div></div>))}{allRunners.filter(r => r.status === 'retired').length === 0 && (<p className="text-[10px] text-slate-300 italic py-2">引退した選手はいません</p>)}</div></div></div>)}
+          {view === 'coach-runner-detail' && selectedRunner && (<div className="space-y-6 animate-in slide-in-from-right-10 max-w-3xl mx-auto"><div className="flex items-center gap-4 bg-white p-4 rounded-3xl shadow-sm"><button onClick={() => setView('coach-roster')} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft size={20} className="text-slate-600"/></button><h3 className="font-black text-lg text-slate-800">{selectedRunner.lastName} {selectedRunner.firstName}</h3></div>
+          
+          {/* Detail画面にもプレビューボタン追加 */}
+          <div className="flex justify-end">
+             <button onClick={() => handleStartPreview(selectedRunner)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-lg hover:bg-slate-700 transition-colors"><Eye size={16}/> この選手の画面をプレビュー</button>
+          </div>
+
+          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Settings size={14}/> Profile Settings</h4><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 ml-1">苗字</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.lastName} onChange={e => setCoachEditFormData({...coachEditFormData, lastName: e.target.value})}/></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">名前</label><input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none border border-slate-100 focus:border-blue-500" value={coachEditFormData.firstName} onChange={e => setCoachEditFormData({...coachEditFormData, firstName: e.target.value})}/></div></div><div><label className="text-[10px] font-bold text-slate-400 ml-1">PIN (パスコード)</label><div className="relative"><input type="tel" maxLength={4} className="w-full p-3 pl-10 bg-slate-50 rounded-xl font-mono font-bold text-lg outline-none border border-slate-100 focus:border-blue-500 tracking-widest" value={coachEditFormData.pin} onChange={e => setCoachEditFormData({...coachEditFormData, pin: e.target.value.replace(/[^0-9]/g, '')})}/><KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/></div></div><button onClick={handleCoachSaveProfile} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={16}/> 保存する</button><button onClick={() => setConfirmDialog({ isOpen: true, message: `${selectedRunner.lastName}選手を引退させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', selectedRunner.id), { status: 'retired' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); setView('coach-roster'); } })} className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">引退へ移動</button></div><div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100"><div className="p-6 bg-slate-50 border-b flex justify-between items-center"><h4 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Activity size={14}/> Activity Logs</h4><span className="text-[10px] font-bold text-slate-400">{allLogs.filter(l => l.runnerId === selectedRunner.id).length} records</span></div><div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">{allLogs.filter(l => l.runnerId === selectedRunner.id).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(l => (<div key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"><div><div className="flex items-center gap-2 mb-1"><span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{l.date}</span><span className="text-[10px] font-bold text-slate-500">{l.category}</span></div><div className="flex items-end gap-1"><span className="text-lg font-black text-slate-800">{l.distance}</span><span className="text-[10px] font-bold text-slate-400 mb-1">km</span></div><p className="text-[10px] text-slate-400 truncate max-w-[150px]">{l.menuDetail}</p></div><div className="flex gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${l.date}の記録(${l.distance}km)を削除しますか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"><Trash2 size={16}/></button></div></div>))}{allLogs.filter(l => l.runnerId === selectedRunner.id).length === 0 && (<div className="p-8 text-center text-xs text-slate-400 font-bold">記録がありません</div>)}</div></div></div>)}
+          {view === 'coach-settings' && (
+            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Settings</h3>
               <div className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest mb-2 block text-left">Monthly (km)</label>
-                  <input type="number" className="w-full text-4xl font-black text-blue-600 bg-slate-50 rounded-2xl p-5 outline-none border-2 border-transparent focus:border-blue-100" placeholder={currentProfile.goalMonthly} onChange={e => setGoalInput({...goalInput, monthly: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-emerald-400 ml-1 uppercase tracking-widest mb-2 block text-left">Period Total (km)</label>
-                  <input type="number" className="w-full text-4xl font-black text-emerald-600 bg-slate-50 rounded-2xl p-5 outline-none border-2 border-transparent focus:border-emerald-100" placeholder={currentProfile.goalPeriod} onChange={e => setGoalInput({...goalInput, period: e.target.value})} />
-                </div>
-                
-                {/* Quarter Goals Input */}
-                {activeQuarters.length > 0 && (
-                  <div className="bg-slate-50 p-4 rounded-3xl">
-                    {/* 修正箇所: 安全な文字列操作 */}
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-left">Quarter Goals ({appSettings.startDate ? appSettings.startDate.slice(5) : ''}〜)</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      {activeQuarters.map((q, idx) => (
-                        <div key={idx} className="text-left">
-                          {/* 修正箇所: 安全な文字列操作 */}
-                          <label className="text-[8px] font-bold text-slate-400 ml-1 block mb-1 truncate">
-                            Q{idx+1} ({q.start ? q.start.slice(5).replace('-','/') : ''}〜)
-                          </label>
-                          <input 
-                            type="number" 
-                            className="w-full p-3 rounded-xl text-sm font-black text-slate-700 outline-none border border-slate-200 focus:border-emerald-400"
-                            placeholder={currentProfile[`goalQ${idx+1}`] || 0}
-                            onChange={e => setGoalInput(prev => ({...prev, [`q${idx+1}`]: e.target.value}))}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-4">
-                <button onClick={() => changeView('menu')} className="flex-1 py-5 bg-slate-100 rounded-2xl font-black text-slate-400">戻る</button>
-                {/* プレビュー中は保存不可にするか、注意喚起 */}
-                <button onClick={isPreview ? () => alert('プレビュー中は保存できません') : updateGoals} className={`flex-1 py-5 text-white rounded-2xl font-black shadow-lg ${isPreview ? 'bg-slate-400' : 'bg-blue-600'}`}>保存</button>
-              </div>
-            </div>
-          )}
-
-          {view === 'team' && (
-            <div className="bg-white p-7 rounded-[2.5rem] shadow-xl space-y-6 animate-in slide-in-from-right-10">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-black text-xs uppercase tracking-widest flex items-center gap-2"><Trophy size={16} className="text-orange-500"/> Team Ranking</h3>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{appSettings.startDate.slice(5).replace('-','/')} - {appSettings.endDate.slice(5).replace('-','/')}</span>
-              </div>
-              
-              {/* 修正: スマホ(block)はリスト表示、PC(md:block)はグラフ表示 */}
-              <div className="w-full space-y-4 max-h-[65vh] overflow-y-auto pr-1 block md:hidden">
-                 {rankingData.map((r, i) => {
-                    const maxDistance = rankingData[0]?.total || 1;
-                    const percentage = Math.max(2, (r.total / maxDistance) * 100); 
-                    
-                    return (
-                      <div key={r.id} className="relative">
-                         <div className="flex justify-between items-end mb-1 z-10 relative">
-                            <div className="flex items-center gap-3">
-                               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${i < 3 ? 'bg-yellow-400 text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
-                                  {i + 1}
-                               </div>
-                               <span className="font-bold text-sm text-slate-700 truncate max-w-[150px]">{r.name}</span>
-                            </div>
-                            <span className="font-black text-blue-600 text-sm">{r.total} <span className="text-[9px] text-slate-400 font-normal">km</span></span>
-                         </div>
-                         {/* Bar */}
-                         <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full ${i < 3 ? 'bg-gradient-to-r from-blue-400 to-blue-600' : 'bg-slate-300'}`} 
-                              style={{ width: `${percentage}%` }}
-                            ></div>
-                         </div>
-                      </div>
-                    );
-                 })}
-                 {rankingData.length === 0 && <p className="text-center text-xs text-slate-400 py-8">データがありません</p>}
-              </div>
-
-              {/* PC用: Recharts グラフ表示 (md:block) - 修正: 縦棒グラフに変更 */}
-              <div className="w-full overflow-y-auto pr-2 hidden md:block" style={{ maxHeight: '60vh' }}>
-                <div style={{ height: '400px', width: `${Math.max(100, rankingData.length * chartWidthFactor)}%` }}> {/* 幅を人数に応じて広げる */}
-                  <ResponsiveContainer width="100%" height="100%">
-                    {/* 修正: マージン調整 (left:10 -> 0) */}
-                    <BarChart data={rankingData} margin={{ left: 30, right: 30, bottom: 30 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
-                      <XAxis 
-                         dataKey="name" 
-                         interval={0} 
-                         angle={-60} 
-                         textAnchor="end" 
-                         height={60} 
-                         tick={{fontSize: 10, fontWeight: 'bold', fill: '#1e293b'}} 
-                      />
-                      {/* 修正: Y軸幅を30pxに固定して余白を詰める */}
-                      <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#cbd5e1'}} width={30} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', fontWeight: 'bold'}} />
-                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
-                        {rankingData.map((_, i) => (
-                          <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
-                        ))}
-                        <LabelList dataKey="total" position="top" formatter={v => `${v}`} style={{fontSize: '9px', fontWeight: 'black', fill: '#475569'}} offset={5} />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Leaderboard廃止 -> Recent Activity追加 */}
-              <div className="border-t border-slate-100 pt-6">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <Activity size={14}/> Everyone's Activity
-                </p>
-                <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                  {allLogs
-                    .filter(l => activeRunners.some(r => r.id === l.runnerId)) // 現役部員のみ
-                    .sort((a, b) => {
-                       // 実施日(date)で降順ソート
-                       const dateDiff = new Date(b.date) - new Date(a.date);
-                       if (dateDiff !== 0) return dateDiff;
-                       // 同日の場合、作成日時が新しい順
-                       return (b.createdAt || '').localeCompare(a.createdAt || '');
-                    })
-                    .slice(0, 30) // 最新30件
-                    .map((l) => (
-                      <div key={l.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-2xl">
-                         {/* アイコン */}
-                         <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-black text-xs text-blue-600 shadow-sm shrink-0 border border-slate-100">
-                            {l.runnerName.charAt(0)}
-                         </div>
-                         <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-baseline mb-0.5">
-                               <span className="text-xs font-bold text-slate-700 truncate">{l.runnerName}</span>
-                               <span className="text-[10px] font-black text-slate-400">{l.date.slice(5).replace('-','/')}</span>
-                            </div>
-                            <div className="flex items-end gap-1 mb-1">
-                               <span className="text-lg font-black text-blue-600 leading-none">{l.distance}</span>
-                               <span className="text-[9px] font-bold text-slate-400">km</span>
-                               <span className="text-[9px] font-bold text-slate-400 ml-2 bg-white px-1.5 py-0.5 rounded border border-slate-100">{l.category}</span>
-                            </div>
-                            {l.menuDetail && (
-                              <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed bg-white/50 p-1.5 rounded-lg border border-slate-100/50 italic">
-                                {l.menuDetail}
-                              </p>
-                            )}
-                         </div>
-                      </div>
-                    ))}
-                    {allLogs.length === 0 && <p className="text-center text-xs text-slate-400 py-4">まだ記録がありません</p>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {view === 'entry' && (
-            <div className="bg-white p-7 rounded-[2.5rem] shadow-xl space-y-6 animate-in slide-in-from-bottom-8 pb-10">
-              <h2 className="text-xl font-black flex items-center gap-2">
-                {editingLogId ? <Edit className="text-blue-600" /> : <Plus className="text-blue-600"/>} 
-                {editingLogId ? "記録の編集" : "練習記録"}
-              </h2>
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">日付</label>
-                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-xs outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
-                  </div>
-                  <div className="space-y-1">
-                     {/* 修正: 「今日は休み」ボタンを日付の横などに配置すると収まりが良い */}
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">休憩</label>
-                     <button onClick={() => setConfirmDialog({
-                      isOpen: true,
-                      message: '今日を「完全休養」として記録しますか？',
-                      onConfirm: async () => {
-                        setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                        // Reusing the rest registration logic directly here as requested in previous logic flow or call the separate function if defined.
-                        // Calling separate function for clarity.
-                        await handleRestRegister();
-                      }
-                    })} disabled={isSubmitting} className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm border border-emerald-100 active:scale-95 transition-all">
-                      休養
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">距離 (km)</label>
-                    <input type="number" step="0.1" className="w-full p-4 bg-slate-50 rounded-2xl font-black text-2xl text-blue-600 outline-none" value={formData.distance} onChange={e => setFormData({...formData, distance: e.target.value})} placeholder="0.0"/>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">練習区分</label>
-                    <div className="grid grid-rows-3 gap-1 h-full">
-                       {['朝練', '午前練', '午後練'].map(cat => (
-                        <button key={cat} onClick={() => setFormData({...formData, category: cat})} className={`h-full rounded-lg font-bold text-[9px] uppercase transition-all ${formData.category === cat ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 flex items-center gap-1"><BookOpen size={12}/> メニュー詳細</label>
-                  <textarea 
-                    className="w-full p-4 bg-slate-50 rounded-2xl h-24 outline-none font-bold text-slate-700 resize-none shadow-inner text-sm" 
-                    placeholder="例: 1000m × 5 (3'00), 20kmジョグ 等" 
-                    value={formData.menuDetail} 
-                    onChange={e => setFormData({...formData, menuDetail: e.target.value})}
-                  />
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Passcode</label>
+                  <input type="text" maxLength={4} className="w-full p-5 bg-slate-50 rounded-2xl font-black text-4xl text-center outline-none border-2 border-transparent focus:border-blue-500 font-mono tracking-[0.5em]" value={appSettings.coachPass} onChange={e=>setAppSettings({...appSettings, coachPass: e.target.value})}/>
                 </div>
-
-                <div className="p-6 bg-slate-50 rounded-[2rem] space-y-5">
-                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    <span>練習強度 (RPE)</span>
-                    <span className="text-blue-600">Lv: {formData.rpe}</span>
-                  </div>
-                  <input type="range" min="1" max="10" className="w-full accent-blue-600" value={formData.rpe} onChange={e => setFormData({...formData, rpe: parseInt(e.target.value)})}/>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">足の痛み (1-5)</label>
-                    <div className="grid grid-cols-5 gap-2">
-                      {[1, 2, 3, 4, 5].map(v => (
-                        <button key={v} onClick={() => setFormData({...formData, pain: v})} className={`py-3 rounded-[1.1rem] text-sm font-black transition-all ${formData.pain === v ? 'bg-rose-500 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>{v}</button>
-                      ))}
-                    </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-emerald-500 uppercase ml-3 tracking-widest">Team Join Passcode</label>
+                  <input type="text" className="w-full p-5 bg-slate-50 rounded-2xl font-black text-2xl text-center outline-none border-2 border-transparent focus:border-emerald-500 tracking-widest text-emerald-600" value={appSettings.teamPass} onChange={e=>setAppSettings({...appSettings, teamPass: e.target.value})}/>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Period</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.startDate} onChange={e=>setAppSettings({...appSettings, startDate: e.target.value})}/><input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.endDate} onChange={e=>setAppSettings({...appSettings, endDate: e.target.value})}/>
                   </div>
                 </div>
-                <div className="flex flex-col gap-3">
-                  <button onClick={handleSaveLog} disabled={isSubmitting || !formData.distance} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black text-lg active:scale-95 transition-all shadow-xl shadow-blue-100 disabled:opacity-50">
-                    {isSubmitting ? '保存中...' : (editingLogId ? '更新する' : '記録を保存する')}
-                  </button>
-                  {editingLogId && (
-                    <button onClick={resetForm} className="w-full py-4 text-slate-400 font-bold text-sm">編集をキャンセル</button>
-                  )}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Quarter Intervals</label>
+                    <button onClick={handleAutoFillQuarters} className="text-[9px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black flex items-center gap-1"><RefreshCw size={10}/> Auto</button>
+                  </div>
+                  <div className="space-y-3">{appSettings.quarters.map((q, idx) => (<div key={q.id} className="bg-slate-50 p-3 rounded-2xl"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Quarter {q.id}</p><div className="grid grid-cols-2 gap-3"><input type="date" className="w-full p-2 bg-white rounded-xl text-[10px] font-black outline-none border border-slate-100" value={q.start} onChange={e => handleQuarterChange(idx, 'start', e.target.value)}/><input type="date" className="w-full p-2 bg-white rounded-xl text-[10px] font-black outline-none border border-slate-100" value={q.end} onChange={e => handleQuarterChange(idx, 'end', e.target.value)}/></div></div>))}</div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {view === 'stats' && (
-            <div className="space-y-6 pb-16 animate-in slide-in-from-right-10">
-              <div className="bg-white p-7 rounded-[2.5rem] shadow-lg">
-                <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest mb-8 flex items-center gap-2">
-                  <BarChart2 size={16} className="text-blue-600"/> 14-Day Activity
-                </h3>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
-                    <BarChart data={personalStats.daily} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
-                      <XAxis dataKey="label" tick={{fontSize: 9, fontWeight: 'bold', fill: '#cbd5e1'}} axisLine={false} tickLine={false} />
-                      <YAxis tick={{fontSize: 9, fontWeight: 'bold', fill: '#cbd5e1'}} width={30} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 'bold'}} />
-                      <Bar dataKey="distance" radius={[5, 5, 0, 0]}>
-                        {personalStats.daily.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.distance > 0 ? '#3b82f6' : '#f1f5f9'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-[2.5rem] shadow-lg overflow-hidden border border-slate-100">
-                <div className="p-6 border-b font-black text-slate-800 uppercase text-[10px] tracking-widest bg-slate-50">Training History</div>
-                <div className="divide-y divide-slate-50 max-h-[35rem] overflow-y-auto no-scrollbar">
-                  {allLogs.filter(l => l.runnerId === currentUserId).sort((a,b) => new Date(b.date) - new Date(a.date)).map(l => (
-                    <div key={l.id} className="p-6 flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className={`p-3 rounded-[1.2rem] ${l.category === '朝練' ? 'bg-orange-50 text-orange-500' : 'bg-blue-50 text-blue-500'}`}><Clock size={20}/></div>
-                          <div>
-                            <p className="text-[10px] font-black text-slate-300 mb-1">{l.date}</p>
-                            <p className="text-sm font-black text-slate-800">{l.category}</p>
-                          </div>
-                        </div>
-                        <span className="text-3xl font-black text-blue-600 tracking-tighter">{l.distance}<span className="text-[10px] ml-0.5 text-slate-400">km</span></span>
-                      </div>
-                      
-                      {l.menuDetail && (
-                        <div className="bg-slate-50 p-3 rounded-2xl text-xs font-bold text-slate-600 leading-relaxed italic border-l-4 border-slate-200">
-                          "{l.menuDetail}"
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-4 pt-1 border-t border-dashed border-slate-100 mt-1">
-                        <div className="bg-slate-50 p-2.5 rounded-2xl flex items-center justify-between"><span className="text-[9px] font-black text-slate-400 uppercase">強度</span><span className="text-xs font-black">Lv.{l.rpe}</span></div>
-                        <div className={`p-2.5 rounded-2xl flex items-center justify-between ${l.pain > 2 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}><span className="text-[9px] font-black uppercase opacity-60">痛み</span><span className="text-xs font-black">Lv.{l.pain}</span></div>
-                      </div>
-                      <div className="flex justify-end gap-3 pt-2">
-                          <button onClick={isPreview ? null : () => handleEditLog(l)} className={`p-2 rounded-xl transition-colors ${isPreview ? 'text-slate-200' : 'text-slate-300 hover:text-blue-500 bg-slate-50'}`}>
-                            <Edit size={16}/>
-                          </button>
-                          {/* 修正箇所: confirmDialogを使用するように変更 */}
-                          <button onClick={isPreview ? null : () => setConfirmDialog({
-                            isOpen: true,
-                            message: 'この記録を削除しますか？',
-                            onConfirm: async () => {
-                              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', l.id));
-                              setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                            }
-                          })} className={`p-2 rounded-xl transition-colors ${isPreview ? 'text-slate-200' : 'text-slate-300 hover:text-rose-500 bg-slate-50'}`}>
-                            <Trash2 size={16}/>
-                          </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <button onClick={() => { setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), appSettings); setSuccessMsg('保存しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95">設定保存</button>
               </div>
             </div>
           )}
         </main>
-
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-2xl border-t border-slate-100 flex justify-around items-center px-6 py-5 z-[50] rounded-t-[3.5rem] shadow-2xl max-w-md mx-auto">
-          <button onClick={() => changeView('menu')} className={`flex flex-col items-center gap-1 transition-all ${view === 'menu' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}>
-            <Home size={22} /><span className="text-[8px] font-black uppercase tracking-widest mt-1">Home</span>
-          </button>
-          
-          <button onClick={() => changeView('team')} className={`flex flex-col items-center gap-1 transition-all ${view === 'team' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}>
-            <Medal size={22} /><span className="text-[8px] font-black uppercase tracking-widest mt-1">Team</span>
-          </button>
-
-          <button onClick={() => changeView('entry')} className="flex flex-col items-center gap-1 -mt-14 transition-all">
-            <div className={`p-5 rounded-[1.8rem] shadow-xl transition-all ${view === 'entry' ? 'bg-blue-600 text-white scale-110' : 'bg-slate-950 text-white'}`}><Plus size={24} /></div>
-          </button>
-          
-          <button onClick={() => changeView('stats')} className={`flex flex-col items-center gap-1 transition-all ${view === 'stats' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}>
-            <BarChart2 size={22} /><span className="text-[8px] font-black uppercase tracking-widest mt-1">Data</span>
-          </button>
-        </nav>
-        
-        {/* Custom Confirmation Dialog (Coach & Runner Shared) */}
-        {confirmDialog.isOpen && (
-          <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
-              <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">{confirmDialog.message}</p>
-              <div className="flex gap-3">
-                <button onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500 text-sm">キャンセル</button>
-                <button onClick={confirmDialog.onConfirm} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg">OK</button>
-              </div>
-            </div>
-          </div>
-        )}
+        {confirmDialog.isOpen && (<div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-in fade-in"><div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95"><p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">{confirmDialog.message}</p><div className="flex gap-3"><button onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500 text-sm">キャンセル</button><button onClick={confirmDialog.onConfirm} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg">OK</button></div></div></div>)}
       </div>
     );
   }
