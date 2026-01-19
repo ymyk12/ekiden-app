@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 // --- App Version ---
-const APP_LAST_UPDATED = '2026.01.15 13:35';
+const APP_LAST_UPDATED = '2026.01.15 14:20';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -195,22 +195,26 @@ const App = () => {
     /* プレビュー時はカードをA4用紙(横向き)に見立てる */
     .preview-mode-wrapper .report-card-base {
       width: 297mm; /* A4横幅 */
-      min-height: 210mm; /* A4縦幅 */
+      height: 210mm; /* A4縦幅固定 */
       padding: 10mm; 
       margin: 0 auto 30px auto; /* 中央寄せ + 下マージン */
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       border-radius: 0;
       box-sizing: border-box;
       position: relative;
-      overflow: hidden; /* A4内でははみ出し許可（または制御） */
+      overflow: hidden; 
       page-break-after: always;
+      display: flex;
+      flex-direction: column;
     }
 
     /* プレビュー時はグラフのスクロールを無効化して全体表示 */
     .preview-mode-wrapper .report-chart-container {
       overflow: hidden !important;
-      height: 160mm !important; /* 横向き用紙に合わせて高さを調整 */
+      flex: 1; /* 残りの高さを全て使う */
       width: 100% !important;
+      display: flex;
+      align-items: center;
     }
     
     /* プレビュー時の表のスタイル強制 */
@@ -228,7 +232,7 @@ const App = () => {
       border: 1px solid #ccc !important;
     }
     
-    /* 左端（日付・項目列）の調整 - 幅を広げて折り返し防止 */
+    /* 左端（日付・項目列）の調整 */
     .preview-mode-wrapper th:first-child, 
     .preview-mode-wrapper td:first-child {
       width: 80px !important; /* 幅を拡張 */
@@ -276,24 +280,28 @@ const App = () => {
         page-break-after: always;
         page-break-inside: avoid;
         box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
       }
       
-      /* 最後のページの余分な改ページを防ぐ */
       .report-card-base:last-child {
         page-break-after: auto;
       }
       
-      /* グラフコンテナの印刷時調整 */
+      /* グラフコンテナの印刷時調整 (重要: mm単位で高さを確保) */
       .report-chart-container {
          overflow: visible !important;
          width: 100% !important;
-         height: 90% !important; /* ページ内で大きく表示 */
+         flex: 1; /* 残りの高さを埋める */
+         /* 万が一flexが効かない場合のフォールバックとして高さを指定 */
+         min-height: 150mm !important; 
          display: block !important;
       }
       
       /* 内部のdiv幅を強制的に100%にする */
       .chart-inner-wrapper {
          width: 100% !important;
+         height: 100% !important;
       }
 
       .recharts-responsive-container {
@@ -315,7 +323,7 @@ const App = () => {
         overflow: hidden;
       }
       
-      /* 左端（日付・項目列）の調整 - 幅を広げて折り返し防止 */
+      /* 左端（日付・項目列）の調整 */
       th:first-child, td:first-child {
         width: 80px !important; /* 幅を拡張 */
         white-space: nowrap !important; /* 折り返し禁止 */
@@ -920,7 +928,7 @@ const App = () => {
     }
   };
 
-  const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
+  const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, updatedAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
   const confirmRestRegister = () => { setConfirmDialog({ isOpen: true, message: '今日を「完全休養」として記録しますか？', onConfirm: async () => { setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); await handleRestRegister(); } }); };
   const handleRestRegister = async () => { setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: 0, category: '完全休養', menuDetail: 'オフ', rpe: 1, pain: 1, achieved: true, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('休養日として記録しました'); resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch(e) { console.error(e); setSuccessMsg("保存エラー"); } finally { setIsSubmitting(false); } };
 
@@ -1294,7 +1302,7 @@ const App = () => {
                             <div className="flex items-center gap-3">
                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${i < 3 ? 'bg-yellow-400 text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
                                   {i + 1}
-                                </div>
+                               </div>
                                <span className="font-bold text-sm text-slate-700 truncate max-w-[150px]">{r.name}</span>
                             </div>
                             <span className="font-black text-blue-600 text-sm">{r.total} <span className="text-[9px] text-slate-400 font-normal">km</span></span>
@@ -1967,7 +1975,7 @@ const App = () => {
               </div>
             </>
           )}
-          {/* ... (rest of coach views) */}
+
           {view === 'coach-check' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Status Check</h3><div className="flex flex-col md:flex-row items-center justify-center mb-6 gap-6"><input type="date" className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500" value={checkDate} onChange={e => setCheckDate(e.target.value)} /><div className="grid grid-cols-2 gap-4 w-full md:w-auto"><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出率</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-blue-600">{checkListData.length > 0 ? Math.round((checkListData.filter(r => r.status !== 'unsubmitted').length / checkListData.length) * 100) : 0}</span><span className="text-xs font-bold text-slate-400 mb-1">%</span></div></div><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-emerald-600">{checkListData.filter(r => r.status !== 'unsubmitted').length}</span><span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span></div></div></div></div><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2">{checkListData.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group"><div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${r.status === 'active' ? 'bg-blue-500' : r.status === 'rest' ? 'bg-emerald-400' : 'bg-rose-400'}`}>{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p></div></div><div>{r.status === 'active' && (<span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Check size={12}/> {r.detail}</span>)}{r.status === 'rest' && (<span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">{r.detail}</span>)}{r.status === 'unsubmitted' && (<span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><AlertTriangle size={12}/> 未提出</span>)}</div></div>))}</div></div>)}
           {view === 'coach-menu' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">Board Update</h3><div className="space-y-4 max-w-2xl mx-auto"><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-black text-sm" value={menuInput.date} onChange={e=>setMenuInput({...menuInput, date: e.target.value})}/><textarea placeholder="指示を入力..." className="w-full p-6 bg-slate-50 rounded-[2.5rem] h-64 outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-500 text-lg leading-relaxed shadow-inner resize-none" value={menuInput.text} onChange={e=>setMenuInput({...menuInput, text: e.target.value})} /><button onClick={async() => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menus', menuInput.date), menuInput); setSuccessMsg('掲示しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95 transition-all">掲示板を更新</button></div></div>)}
           {view === 'coach-roster' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Team Roster</h3><div className="space-y-4"><h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><UserCheck size={16}/> Active Members ({activeRunners.length})</h4><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">{activeRunners.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2" onClick={() => handleCoachEditRunner(r)}><div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Goal: {r.goalMonthly}km/mo</p><p className="text-[10px] text-slate-300 font-mono">PIN: {r.pin || '未設定'}</p></div></div><div className="flex items-center gap-2">
