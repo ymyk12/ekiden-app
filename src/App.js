@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 // --- App Version ---
-const APP_LAST_UPDATED = '2026.01.19 13:40';
+const APP_LAST_UPDATED = '2026.01.19 14:15';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -293,7 +293,6 @@ const App = () => {
          overflow: visible !important;
          width: 100% !important;
          flex: 1; /* 残りの高さを埋める */
-         /* 万が一flexが効かない場合のフォールバックとして高さを指定 */
          min-height: 150mm !important; 
          display: block !important;
       }
@@ -791,7 +790,7 @@ const App = () => {
     if (formData.lastName.trim() === 'admin') {
       setIsSubmitting(true);
       try {
-        const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners');
+        // const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners'); // Removed unused var
         const adminProfile = {
           lastName: 'admin',
           firstName: formData.firstName || 'User',
@@ -800,7 +799,7 @@ const App = () => {
           status: 'active',
           pin: formData.personalPin || '0000',
           registeredAt: new Date().toISOString(),
-          id: 'admin_temp_id' // 一時的なIDを使用
+          id: 'admin_temp_id' 
         };
         
         setProfile(adminProfile);
@@ -929,8 +928,23 @@ const App = () => {
   };
 
   const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, updatedAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
-  const confirmRestRegister = () => { setConfirmDialog({ isOpen: true, message: '今日を「完全休養」として記録しますか？', onConfirm: async () => { setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); await handleRestRegister(); } }); };
-  const handleRestRegister = async () => { setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: 0, category: '完全休養', menuDetail: 'オフ', rpe: 1, pain: 1, achieved: true, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('休養日として記録しました'); resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch(e) { console.error(e); setSuccessMsg("保存エラー"); } finally { setIsSubmitting(false); } };
+  
+  // Replaced unused inline function with this proper one for rest registration
+  const handleRestRegister = async () => { 
+    setIsSubmitting(true); 
+    try { 
+      const dataToSave = { date: formData.date, distance: 0, category: '完全休養', menuDetail: 'オフ', rpe: 1, pain: 1, achieved: true, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; 
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); 
+      setSuccessMsg('休養日として記録しました'); 
+      resetForm(); 
+      setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); 
+    } catch(e) { 
+      console.error(e); 
+      setSuccessMsg("保存エラー"); 
+    } finally { 
+      setIsSubmitting(false); 
+    } 
+  };
 
   const handleQuarterChange = (index, field, value) => { const newQuarters = [...appSettings.quarters]; newQuarters[index] = { ...newQuarters[index], [field]: value }; setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
   const handleAutoFillQuarters = () => { const newQuarters = calculateAutoQuarters(appSettings.startDate, appSettings.endDate); setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
@@ -1410,38 +1424,14 @@ const App = () => {
                   <div className="space-y-1">
                      {/* 修正: 「今日は休み」ボタンを日付の横などに配置すると収まりが良い */}
                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">休憩</label>
-                    <button onClick={() => setConfirmDialog({
+                     <button onClick={() => setConfirmDialog({
                       isOpen: true,
                       message: '今日を「完全休養」として記録しますか？',
                       onConfirm: async () => {
                         setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                        setIsSubmitting(true);
-                        try {
-                          const dataToSave = {
-                            date: formData.date, 
-                            distance: 0,
-                            category: '完全休養',
-                            menuDetail: 'オフ',
-                            rpe: 1,
-                            pain: 1,
-                            achieved: true,
-                            runnerId: currentUserId,
-                            runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
-                          };
-                          
-                          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
-                              ...dataToSave,
-                              createdAt: new Date().toISOString()
-                          });
-                          setSuccessMsg('休養日として記録しました');
-                          resetForm();
-                          setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500);
-                        } catch(e) {
-                          console.error(e);
-                          setSuccessMsg("保存エラー");
-                        } finally {
-                          setIsSubmitting(false);
-                        }
+                        // Reusing the rest registration logic directly here as requested in previous logic flow or call the separate function if defined.
+                        // Calling separate function for clarity.
+                        await handleRestRegister();
                       }
                     })} disabled={isSubmitting} className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm border border-emerald-100 active:scale-95 transition-all">
                       休養
