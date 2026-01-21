@@ -7,11 +7,11 @@ import {
 } from 'recharts';
 import { 
   Home, Plus, BarChart2, Users, Settings, LogOut, ChevronRight, 
-  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList, Eye, X
+  Activity, AlertCircle, Download, Trash2, Calendar, Clock, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserCheck, Archive, Menu, LogIn, UserPlus, AlertTriangle, Check, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList, Eye, X
 } from 'lucide-react';
 
 // --- App Version ---
-const APP_LAST_UPDATED = '2026.01.19 14:00';
+const APP_LAST_UPDATED = '2026.01.21 18:20';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -35,9 +35,8 @@ const COLORS = ['#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'
 // --- Helper: Date Quarter Calculation ---
 const calculateAutoQuarters = (startStr, endStr) => {
   const s = startStr ? new Date(startStr) : new Date();
-  const e = endStr ? new Date(endStr) : new Date();
   
-  if (isNaN(s.getTime()) || isNaN(e.getTime())) {
+  if (isNaN(s.getTime())) {
       const now = new Date();
       return [
         { id: 1, start: now.toLocaleDateString('sv-SE'), end: now.toLocaleDateString('sv-SE') },
@@ -47,29 +46,12 @@ const calculateAutoQuarters = (startStr, endStr) => {
       ];
   }
 
-  const totalTime = e - s;
-  const totalDays = Math.floor(totalTime / (1000 * 60 * 60 * 24)) + 1;
-  
-  if (totalDays <= 0) return [
-    { id: 1, start: '', end: '' }, { id: 2, start: '', end: '' }, 
-    { id: 3, start: '', end: '' }, { id: 4, start: '', end: '' }
-  ];
-
   const quarters = [];
   for (let i = 0; i < 4; i++) {
-    const qStart = new Date(s);
-    qStart.setDate(s.getDate() + Math.floor((totalDays / 4) * i));
-    
-    const qEnd = new Date(s);
-    if (i === 3) {
-      qEnd.setDate(s.getDate() + totalDays - 1);
-    } else {
-      qEnd.setDate(s.getDate() + Math.floor((totalDays / 4) * (i + 1)) - 1);
-    }
     quarters.push({ 
       id: i + 1,
-      start: qStart.toLocaleDateString('sv-SE'),
-      end: qEnd.toLocaleDateString('sv-SE')
+      start: '', 
+      end: ''
     });
   }
   return quarters;
@@ -404,7 +386,7 @@ const App = () => {
         setAppSettings(prev => ({
           ...prev,
           ...data,
-          quarters: quarters, // 補正済みのデータを使用
+          quarters: quarters, 
           startDate: data.startDate || '',
           endDate: data.endDate || ''
         }));
@@ -509,7 +491,6 @@ const App = () => {
     const matrix = reportDates.map(date => {
       const row = { date };
       runnerIds.forEach(id => {
-        // 表の集計ロジック（修正なし：もともとfilter使用で正しかった）
         const logs = allLogs.filter(l => l.runnerId === id && l.date === date);
         if (logs.length === 0) {
           row[id] = '未';
@@ -560,13 +541,9 @@ const App = () => {
     activeRunners.forEach(r => {
       let sum = 0;
       reportDates.forEach((date, idx) => {
-        // --- 修正箇所: find から filter + reduce に変更 ---
-        // 1日複数回練習した場合も全て加算する
         const dayLogs = allLogs.filter(l => l.runnerId === r.id && l.date === date);
         const dayDist = dayLogs.reduce((acc, log) => acc + (Number(log.distance) || 0), 0);
-        
         sum += dayDist;
-        
         if (data[idx]) {
           data[idx][r.id] = Math.round(sum * 10) / 10;
         }
@@ -910,7 +887,7 @@ const App = () => {
   };
 
   const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, updatedAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
-  const confirmRestRegister = () => { setConfirmDialog({ isOpen: true, message: '今日を「完全休養」として記録しますか？', onConfirm: async () => { setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); await handleRestRegister(); } }); };
+  // const confirmRestRegister = ... は削除し、直接呼ぶ
   const handleRestRegister = async () => { setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: 0, category: '完全休養', menuDetail: 'オフ', rpe: 1, pain: 1, achieved: true, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('休養日として記録しました'); resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch(e) { console.error(e); setSuccessMsg("保存エラー"); } finally { setIsSubmitting(false); } };
 
   const handleQuarterChange = (index, field, value) => { const newQuarters = [...appSettings.quarters]; newQuarters[index] = { ...newQuarters[index], [field]: value }; setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
@@ -1770,8 +1747,7 @@ const App = () => {
                                 <td className="p-3 sticky left-0 bg-slate-100 border-t-2 border-slate-300">TOTAL</td>
                                 {activeRunners.map(r => (
                                     <td key={r.id} className="p-3 text-center text-blue-700 border-t-2 border-slate-300">
-                                      {/* 安全なアクセスに変更 */}
-                                      <span style={{ fontSize: '1.1em' }}>{reportMatrix?.totals?.[r.id] || 0}</span>
+                                      <span style={{ fontSize: '1.1em' }}>{reportMatrix.totals[r.id] || 0}</span>
                                       <span style={{ fontSize: '0.8em', color: '#64748b' }}> / {r.goalPeriod || 0}</span>
                                     </td>
                                 ))}
