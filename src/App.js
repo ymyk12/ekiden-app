@@ -7,11 +7,11 @@ import {
 } from 'recharts';
 import { 
   Home, Plus, BarChart2, Users, Settings, LogOut, ChevronRight, 
-  Activity, Download, Trash2, Calendar, Clock, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserCheck, Archive, Menu, LogIn, UserPlus, AlertTriangle, Check, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList, Eye, X
+  Activity, AlertCircle, CheckCircle, Download, Trash2, Calendar, Clock, HeartPulse, Trophy, BookOpen, Flag, Target, RefreshCw, Edit, Medal, FileText, Printer, FileSpreadsheet, Lock, UserMinus, UserCheck, Archive, Menu, User, LogIn, UserPlus, AlertTriangle, Check, Coffee, KeyRound, ArrowLeft, Save, LayoutDashboard, ClipboardList, Eye, X
 } from 'lucide-react';
 
 // --- App Version ---
-const APP_LAST_UPDATED = '2026.01.21 17:15';
+const APP_LAST_UPDATED = '2026.01.19 14:00';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -35,9 +35,9 @@ const COLORS = ['#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'
 // --- Helper: Date Quarter Calculation ---
 const calculateAutoQuarters = (startStr, endStr) => {
   const s = startStr ? new Date(startStr) : new Date();
-  // const e = endStr ? new Date(endStr) : new Date(); // 未使用のためコメントアウト
+  const e = endStr ? new Date(endStr) : new Date();
   
-  if (isNaN(s.getTime())) {
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) {
       const now = new Date();
       return [
         { id: 1, start: now.toLocaleDateString('sv-SE'), end: now.toLocaleDateString('sv-SE') },
@@ -47,14 +47,29 @@ const calculateAutoQuarters = (startStr, endStr) => {
       ];
   }
 
-  // 期間計算ロジック（簡易版）
-  // 実際には設定画面等で変更されることを想定
+  const totalTime = e - s;
+  const totalDays = Math.floor(totalTime / (1000 * 60 * 60 * 24)) + 1;
+  
+  if (totalDays <= 0) return [
+    { id: 1, start: '', end: '' }, { id: 2, start: '', end: '' }, 
+    { id: 3, start: '', end: '' }, { id: 4, start: '', end: '' }
+  ];
+
   const quarters = [];
   for (let i = 0; i < 4; i++) {
+    const qStart = new Date(s);
+    qStart.setDate(s.getDate() + Math.floor((totalDays / 4) * i));
+    
+    const qEnd = new Date(s);
+    if (i === 3) {
+      qEnd.setDate(s.getDate() + totalDays - 1);
+    } else {
+      qEnd.setDate(s.getDate() + Math.floor((totalDays / 4) * (i + 1)) - 1);
+    }
     quarters.push({ 
       id: i + 1,
-      start: '', // デフォルトは空
-      end: ''
+      start: qStart.toLocaleDateString('sv-SE'),
+      end: qEnd.toLocaleDateString('sv-SE')
     });
   }
   return quarters;
@@ -155,10 +170,11 @@ const App = () => {
       margin-bottom: 20px;
       width: 100%;
     }
+    
     .report-chart-container {
       height: 400px;
       width: 100%;
-      overflow-x: auto; 
+      overflow-x: auto; /* 横スクロールを許可 */
       display: block;
     }
 
@@ -169,32 +185,39 @@ const App = () => {
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: #525659;
+      background-color: #525659; /* アプリ背景を隠すダークグレー */
       z-index: 9999;
       overflow-y: auto;
       padding: 20px;
       display: block;
     }
     
+    /* プレビュー時はカードをA4用紙(横向き)に見立てる */
     .preview-mode-wrapper .report-card-base {
-      width: 297mm; 
-      min-height: 210mm; 
+      width: 297mm; /* A4横幅 */
+      height: 210mm; /* A4縦幅固定 */
       padding: 10mm; 
-      margin: 0 auto 30px auto; 
+      margin: 0 auto 30px auto; /* 中央寄せ + 下マージン */
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       border-radius: 0;
       box-sizing: border-box;
       position: relative;
       overflow: hidden; 
       page-break-after: always;
+      display: flex;
+      flex-direction: column;
     }
 
+    /* プレビュー時はグラフのスクロールを無効化して全体表示 */
     .preview-mode-wrapper .report-chart-container {
       overflow: hidden !important;
-      height: 160mm !important; 
+      flex: 1; /* 残りの高さを全て使う */
       width: 100% !important;
+      display: flex;
+      align-items: center;
     }
     
+    /* プレビュー時の表のスタイル強制 */
     .preview-mode-wrapper table {
       width: 100% !important;
       table-layout: fixed !important;
@@ -208,16 +231,18 @@ const App = () => {
       white-space: normal !important;
       border: 1px solid #ccc !important;
     }
+    
+    /* 左端（日付・項目列）の調整 */
     .preview-mode-wrapper th:first-child, 
     .preview-mode-wrapper td:first-child {
-      width: 80px !important; 
-      white-space: nowrap !important;
+      width: 80px !important; /* 幅を拡張 */
+      white-space: nowrap !important; /* 折り返し禁止 */
     }
 
     /* === 3. 印刷時（@media print）のスタイル === */
     @media print {
       @page { 
-        size: A4 landscape; 
+        size: A4 landscape; /* 横向き */
         margin: 0; 
       }
       body { 
@@ -379,7 +404,7 @@ const App = () => {
         setAppSettings(prev => ({
           ...prev,
           ...data,
-          quarters: quarters, 
+          quarters: quarters, // 補正済みのデータを使用
           startDate: data.startDate || '',
           endDate: data.endDate || ''
         }));
@@ -484,6 +509,7 @@ const App = () => {
     const matrix = reportDates.map(date => {
       const row = { date };
       runnerIds.forEach(id => {
+        // 表の集計ロジック（修正なし：もともとfilter使用で正しかった）
         const logs = allLogs.filter(l => l.runnerId === id && l.date === date);
         if (logs.length === 0) {
           row[id] = '未';
@@ -534,9 +560,13 @@ const App = () => {
     activeRunners.forEach(r => {
       let sum = 0;
       reportDates.forEach((date, idx) => {
+        // --- 修正箇所: find から filter + reduce に変更 ---
+        // 1日複数回練習した場合も全て加算する
         const dayLogs = allLogs.filter(l => l.runnerId === r.id && l.date === date);
         const dayDist = dayLogs.reduce((acc, log) => acc + (Number(log.distance) || 0), 0);
+        
         sum += dayDist;
+        
         if (data[idx]) {
           data[idx][r.id] = Math.round(sum * 10) / 10;
         }
@@ -742,7 +772,7 @@ const App = () => {
     if (formData.lastName.trim() === 'admin') {
       setIsSubmitting(true);
       try {
-        // const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners'); // 不要なのでコメントアウト
+        const runnersRef = collection(db, 'artifacts', appId, 'public', 'data', 'runners');
         const adminProfile = {
           lastName: 'admin',
           firstName: formData.firstName || 'User',
@@ -751,7 +781,7 @@ const App = () => {
           status: 'active',
           pin: formData.personalPin || '0000',
           registeredAt: new Date().toISOString(),
-          id: 'admin_temp_id' 
+          id: 'admin_temp_id' // 一時的なIDを使用
         };
         
         setProfile(adminProfile);
@@ -880,7 +910,7 @@ const App = () => {
   };
 
   const handleSaveLog = async () => { if (!formData.distance) return; setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: parseFloat(formData.distance), category: formData.category, menuDetail: formData.menuDetail, rpe: formData.rpe, pain: formData.pain, achieved: formData.achieved, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; if (editingLogId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', editingLogId), { ...dataToSave, updatedAt: new Date().toISOString() }); setSuccessMsg('記録を更新しました'); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('記録を保存しました'); } resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch (e) { console.error(e); setSuccessMsg("保存エラー: " + e.message); } finally { setIsSubmitting(false); } };
-  // const confirmRestRegister = ... は削除し、直接呼ぶ
+  const confirmRestRegister = () => { setConfirmDialog({ isOpen: true, message: '今日を「完全休養」として記録しますか？', onConfirm: async () => { setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); await handleRestRegister(); } }); };
   const handleRestRegister = async () => { setIsSubmitting(true); try { const dataToSave = { date: formData.date, distance: 0, category: '完全休養', menuDetail: 'オフ', rpe: 1, pain: 1, achieved: true, runnerId: currentUserId, runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`, }; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { ...dataToSave, createdAt: new Date().toISOString() }); setSuccessMsg('休養日として記録しました'); resetForm(); setTimeout(() => { setSuccessMsg(''); setView('menu'); }, 1500); } catch(e) { console.error(e); setSuccessMsg("保存エラー"); } finally { setIsSubmitting(false); } };
 
   const handleQuarterChange = (index, field, value) => { const newQuarters = [...appSettings.quarters]; newQuarters[index] = { ...newQuarters[index], [field]: value }; setAppSettings(prev => ({ ...prev, quarters: newQuarters })); };
@@ -1533,6 +1563,415 @@ const App = () => {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // --- COACH VIEW ---
+  if (role === 'coach') {
+    return (
+      <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 print:bg-white print:pb-0 print:h-auto md:flex">
+        {/* Header / Sidebar for PC */}
+        <header className="bg-slate-950 text-white p-5 sticky top-0 z-50 md:h-screen md:w-64 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
+          <div>
+             <h1 className="font-black italic text-xl flex items-center gap-2 tracking-tighter mb-8 md:mb-10"><Users size={20} className="text-blue-400"/> COACH TERMINAL</h1>
+             
+             {/* PC Navigation */}
+             <nav className="hidden md:flex flex-col gap-2">
+               {['stats', 'report', 'check', 'menu', 'roster', 'settings'].map(t => (
+                 <button 
+                   key={t} 
+                   onClick={() => setView(`coach-${t}`)} 
+                   className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold uppercase tracking-widest transition-all ${view === `coach-${t}` ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800'}`}
+                 >
+                   {t === 'stats' && <LayoutDashboard size={18}/>}
+                   {t === 'report' && <FileText size={18}/>}
+                   {t === 'check' && <ClipboardList size={18}/>}
+                   {t === 'menu' && <Calendar size={18}/>}
+                   {t === 'roster' && <Users size={18}/>}
+                   {t === 'settings' && <Settings size={18}/>}
+                   {t}
+                 </button>
+               ))}
+             </nav>
+          </div>
+          <button onClick={handleLogout} className="opacity-60 hover:opacity-100 flex items-center gap-2 font-bold text-sm"><LogOut size={18}/> Logout</button>
+        </header>
+
+        {/* Main Content Area - Layout fixed for PC/Print */}
+        <main className="flex-1 p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none md:overflow-y-auto md:h-screen print:max-w-none print:p-0 print:w-full print:overflow-visible">
+          
+          {/* Mobile Navigation Tabs */}
+          <div className="md:hidden flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-hidden print:hidden mb-6">
+            {['stats', 'report', 'check', 'menu', 'roster', 'settings'].map(t => (
+              <button key={t} onClick={() => setView(`coach-${t}`)} className={`flex-1 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${view === `coach-${t}` ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-400'}`}>{t.slice(0,3)}</button>
+            ))}
+          </div>
+
+          {(view === 'coach-stats' || !view.startsWith('coach-')) && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-slate-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Members</p>
+                   <p className="text-3xl md:text-4xl font-black text-slate-800">{activeRunners.length}<span className="text-xs ml-1">名</span></p>
+                </div>
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-blue-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Today's Report</p>
+                   <div className="flex items-baseline gap-1">
+                     <p className="text-3xl md:text-4xl font-black text-blue-600">{coachStats.reportRate}</p>
+                     <span className="text-sm font-black text-slate-400">%</span>
+                   </div>
+                </div>
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-emerald-500">
+                   <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Distance</p>
+                   {/* 修正: 安全なアクセス */}
+                   <p className="text-2xl md:text-3xl font-black text-emerald-600">{reportMatrix?.totals?.grandTotal || 0}<span className="text-xs ml-1 text-slate-400">km</span></p>
+                </div>
+                <div className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 ${coachStats.painAlertCount > 0 ? 'border-rose-500 bg-rose-50' : 'border-emerald-500'}`}>
+                  <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Pain Alert</p>
+                  <p className={`text-3xl md:text-4xl font-black ${coachStats.painAlertCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{coachStats.painAlertCount}<span className="text-xs ml-1 text-slate-400">名</span></p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] flex flex-col">
+                   <div className="flex justify-between items-center mb-6">
+                     <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2"><Trophy size={18} className="text-orange-500"/> Team Ranking</h3>
+                     <button onClick={exportCSV} className="text-blue-600 p-2 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"><Download size={20}/></button>
+                   </div>
+                   
+                   {/* 修正箇所: グラフの高さを動的に設定 (Coach Stats) */}
+                   <div className="flex-1 w-full min-h-0 overflow-y-auto pr-2">
+                     <div style={{ height: Math.max(300, rankingData.length * 50) }}>
+                       <ResponsiveContainer width="100%" height="100%">
+                         <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 60 }}>
+                           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9"/>
+                           <XAxis type="number" hide />
+                           <YAxis dataKey="name" type="category" width={110} tick={{fontSize: 12, fontWeight: 'bold', fill: '#1e293b', interval: 0}} axisLine={false} tickLine={false}/>
+                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', fontWeight: 'bold'}} />
+                           <Bar dataKey="total" radius={[0, 10, 10, 0]} barSize={24}>
+                             {rankingData.map((_, i) => (
+                               <Cell key={i} fill={i === 0 ? '#0f172a' : i < 3 ? '#3b82f6' : '#cbd5e1'} />
+                             ))}
+                             <LabelList dataKey="total" position="right" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={10} />
+                           </Bar>
+                         </BarChart>
+                       </ResponsiveContainer>
+                     </div>
+                   </div>
+                </div>
+
+                <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 h-[28rem] flex flex-col">
+                  <div className="p-6 bg-slate-50 border-b flex items-center gap-2">
+                    <Activity size={16} className="text-slate-400"/>
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Recent Activity</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {allLogs.filter(l => activeRunners.some(r => r.id === l.runnerId)).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, 50).map(l => (
+                      <div key={l.id} className="p-4 mb-2 bg-white rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors">
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="flex items-center gap-3">
+                             <div className={`w-2 h-2 rounded-full ${l.pain > 3 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'}`}></div>
+                             <span className="font-bold text-slate-700 text-sm">{l.runnerName}</span>
+                          </div>
+                          <span className="font-black text-blue-600">{l.distance}km</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-5">
+                           <span>{l.date} · {l.category}</span>
+                           <span>RPE: {l.rpe}</span>
+                        </div>
+                        {l.menuDetail && <p className="mt-2 ml-5 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg italic">"{l.menuDetail}"</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {view === 'coach-report' && (
+            <>
+              {/* 印刷プレビューモードのトグル */}
+              <div className="flex justify-end mb-4 no-print">
+                 <button onClick={() => setIsPrintPreview(!isPrintPreview)} className={`px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center gap-2 ${isPrintPreview ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                    {isPrintPreview ? <X size={16}/> : <Eye size={16}/>}
+                    {isPrintPreview ? 'プレビューを閉じる' : '印刷レイアウト確認'}
+                 </button>
+              </div>
+
+              {/* isPrintPreview が true の場合は画面上でプレビュー用CSSを適用するラッパーを表示 */}
+              <div className={isPrintPreview ? "preview-mode-wrapper" : ""}>
+                {isPrintPreview && (
+                   <div className="flex justify-end mb-4 max-w-5xl mx-auto no-print">
+                      <button onClick={() => setIsPrintPreview(false)} className="bg-white text-slate-800 px-6 py-3 rounded-full font-bold shadow-xl hover:bg-slate-100 transition-colors">閉じる</button>
+                   </div>
+                )}
+                
+                <style>{printStyles}</style>
+                <div id="printable-report" className={`${isPrintPreview ? 'max-w-5xl mx-auto shadow-2xl scale-100 origin-top' : ''}`}>
+                   
+                   {/* 1ページ目: 表紙 & テーブル */}
+                   <div className="report-card-base">
+                       <div className="flex justify-between items-center pb-6 border-b border-slate-100 print:border-slate-800">
+                        <div>
+                          <h2 className="font-black text-2xl text-slate-800 flex items-center gap-3 uppercase tracking-tighter"><FileText className="text-blue-600 print:text-black"/> KSWC EKIDEN TEAM REPORT</h2>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
+                            Target Period: {appSettings.startDate.replace(/-/g, '/')} - {appSettings.endDate.replace(/-/g, '/')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 no-print">
+                          <button onClick={handleExportMatrixCSV} className="bg-emerald-600 text-white px-4 py-3 rounded-xl hover:bg-emerald-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><FileSpreadsheet size={18}/> CSV出力</button>
+                          <button onClick={handlePrint} className="bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"><Printer size={18}/> 印刷 / PDF</button>
+                        </div>
+                      </div>
+  
+                      <div className={`pb-4 ${isPrintPreview ? 'overflow-visible' : 'overflow-x-auto'}`}>
+                        <table className="w-full text-xs border-collapse">
+                          <thead><tr><th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">DATE</th>{activeRunners.map(r => (<th key={r.id} className="p-3 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[80px] whitespace-nowrap text-center bg-slate-50/50">{r.lastName} {r.firstName.charAt(0)}.</th>))}</tr></thead>
+                          <tbody>
+                            {reportMatrix.matrix.map((row, i) => (
+                              <tr key={row.date} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">{row.date.slice(5).replace('-','/')}</td>
+                                {activeRunners.map(r => {
+                                  const val = row[r.id];
+                                  let cellClass = "p-2 border-b border-slate-100 text-center font-bold text-sm ";
+                                  if (val === '未') cellClass += "text-rose-400 bg-rose-50/30";
+                                  else if (val === '休') cellClass += "text-emerald-500 bg-emerald-50/30";
+                                  else if (val === '0') cellClass += "text-slate-300";
+                                  else cellClass += "text-blue-600";
+                                  return (<td key={r.id} className={cellClass}>{val}</td>);
+                                })}
+                              </tr>
+                            ))}
+                            
+                            {/* ここに追加: 区間合計 (Q1-Q4) - 修正: 項目列の幅確保 */}
+                            {reportMatrix.qTotals.map((row, i) => (
+                              <tr key={`qtotal-${i}`} className="bg-slate-50 font-bold text-slate-600">
+                                {/* 修正: 幅指定を追加して折り返しを防ぐ */}
+                                <td className="p-3 border-b border-slate-200 sticky left-0 bg-slate-50 whitespace-nowrap" style={{ minWidth: '80px' }}>
+                                  Q{i+1} Total
+                                </td>
+                                {activeRunners.map(r => {
+                                  const goalKey = `goalQ${i+1}`;
+                                  const goal = r[goalKey] || 0;
+                                  return (
+                                    <td key={r.id} className="p-3 text-center border-b border-slate-200">
+                                      {/* 実績 / 目標 の形で表示 */}
+                                      <span style={{ fontSize: '1em' }}>{row[r.id] || 0}</span>
+                                      <span style={{ fontSize: '0.7em', color: '#94a3b8' }}> / {goal}</span>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+
+                            {/* 総合計 */}
+                            <tr className="bg-slate-100 font-black text-slate-800">
+                                <td className="p-3 sticky left-0 bg-slate-100 border-t-2 border-slate-300">TOTAL</td>
+                                {activeRunners.map(r => (
+                                    <td key={r.id} className="p-3 text-center text-blue-700 border-t-2 border-slate-300">
+                                      {/* 安全なアクセスに変更 */}
+                                      <span style={{ fontSize: '1.1em' }}>{reportMatrix?.totals?.[r.id] || 0}</span>
+                                      <span style={{ fontSize: '0.8em', color: '#64748b' }}> / {r.goalPeriod || 0}</span>
+                                    </td>
+                                ))}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                   </div>
+  
+                   {/* 2ページ目以降: グラフ (カード形式) */}
+                   
+                   {/* 1. Cumulative Distance Trends */}
+                   <div className="report-card-base">
+                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Cumulative Distance Trends</h3>
+                      <div className="report-chart-container">
+                        <div className="chart-inner-wrapper" style={{ width: '100%', height: '100%' }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
+                            <LineChart data={cumulativeData} margin={{ top: 10, right: 50, left: 0, bottom: 0 }}>
+                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
+                               <XAxis dataKey="date" tick={{fontSize: 10}} />
+                               <YAxis tick={{fontSize: 10}} width={30} />
+                               <Tooltip />
+                               <Legend />
+                               {activeRunners.map((r, i) => (
+                                 <Line 
+                                   key={r.id} 
+                                   type="monotone" 
+                                   dataKey={r.id} 
+                                   name={`${r.lastName} ${r.firstName}`} 
+                                   stroke={COLORS[i % COLORS.length]} 
+                                   strokeWidth={2} 
+                                   dot={false} 
+                                   activeDot={{ r: 6 }}
+                                   // ここで最後の点に名前を表示
+                                   label={({ x, y, index, stroke }) => {
+                                      if (index === cumulativeData.length - 1) {
+                                        return (
+                                          <text x={x + 5} y={y} dy={4} fill={stroke} fontSize={10} fontWeight="bold" textAnchor="start">
+                                            {r.lastName}
+                                          </text>
+                                        );
+                                      }
+                                      return null;
+                                   }}
+                                 />
+                               ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                   </div>
+
+                   {/* 2. Total Distance */}
+                   <div className="report-card-base">
+                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Total Distance</h3>
+                      <div className="report-chart-container">
+                         {/* プレビュー時および印刷時は強制的に100%にするロジック */}
+                         <div className="chart-inner-wrapper" style={{ width: isPrintPreview ? '100%' : `${Math.max(100, rankingData.length * chartWidthFactor)}%`, height: '100%', minWidth: '100%' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
+                              <BarChart data={rankingData} margin={{ top: 10, right: 30, left: 10, bottom: 50 }}> {/* bottomを増やしてX軸ラベルの切れ防止 */}
+                                <CartesianGrid strokeDasharray="3 3" vertical={false}/>
+                                <XAxis 
+                                  dataKey="name" 
+                                  interval={0} 
+                                  angle={-60} /* -45 -> -60 で重なり軽減 */
+                                  textAnchor="end" 
+                                  height={80} 
+                                  tick={({ x, y, payload }) => (
+                                    <g transform={`translate(${x},${y})`}>
+                                      <text
+                                        x={0}
+                                        y={0}
+                                        dy={16}
+                                        textAnchor="end"
+                                        fill="#1e293b"
+                                        transform="rotate(-60)"
+                                        style={{ fontSize: isPrintPreview ? '9px' : '10px', fontWeight: 'bold' }} /* 印刷時はフォント小さく */
+                                      >
+                                        {payload.value}
+                                      </text>
+                                    </g>
+                                  )}
+                                />
+                                <YAxis tick={{fontSize: 10}} width={30}/>
+                                <Bar 
+                                  dataKey="total" 
+                                  fill="#3b82f6" 
+                                  radius={[4, 4, 0, 0]} 
+                                  // 印刷時は太さを自動(undefined)にして詰める
+                                  barSize={isPrintPreview ? undefined : 40} 
+                                >
+                                  <LabelList dataKey="total" position="top" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={5} />
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* 3-6. Quarter Charts */}
+                   {activeQuarters.map((q, idx) => {
+                      const qData = activeRunners.map(r => {
+                        const total = allLogs.filter(l => l.runnerId === r.id && l.date >= q.start && l.date <= q.end).reduce((s, l) => s + (Number(l.distance) || 0), 0);
+                        return { name: `${r.lastName} ${r.firstName}`, total: Math.round(total * 10) / 10 };
+                      }).sort((a, b) => b.total - a.total); 
+                      
+                      return (
+                        <div key={idx} className="report-card-base">
+                          <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">Q{idx + 1} ({q.start.slice(5)} - {q.end.slice(5)})</h3>
+                          <div className="report-chart-container">
+                             <div className="chart-inner-wrapper" style={{ width: isPrintPreview ? '100%' : `${Math.max(100, qData.length * chartWidthFactor)}%`, height: '100%', minWidth: '100%' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  {/* 修正: Y軸のwidthを30に縮小 + マージン調整 */}
+                                  <BarChart data={qData} margin={{ top: 10, right: 30, left: 10, bottom: 50 }}> {/* bottomを増やしてX軸ラベルの切れ防止 */}
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false}/>
+                                    <XAxis 
+                                      dataKey="name" 
+                                      interval={0} 
+                                      angle={-60} /* -45 -> -60 で重なり軽減 */
+                                      textAnchor="end" 
+                                      height={80} 
+                                      tick={({ x, y, payload }) => (
+                                        <g transform={`translate(${x},${y})`}>
+                                          <text
+                                            x={0}
+                                            y={0}
+                                            dy={16}
+                                            textAnchor="end"
+                                            fill="#1e293b"
+                                            transform="rotate(-60)"
+                                            style={{ fontSize: isPrintPreview ? '9px' : '10px', fontWeight: 'bold' }} /* 印刷時はフォント小さく */
+                                          >
+                                            {payload.value}
+                                          </text>
+                                        </g>
+                                      )}
+                                    />
+                                    <YAxis tick={{fontSize: 10}} width={30}/>
+                                    <Bar 
+                                      dataKey="total" 
+                                      fill="#10b981" 
+                                      radius={[4, 4, 0, 0]} 
+                                      // 印刷時は太さを自動(undefined)にして詰める
+                                      barSize={isPrintPreview ? undefined : 40}
+                                    >
+                                      <LabelList dataKey="total" position="top" formatter={v => `${v}km`} style={{fontSize: '11px', fontWeight: 'black', fill: '#475569'}} offset={5} />
+                                    </Bar>
+                                  </BarChart>
+                                </ResponsiveContainer>
+                             </div>
+                          </div>
+                        </div>
+                      );
+                   })}
+                   
+                </div>
+              </div>
+            </>
+          )}
+
+          {view === 'coach-check' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Status Check</h3><div className="flex flex-col md:flex-row items-center justify-center mb-6 gap-6"><input type="date" className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500" value={checkDate} onChange={e => setCheckDate(e.target.value)} /><div className="grid grid-cols-2 gap-4 w-full md:w-auto"><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出率</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-blue-600">{checkListData.length > 0 ? Math.round((checkListData.filter(r => r.status !== 'unsubmitted').length / checkListData.length) * 100) : 0}</span><span className="text-xs font-bold text-slate-400 mb-1">%</span></div></div><div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span><div className="flex items-end gap-1"><span className="text-3xl font-black text-emerald-600">{checkListData.filter(r => r.status !== 'unsubmitted').length}</span><span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span></div></div></div></div><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2">{checkListData.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group"><div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${r.status === 'active' ? 'bg-blue-500' : r.status === 'rest' ? 'bg-emerald-400' : 'bg-rose-400'}`}>{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p></div></div><div>{r.status === 'active' && (<span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Check size={12}/> {r.detail}</span>)}{r.status === 'rest' && (<span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">{r.detail}</span>)}{r.status === 'unsubmitted' && (<span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><AlertTriangle size={12}/> 未提出</span>)}</div></div>))}</div></div>)}
+          {view === 'coach-menu' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">Board Update</h3><div className="space-y-4 max-w-2xl mx-auto"><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-black text-sm" value={menuInput.date} onChange={e=>setMenuInput({...menuInput, date: e.target.value})}/><textarea placeholder="指示を入力..." className="w-full p-6 bg-slate-50 rounded-[2.5rem] h-64 outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-500 text-lg leading-relaxed shadow-inner resize-none" value={menuInput.text} onChange={e=>setMenuInput({...menuInput, text: e.target.value})} /><button onClick={async() => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menus', menuInput.date), menuInput); setSuccessMsg('掲示しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95 transition-all">掲示板を更新</button></div></div>)}
+          {view === 'coach-roster' && (<div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in"><h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Team Roster</h3><div className="space-y-4"><h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><UserCheck size={16}/> Active Members ({activeRunners.length})</h4><div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">{activeRunners.map(r => (<div key={r.id} className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2" onClick={() => handleCoachEditRunner(r)}><div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-800">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Goal: {r.goalMonthly}km/mo</p><p className="text-[10px] text-slate-300 font-mono">PIN: {r.pin || '未設定'}</p></div></div><div className="flex items-center gap-2">
+            {/* プレビューボタンの追加 */}
+            <button onClick={(e) => { e.stopPropagation(); handleStartPreview(r); }} className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors" title="本人視点でプレビュー"><Eye size={18}/></button>
+            <ChevronRight className="text-slate-300" size={20}/>
+          </div></div>))}</div></div><div className="space-y-4 pt-8 border-t border-slate-100"><h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><Archive size={16}/> Retired / Inactive</h4><div className="divide-y divide-slate-100 opacity-60 hover:opacity-100 transition-opacity grid md:grid-cols-2 gap-x-12 gap-y-0">{allRunners.filter(r => r.status === 'retired').map(r => (<div key={r.id} className="py-4 flex items-center justify-between"><div className="flex items-center gap-3 grayscale"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">{r.lastName.charAt(0)}</div><div><p className="font-bold text-slate-600">{r.lastName} {r.firstName}</p><p className="text-[10px] text-slate-400 font-bold">Retired</p></div></div><div className="flex items-center gap-2"><button onClick={() => setConfirmDialog({ isOpen: true, message: `${r.lastName}選手を現役復帰させますか？`, onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id), { status: 'active' }); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 transition-colors" title="現役復帰"><UserCheck size={18}/></button><button onClick={() => setConfirmDialog({ isOpen: true, message: `警告: ${r.lastName}選手のデータを完全に削除します。元に戻せません。よろしいですか？`, onConfirm: async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'runners', r.id)); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); } })} className="bg-rose-50 text-rose-600 p-2 rounded-xl hover:bg-rose-100 transition-colors" title="完全削除"><Trash2 size={18}/></button></div></div>))}{allRunners.filter(r => r.status === 'retired').length === 0 && (<p className="text-[10px] text-slate-300 italic py-2">引退した選手はいません</p>)}</div></div></div>)}
+          {view === 'coach-settings' && (
+            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">Settings</h3>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Passcode</label>
+                  <input type="text" maxLength={4} className="w-full p-5 bg-slate-50 rounded-2xl font-black text-4xl text-center outline-none border-2 border-transparent focus:border-blue-500 font-mono tracking-[0.5em]" value={appSettings.coachPass} onChange={e=>setAppSettings({...appSettings, coachPass: e.target.value})}/>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-emerald-500 uppercase ml-3 tracking-widest">Team Join Passcode</label>
+                  <input type="text" className="w-full p-5 bg-slate-50 rounded-2xl font-black text-2xl text-center outline-none border-2 border-transparent focus:border-emerald-500 tracking-widest text-emerald-600" value={appSettings.teamPass} onChange={e=>setAppSettings({...appSettings, teamPass: e.target.value})}/>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Period</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.startDate} onChange={e=>setAppSettings({...appSettings, startDate: e.target.value})}/><input type="date" className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black" value={appSettings.endDate} onChange={e=>setAppSettings({...appSettings, endDate: e.target.value})}/>
+                  </div>
+                </div>
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">Quarter Intervals</label>
+                    <button onClick={handleAutoFillQuarters} className="text-[9px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black flex items-center gap-1"><RefreshCw size={10}/> Auto</button>
+                  </div>
+                  <div className="space-y-3">{appSettings.quarters.map((q, idx) => (<div key={q.id} className="bg-slate-50 p-3 rounded-2xl"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Quarter {q.id}</p><div className="grid grid-cols-2 gap-3"><input type="date" className="w-full p-2 bg-white rounded-xl text-[10px] font-black outline-none border border-slate-100" value={q.start} onChange={e => handleQuarterChange(idx, 'start', e.target.value)}/><input type="date" className="w-full p-2 bg-white rounded-xl text-[10px] font-black outline-none border border-slate-100" value={q.end} onChange={e => handleQuarterChange(idx, 'end', e.target.value)}/></div></div>))}</div>
+                </div>
+                <button onClick={() => { setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), appSettings); setSuccessMsg('保存しました'); setTimeout(()=>setSuccessMsg(''), 2000); }} className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95">設定保存</button>
+              </div>
+            </div>
+          )}
+        </main>
+        {confirmDialog.isOpen && (<div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-in fade-in"><div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95"><p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">{confirmDialog.message}</p><div className="flex gap-3"><button onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500 text-sm">キャンセル</button><button onClick={confirmDialog.onConfirm} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg">OK</button></div></div></div>)}
       </div>
     );
   }
