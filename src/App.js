@@ -85,7 +85,8 @@ import {
 } from "lucide-react";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "2026.02.03 10:00 (Major Update: Fixed ID System)";
+const APP_LAST_UPDATED =
+  "Ver3.1-fix: データ表示不具合の修正とコンディション管理UIの改善";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -410,6 +411,8 @@ const App = () => {
   const [isPrintPreview, setIsPrintPreview] = useState(false);
   const [checkDate, setCheckDate] = useState(getTodayStr());
   const [isCoachEditModalOpen, setIsCoachEditModalOpen] = useState(false); // 監督用ログ編集モーダル
+  // ▼▼▼ 追加: アラートリストの開閉ステート ▼▼▼
+  const [isPainAlertModalOpen, setIsPainAlertModalOpen] = useState(false);
   // 監督用: 選手の目標編集ステート
   const [coachGoalInput, setCoachGoalInput] = useState({
     monthly: "",
@@ -502,7 +505,7 @@ const App = () => {
         setSelectedRunner(updated);
       }
     }
-  }, [allRunners, role]);
+  }, [allRunners, role, selectedRunner]);
 
   useEffect(() => {
     document.title = "KCTF Ekiden Team";
@@ -664,7 +667,9 @@ const App = () => {
   }, [allRunners, user, role]);
 
   // 3. Derived Data
-  const currentUserId = previewRunner ? previewRunner.id : user?.uid;
+  // ★修正：user.uid(認証ID)ではなく、profile.id(選手番号)を使用する
+  // user.uidを使うと、logs内のrunnerId(選手番号)と一致せずデータが出ないため
+  const currentUserId = previewRunner ? previewRunner.id : profile?.id;
   const currentProfile = previewRunner || profile;
 
   const availablePeriods = useMemo(() => {
@@ -1627,8 +1632,9 @@ const App = () => {
         distance: parseFloat(formData.distance),
         category: formData.category,
         menuDetail: formData.menuDetail,
-        rpe: formData.rpe,
-        pain: formData.pain,
+        // ★修正：確実に数値として保存する（計算やグラフ表示でのバグ防止）
+        rpe: parseInt(formData.rpe, 10),
+        pain: parseInt(formData.pain, 10),
         achieved: formData.achieved,
         runnerId: currentUserId,
         runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
@@ -2230,6 +2236,8 @@ const App = () => {
               <div className="relative">
                 <input
                   type="tel" // スマホで数字キーボードを出す
+                  inputmode="numeric" // ★【追加】スマホで「数字キーボード」を出す
+                  pattern="[0-9]*" // ★【追加】念の為のiOS対策
                   maxLength={5}
                   placeholder="選手番号 (例: 26001)"
                   className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500 text-lg tracking-wider"
@@ -2418,8 +2426,10 @@ const App = () => {
               >
                 {availablePeriods.map((p) => (
                   <option key={p.id} value={p.id} className="text-slate-900">
-                    {p.name}{" "}
-                    {p.start ? `(${p.start.slice(5).replace("-", "/")})` : ""}
+                    {p.name}
+                    {p.start && p.end
+                      ? ` (${p.start.slice(5).replace("-", "/")}～${p.end.slice(5).replace("-", "/")})`
+                      : ""}
                   </option>
                 ))}
               </select>
@@ -2565,110 +2575,104 @@ const App = () => {
                   </p>
                 )}
               </div>
+
+              {/* ▼▼▼ 追加: チーム活動ログ (直近7日間) ▼▼▼ */}
+              <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
+                    <Activity size={14} /> Team Activity (Last 7 Days)
+                  </h3>
+                </div>
+
+                <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
+                  {(() => {
+                    // 1. 直近7日間の日付文字列を生成
+                    const today = new Date();
+                    const pastDate = new Date();
+                    pastDate.setDate(today.getDate() - 6); // 今日含めて7日間
+                    const minDateStr = pastDate.toLocaleDateString("sv-SE"); // YYYY-MM-DD形式
+
+                    // 2. フィルタリングとソート
+                    const teamLogs = allLogs
+                      .filter((l) => l.date >= minDateStr) // 7日前以降
+                      // ★追加：現役選手リストに含まれるIDのログだけを通す
+                      .filter((l) =>
+                        activeRunners.some((r) => r.id === l.runnerId),
+                      )
+                      .sort((a, b) => {
+                        // 日付の新しい順 > 作成日時の新しい順
+                        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+                        return (b.createdAt || "").localeCompare(
+                          a.createdAt || "",
+                        );
+                      })
+                      .slice(0, 10); // 表示が多くなりすぎないよう最新10件に制限
+
+                    if (teamLogs.length === 0) {
+                      return (
+                        <p className="text-center text-xs text-slate-300 py-4 font-bold">
+                          直近の活動記録はありません
+                        </p>
+                      );
+                    }
+
+                    return teamLogs.map((log) => {
+                      const isRest = log.category === "完全休養";
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="flex items-start gap-3 relative pl-2"
+                        >
+                          {/* タイムラインの線 */}
+                          <div className="absolute left-[19px] top-8 bottom-[-16px] w-0.5 bg-slate-100 last:hidden"></div>
+
+                          {/* アバター */}
+                          <div
+                            className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-sm z-10 ${
+                              isRest ? "bg-emerald-400" : "bg-blue-500"
+                            }`}
+                          >
+                            {log.runnerName ? log.runnerName.charAt(0) : "?"}
+                          </div>
+
+                          {/* 内容 */}
+                          <div className="bg-slate-50 p-3 rounded-2xl w-full border border-slate-100">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-400">
+                                  {log.date.slice(5).replace("-", "/")} ·{" "}
+                                  {log.runnerName}
+                                </p>
+                                <p
+                                  className={`text-sm font-black ${isRest ? "text-emerald-600" : "text-slate-700"}`}
+                                >
+                                  {isRest ? "完全休養" : `${log.distance}km`}
+                                  {!isRest && (
+                                    <span className="text-[10px] font-bold text-slate-400 ml-2 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                      {log.category}
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                              {/* ★RPE表示ブロックを削除しました */}
+                            </div>
+
+                            {/* 一言コメントがあれば表示 */}
+                            {log.menuDetail && (
+                              <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed bg-white/50 p-1.5 rounded-lg">
+                                "{log.menuDetail}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
             </>
           )}
-          {/* ▼▼▼ 追加: チーム活動ログ (直近7日間) ▼▼▼ */}
-          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
-                <Activity size={14} /> Team Activity (Last 7 Days)
-              </h3>
-            </div>
-
-            <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
-              {(() => {
-                // 1. 直近7日間の日付文字列を生成
-                const today = new Date();
-                const pastDate = new Date();
-                pastDate.setDate(today.getDate() - 6); // 今日含めて7日間
-                const minDateStr = pastDate.toLocaleDateString("sv-SE"); // YYYY-MM-DD形式
-
-                // 2. フィルタリングとソート
-                const teamLogs = allLogs
-                  .filter((l) => l.date >= minDateStr) // 7日前以降
-                  .sort((a, b) => {
-                    // 日付の新しい順 > 作成日時の新しい順
-                    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-                    return (b.createdAt || "").localeCompare(a.createdAt || "");
-                  })
-                  .slice(0, 10); // 表示が多くなりすぎないよう最新10件に制限（必要なら変更可）
-
-                if (teamLogs.length === 0) {
-                  return (
-                    <p className="text-center text-xs text-slate-300 py-4 font-bold">
-                      直近の活動記録はありません
-                    </p>
-                  );
-                }
-
-                return teamLogs.map((log) => {
-                  const isRest = log.category === "完全休養";
-
-                  return (
-                    <div
-                      key={log.id}
-                      className="flex items-start gap-3 relative pl-2"
-                    >
-                      {/* タイムラインの線 */}
-                      <div className="absolute left-[19px] top-8 bottom-[-16px] w-0.5 bg-slate-100 last:hidden"></div>
-
-                      {/* アバター */}
-                      <div
-                        className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-sm z-10 ${
-                          isRest ? "bg-emerald-400" : "bg-blue-500"
-                        }`}
-                      >
-                        {log.runnerName ? log.runnerName.charAt(0) : "?"}
-                      </div>
-
-                      {/* 内容 */}
-                      <div className="bg-slate-50 p-3 rounded-2xl w-full border border-slate-100">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400">
-                              {log.date.slice(5).replace("-", "/")} ·{" "}
-                              {log.runnerName}
-                            </p>
-                            <p
-                              className={`text-sm font-black ${isRest ? "text-emerald-600" : "text-slate-700"}`}
-                            >
-                              {isRest ? "完全休養" : `${log.distance}km`}
-                              {!isRest && (
-                                <span className="text-[10px] font-bold text-slate-400 ml-2 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                  {log.category}
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                          {/* RPE表示 (練習のみ) */}
-                          {!isRest && (
-                            <div
-                              className={`px-2 py-1 rounded-lg text-[10px] font-black ${
-                                log.rpe >= 8
-                                  ? "bg-rose-100 text-rose-600"
-                                  : log.rpe >= 5
-                                    ? "bg-orange-100 text-orange-600"
-                                    : "bg-blue-100 text-blue-600"
-                              }`}
-                            >
-                              RPE {log.rpe}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 一言コメントがあれば表示 */}
-                        {log.menuDetail && (
-                          <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed bg-white/50 p-1.5 rounded-lg">
-                            "{log.menuDetail}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-          </div>
 
           {/* ADDED: Entry View */}
           {view === "entry" && (
@@ -3395,11 +3399,7 @@ const App = () => {
               }`}
             >
               <Home size={24} strokeWidth={view === "menu" ? 3 : 2} />
-              <span
-                className={`text-[8px] font-black uppercase tracking-widest ${
-                  view === "menu" ? "opacity-100" : "opacity-0"
-                }`}
-              >
+              <span className="text-[8px] font-black uppercase tracking-widest">
                 Home
               </span>
             </button>
@@ -3414,11 +3414,7 @@ const App = () => {
               }`}
             >
               <Users size={24} strokeWidth={view === "team_status" ? 3 : 2} />
-              <span
-                className={`text-[8px] font-black uppercase tracking-widest ${
-                  view === "team_status" ? "opacity-100" : "opacity-0"
-                }`}
-              >
+              <span className="text-[8px] font-black uppercase tracking-widest">
                 Team
               </span>
             </button>
@@ -3453,11 +3449,7 @@ const App = () => {
                 size={24}
                 strokeWidth={view === "review" ? 3 : 2}
               />
-              <span
-                className={`text-[8px] font-black uppercase tracking-widest ${
-                  view === "review" ? "opacity-100" : "opacity-0"
-                }`}
-              >
+              <span className="text-[8px] font-black uppercase tracking-widest">
                 Review
               </span>
             </button>
@@ -3541,8 +3533,10 @@ const App = () => {
               >
                 {availablePeriods.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}{" "}
-                    {p.start ? `(${p.start.slice(5).replace("-", "/")})` : ""}
+                    {p.name}
+                    {p.start && p.end
+                      ? ` (${p.start.slice(5).replace("-", "/")}～${p.end.slice(5).replace("-", "/")})`
+                      : ""}
                   </option>
                 ))}
               </select>
@@ -3588,11 +3582,28 @@ const App = () => {
                   </p>
                 </div>
                 <div
-                  className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 ${coachStats.painAlertCount > 0 ? "border-rose-500 bg-rose-50" : "border-emerald-500"}`}
+                  // ★onClickを追加
+                  onClick={() => {
+                    if (coachStats.painAlertCount > 0) {
+                      setIsPainAlertModalOpen(true);
+                    }
+                  }}
+                  // ★カーソル(cursor-pointer)とホバー効果(active:scale-95)を追加
+                  className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 transition-transform ${
+                    coachStats.painAlertCount > 0
+                      ? "border-rose-500 bg-rose-50 cursor-pointer active:scale-95 hover:shadow-md"
+                      : "border-emerald-500"
+                  }`}
                 >
-                  <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                    Pain Alert
-                  </p>
+                  {/* タイトルに「一覧」というヒントを追加 */}
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest">
+                      Pain Alert
+                    </p>
+                    {coachStats.painAlertCount > 0 && (
+                      <ChevronRight size={14} className="text-rose-400" />
+                    )}
+                  </div>
                   <p
                     className={`text-3xl md:text-4xl font-black ${coachStats.painAlertCount > 0 ? "text-rose-600" : "text-emerald-600"}`}
                   >
@@ -3731,11 +3742,40 @@ const App = () => {
                               {l.distance}km
                             </span>
                           </div>
-                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-5">
-                            <span>
-                              {l.date} · {l.category}
+                          {/* ★修正：日付・カテゴリの行 */}
+                          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-5 mb-2">
+                            {l.date.slice(5).replace("-", "/")} · {l.category}
+                          </div>
+
+                          {/* ★追加：コンディション（RPE・Pain）をバッジで目立たせる行 */}
+                          <div className="flex gap-2 ml-5 mb-1">
+                            {/* RPEバッジ */}
+                            <span
+                              className={`px-2 py-1 rounded-md text-[10px] font-black ${
+                                l.rpe >= 8
+                                  ? "bg-rose-100 text-rose-600 border border-rose-200" // 高強度：赤
+                                  : l.rpe >= 5
+                                    ? "bg-orange-100 text-orange-600 border border-orange-200" // 中強度：オレンジ
+                                    : "bg-blue-50 text-blue-600 border border-blue-100" // 低強度：青
+                              }`}
+                            >
+                              RPE {l.rpe}
                             </span>
-                            <span>RPE: {l.rpe}</span>
+
+                            {/* Painバッジ（痛みがある場合のみ表示） */}
+                            {l.pain > 1 && (
+                              <span
+                                className={`px-2 py-1 rounded-md text-[10px] font-black flex items-center gap-1 ${
+                                  l.pain >= 4
+                                    ? "bg-purple-100 text-purple-600 border border-purple-200 animate-pulse" // 激痛：紫（点滅）
+                                    : l.pain === 3
+                                      ? "bg-rose-100 text-rose-600 border border-rose-200" // 痛みあり：赤
+                                      : "bg-yellow-100 text-yellow-700 border border-yellow-200" // 違和感：黄色
+                                }`}
+                              >
+                                <HeartPulse size={12} /> Pain {l.pain}
+                              </span>
+                            )}
                           </div>
                           {l.menuDetail && (
                             <p className="mt-2 ml-5 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg italic">
@@ -4643,28 +4683,69 @@ const App = () => {
                     .map((l) => (
                       <div
                         key={l.id}
-                        className="bg-slate-50 p-3 rounded-xl flex justify-between items-center group relative hover:border hover:border-blue-200 border border-transparent transition-all"
+                        className="bg-slate-50 p-3 rounded-xl flex justify-between items-start group relative hover:border hover:border-blue-200 border border-transparent transition-all"
                       >
-                        <div>
-                          <p className="text-[10px] font-black text-slate-400">
-                            {l.date}{" "}
-                            <span className="ml-1 px-1.5 py-0.5 bg-white rounded border border-slate-200 text-slate-600">
-                              {l.category}
+                        <div className="w-full">
+                          {/* 1行目: 日付とカテゴリ */}
+                          <div className="flex justify-between items-center pr-2">
+                            <p className="text-[10px] font-black text-slate-400 flex items-center gap-2">
+                              {l.date.slice(5).replace("-", "/")}{" "}
+                              <span className="px-1.5 py-0.5 bg-white rounded border border-slate-200 text-slate-600 text-[9px]">
+                                {l.category}
+                              </span>
+                            </p>
+                            {/* 距離を右側に配置 */}
+                            <p className="text-sm font-black text-blue-600">
+                              {l.distance}km
+                            </p>
+                          </div>
+
+                          {/* 2行目: RPEとPainのバッジ（ここを追加） */}
+                          <div className="flex gap-2 mt-2 mb-2">
+                            {/* RPEバッジ */}
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${
+                                l.rpe >= 8
+                                  ? "bg-rose-100 text-rose-600 border-rose-200"
+                                  : l.rpe >= 5
+                                    ? "bg-orange-100 text-orange-600 border-orange-200"
+                                    : "bg-blue-50 text-blue-600 border-blue-100"
+                              }`}
+                            >
+                              RPE {l.rpe}
                             </span>
-                          </p>
-                          <p className="text-sm font-black text-blue-600 mt-0.5">
-                            {l.distance}km
-                          </p>
-                          <p className="text-[10px] text-slate-500 truncate max-w-[200px]">
-                            {l.menuDetail}
-                          </p>
+
+                            {/* Painバッジ（痛みがある時のみ） */}
+                            {l.pain > 1 && (
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[9px] font-black border flex items-center gap-1 ${
+                                  l.pain >= 4
+                                    ? "bg-purple-100 text-purple-600 border-purple-200 animate-pulse"
+                                    : l.pain === 3
+                                      ? "bg-rose-100 text-rose-600 border-rose-200"
+                                      : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                }`}
+                              >
+                                <HeartPulse size={10} /> Pain {l.pain}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 3行目: コメント */}
+                          {l.menuDetail && (
+                            <p className="text-[10px] text-slate-500 bg-white/60 p-1.5 rounded-lg leading-relaxed">
+                              {l.menuDetail}
+                            </p>
+                          )}
                         </div>
+
+                        {/* 修正ボタン（絶対配置に変更して右上に固定） */}
                         <button
                           onClick={() => openCoachEditModal(l)}
-                          className="bg-white p-2 rounded-lg text-slate-400 hover:text-blue-600 shadow-sm border border-slate-200"
+                          className="absolute right-2 top-2 bg-white p-1.5 rounded-lg text-slate-300 hover:text-blue-600 shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity"
                           title="修正する"
                         >
-                          <Edit size={16} />
+                          <Edit size={14} />
                         </button>
                       </div>
                     ))}
@@ -4794,7 +4875,10 @@ const App = () => {
                     </option>
                     {availablePeriods.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} {p.start ? `(${p.start.slice(5)})` : ""}
+                        {p.name}
+                        {p.start && p.end
+                          ? ` (${p.start.slice(5).replace("-", "/")}～${p.end.slice(5).replace("-", "/")})`
+                          : ""}
                       </option>
                     ))}
                   </select>
@@ -5147,6 +5231,104 @@ const App = () => {
                   >
                     更新して保存
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ▼▼▼ 追加: Pain Alert List Modal ▼▼▼ */}
+          {isPainAlertModalOpen && (
+            <div
+              className="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
+              onClick={() => setIsPainAlertModalOpen(false)}
+            >
+              <div
+                className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl space-y-4 animate-in zoom-in-95"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <h3 className="font-black text-lg text-rose-600 flex items-center gap-2">
+                    <AlertTriangle size={20} /> Pain Alert List
+                  </h3>
+                  <button
+                    onClick={() => setIsPainAlertModalOpen(false)}
+                    className="bg-slate-100 p-2 rounded-full text-slate-400 hover:bg-slate-200"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+                  {activeRunners
+                    .map((runner) => {
+                      // 各選手の最新ログを取得して判定
+                      const runnerLogs = allLogs
+                        .filter((l) => l.runnerId === runner.id)
+                        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                      if (runnerLogs.length === 0) return null;
+                      const latestLog = runnerLogs[0];
+
+                      // 痛みが3以上の場合のみ表示対象とする
+                      if (latestLog.pain < 3) return null;
+
+                      return { runner, log: latestLog };
+                    })
+                    .filter(Boolean) // nullを除去
+                    // 痛みが強い順に並べ替え
+                    .sort((a, b) => b.log.pain - a.log.pain)
+                    .map(({ runner, log }) => (
+                      <div
+                        key={runner.id}
+                        className="bg-rose-50 p-4 rounded-2xl border border-rose-100 flex flex-col gap-2"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-black text-rose-500 shadow-sm text-sm">
+                              {runner.lastName.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">
+                                {runner.lastName} {runner.firstName}
+                              </p>
+                              <p className="text-[10px] font-bold text-slate-400">
+                                {log.date.slice(5).replace("-", "/")}
+                              </p>
+                            </div>
+                          </div>
+                          <span
+                            className={`px-3 py-1 rounded-lg text-xs font-black flex items-center gap-1 ${
+                              log.pain >= 4
+                                ? "bg-rose-600 text-white animate-pulse"
+                                : "bg-white text-rose-500 border border-rose-200"
+                            }`}
+                          >
+                            <HeartPulse size={14} /> Pain {log.pain}
+                          </span>
+                        </div>
+
+                        {/* メニュー詳細（痛みの原因や状況）を表示 */}
+                        <div className="bg-white/60 p-2 rounded-xl mt-1">
+                          <p className="text-xs text-slate-600 font-bold">
+                            {log.category}
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                            {log.menuDetail || "（コメントなし）"}
+                          </p>
+                        </div>
+
+                        {/* 監督用の「詳細へ」ボタン */}
+                        <button
+                          onClick={() => {
+                            setIsPainAlertModalOpen(false);
+                            handleCoachEditRunner(runner); // その選手の詳細画面へ移動
+                          }}
+                          className="text-[10px] font-bold text-rose-400 text-right hover:text-rose-600 flex items-center justify-end gap-1 mt-1"
+                        >
+                          詳細・連絡する <ChevronRight size={12} />
+                        </button>
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>
