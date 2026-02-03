@@ -894,6 +894,52 @@ const App = () => {
     };
   }, [allLogs, currentUserId, targetPeriod, activeQuarters]);
 
+  // ★修正: 選択中の期間内で、今日を含まない過去の未入力日をすべて抽出
+  const missingDates = useMemo(() => {
+    if (!currentUserId || !targetPeriod || !targetPeriod.start) return [];
+
+    const missing = [];
+    const myLogs = allLogs.filter((l) => l.runnerId === currentUserId);
+    const logDateSet = new Set(myLogs.map((l) => l.date));
+
+    // 検索の開始日
+    const current = new Date(targetPeriod.start);
+    current.setHours(0, 0, 0, 0);
+
+    // 検索の「上限」日を決める（ここを修正）
+    // 1. 本来の期間終了日
+    const periodEnd = new Date(targetPeriod.end);
+    periodEnd.setHours(0, 0, 0, 0);
+
+    // 2. 昨日（未来の日付を未入力と言わないため）
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+
+    // ★重要: 「期間終了日」と「昨日」のうち、過去の方（早い方）を終了点にする
+    // 例: 1月選択中(1/31終了) vs 昨日(2/3) -> 1/31までチェック
+    // 例: 2月選択中(2/28終了) vs 昨日(2/3) -> 2/3までチェック
+    const checkEndDate = periodEnd < yesterday ? periodEnd : yesterday;
+
+    // 開始日が終了点より未来、または無効な場合は何もしない
+    if (isNaN(current.getTime()) || current > checkEndDate) return [];
+
+    let safetyCounter = 0;
+    // current が checkEndDate を超えるまでループ
+    while (current <= checkEndDate && safetyCounter < 370) {
+      const dateStr = current.toLocaleDateString("sv-SE"); // YYYY-MM-DD
+
+      if (!logDateSet.has(dateStr)) {
+        missing.push(dateStr);
+      }
+
+      current.setDate(current.getDate() + 1);
+      safetyCounter++;
+    }
+
+    return missing.sort();
+  }, [allLogs, currentUserId, targetPeriod]);
+
   const currentFeedback = useMemo(() => {
     if (!currentUserId || !targetPeriod) return null;
     const feedbackId = `${targetPeriod.id}_${currentUserId}`;
@@ -1715,6 +1761,7 @@ const App = () => {
       setIsSubmitting(false);
     }
   };
+
   const handleRestRegister = async () => {
     setIsSubmitting(true);
     try {
@@ -2448,6 +2495,7 @@ const App = () => {
             >
               <Menu size={20} />
             </button>
+
             <div className="text-center">
               <p className="text-blue-100 text-[10px] font-black tracking-widest uppercase mb-1">
                 Athlete Dashboard
@@ -2477,7 +2525,7 @@ const App = () => {
               >
                 {/* 1. 特別期間・カスタム */}
                 <optgroup
-                  label="🚩 指定期間・合宿など"
+                  label="🚩 指定期間"
                   className="text-slate-900 font-bold bg-slate-100"
                 >
                   {availablePeriods
@@ -2488,7 +2536,9 @@ const App = () => {
                         value={p.id}
                         className="text-slate-900 bg-white"
                       >
-                        {p.name}
+                        {/* ▼▼▼ 修正: 年を削って「月/日」だけにしました ▼▼▼ */}
+                        {p.name} ({p.start.slice(5).replace("-", "/")}~
+                        {p.end.slice(5).replace("-", "/")})
                       </option>
                     ))}
                 </optgroup>
@@ -2536,6 +2586,115 @@ const App = () => {
         <main className="px-5 space-y-6 relative z-20 max-w-md mx-auto">
           {view === "menu" && (
             <>
+              {/* ▼▼▼ 追加: 目標未設定時のアラートバナー ▼▼▼ */}
+              {(() => {
+                // 現在の期間の目標値を取得
+                const currentGoal = getGoalValue(
+                  currentProfile,
+                  targetPeriod.id,
+                  targetPeriod.type,
+                  "goalPeriod", // 期間合計目標、または月間目標
+                );
+
+                // 目標が 0 または 未設定の場合に表示
+                if (!currentGoal || currentGoal === 0) {
+                  return (
+                    <div
+                      onClick={() => setView("goal")} // タップで目標設定へ
+                      className="bg-rose-500 text-white p-4 rounded-2xl shadow-lg mb-6 flex items-center justify-between cursor-pointer active:scale-95 transition-transform animate-in slide-in-from-top-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="bg-white/20 p-2 rounded-full">
+                          <Target size={20} className="text-white" />
+                        </div>
+                        <div>
+                          <p className="font-black text-xs uppercase tracking-widest opacity-90">
+                            Action Required
+                          </p>
+                          <p className="font-bold text-sm">
+                            目標が設定されていません
+                          </p>
+                        </div>
+                      </div>
+                      <div className="bg-white text-rose-600 px-3 py-1.5 rounded-lg text-xs font-black shadow-sm">
+                        設定する
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              {/* ▲▲▲ 追加ここまで ▲▲▲ */}
+
+              {/* ▼▼▼ 追加: 未入力日の警告 (Missing Report Alert) ▼▼▼ */}
+              {missingDates.length > 0 && (
+                <div className="mb-6 animate-in slide-in-from-top-4">
+                  {/* ヘッダー部分：何件あるか表示 */}
+                  <div className="flex items-center justify-between mb-2 px-2">
+                    <p className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+                      <AlertTriangle size={14} /> Missing Reports (
+                      {missingDates.length})
+                    </p>
+                  </div>
+
+                  {/* スクロールエリア */}
+                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                    {missingDates.map((dateStr) => {
+                      const d = new Date(dateStr);
+                      return (
+                        <div
+                          key={dateStr}
+                          onClick={() => {
+                            setFormData({ ...formData, date: dateStr });
+                            setView("entry");
+                          }}
+                          // ★高さ（padding）を py-2 に減らし、角丸を rounded-xl に縮小
+                          className="bg-amber-400 text-slate-900 py-2 px-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer active:scale-95 transition-transform border border-slate-900/10"
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* アイコンも小さくシンプルに */}
+                            <AlertTriangle
+                              size={16}
+                              className="text-slate-800"
+                            />
+
+                            {/* 日付とテキストを1行にまとめる */}
+                            <div className="flex items-baseline gap-2">
+                              <span className="font-black text-sm">
+                                {d.getMonth() + 1}/{d.getDate()}
+                              </span>
+                              <span className="text-[10px] font-bold opacity-70">
+                                未入力
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* ボタンも小さく */}
+                          <div className="bg-white/90 text-slate-900 px-2 py-1 rounded text-[10px] font-black min-w-[40px] text-center">
+                            入力
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {missingDates.length > 3 && (
+                    <p className="text-center text-[10px] text-slate-400 font-bold mt-2">
+                      ↑ スクロールして過去分も確認できます
+                    </p>
+                  )}
+
+                  {/* ▲▲▲ 修正ここまで ▲▲▲ */}
+                  {/* 未入力が多い場合の励ましメッセージ（オプション） */}
+                  {missingDates.length >= 2 && (
+                    <p className="text-center text-[10px] text-slate-400 font-bold">
+                      休みだった場合も「完全休養」として記録しましょう！
+                    </p>
+                  )}
+                </div>
+              )}
+              {/* ▲▲▲ 追加ここまで ▲▲▲ */}
+
               {/* Dual Goal Status Card */}
               <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-blue-900/5 space-y-6">
                 <div>
@@ -3627,12 +3786,21 @@ const App = () => {
                   if (period) setSelectedPeriod(period);
                 }}
               >
-                <optgroup label="🚩 特別期間">
+                <optgroup
+                  label="🚩 指定期間"
+                  className="text-slate-900 font-bold bg-slate-100"
+                >
                   {availablePeriods
                     .filter((p) => p.type === "global" || p.type === "custom")
                     .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        className="text-slate-900 bg-white"
+                      >
+                        {/* ▼▼▼ 修正: 「月/日」の表示 ▼▼▼ */}
+                        {p.name} ({p.start.slice(5).replace("-", "/")}~
+                        {p.end.slice(5).replace("-", "/")})
                       </option>
                     ))}
                 </optgroup>
