@@ -85,7 +85,7 @@ import {
 } from "lucide-react";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "2026.01.26 17:15 (Restore Missing Runner Views)";
+const APP_LAST_UPDATED = "2026.02.03 10:00 (Major Update: Fixed ID System)";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -357,6 +357,18 @@ const printStyles = `
   }
 `;
 
+// --- Global Styles (スクロールバー非表示など) ---
+const globalStyles = `
+  /* スクロールバーを非表示にする（機能は維持） */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+`;
+
 const App = () => {
   // 1. State Hooks
   const [user, setUser] = useState(null);
@@ -424,7 +436,7 @@ const App = () => {
     achieved: true,
     lastName: "",
     firstName: "",
-    memberCode: "", // ★追加：選手ID（例：2601）
+    memberCode: "", // ★追加：選手ID（例：26001）
     teamPass: "",
     personalPin: "",
   });
@@ -581,25 +593,6 @@ const App = () => {
     const unsubRunners = onSnapshot(runnersRef, (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setAllRunners(list);
-      // FIX: ここでの自動更新ロジックを削除し、専用のuseEffectに移動して無限ループを防止
-      const myP = list.find((r) => r.id === user.uid);
-      if (myP) {
-        setProfile(myP);
-        if (role !== "coach" && role !== "admin-runner") setRole("runner");
-      } else {
-        if (
-          ![
-            "coach",
-            "registering",
-            "login",
-            "coach-auth",
-            "admin-runner",
-          ].includes(role)
-        ) {
-          setProfile(null);
-          setRole(null);
-        }
-      }
       setLoading(false);
       clearTimeout(timeout);
     });
@@ -638,6 +631,37 @@ const App = () => {
       clearTimeout(timeout);
     };
   }, [user, role]);
+  // ★追加：データが更新されたら自分のプロフィールと役割を同期する
+  useEffect(() => {
+    if (!user || allRunners.length === 0) return;
+
+    // ★修正: IDではなく「最後にログインしたFirebaseUID」で自分を探す
+    const myP = allRunners.find((r) => r.lastLoginUid === user.uid);
+    if (myP) {
+      setProfile(myP);
+      // 現在のroleが未定、または一時的な状態でないならrunnerに確定
+      if (
+        !role ||
+        (role !== "coach" && role !== "admin-runner" && role !== "coach-auth")
+      ) {
+        setRole("runner");
+      }
+    } else {
+      // データが見つからず、かつ登録/ログイン画面等の操作中でなければリセット
+      if (
+        ![
+          "coach",
+          "registering",
+          "login",
+          "coach-auth",
+          "admin-runner",
+        ].includes(role)
+      ) {
+        setProfile(null);
+        setRole(null);
+      }
+    }
+  }, [allRunners, user, role]);
 
   // 3. Derived Data
   const currentUserId = previewRunner ? previewRunner.id : user?.uid;
@@ -1039,18 +1063,34 @@ const App = () => {
 
   const checkListData = useMemo(() => {
     return activeRunners.map((runner) => {
-      const log = allLogs.find(
+      // ★ 修正：filterでその日の全てのログを取得
+      const logs = allLogs.filter(
         (l) => l.runnerId === runner.id && l.date === checkDate,
       );
+
       let status = "unsubmitted";
       let detail = "-";
-      if (log) {
-        if (log.category === "完全休養" || Number(log.distance) === 0) {
+
+      if (logs.length > 0) {
+        // 距離を合算する
+        const totalDist = logs.reduce(
+          (sum, l) => sum + (Number(l.distance) || 0),
+          0,
+        );
+        // 「完全休養」が含まれているかチェック
+        const isRest = logs.some((l) => l.category === "完全休養");
+
+        if (totalDist > 0) {
+          status = "active";
+          // 小数点第1位まで丸める
+          detail = `${Math.round(totalDist * 10) / 10}km`;
+        } else if (isRest) {
           status = "rest";
           detail = "休み";
         } else {
-          status = "active";
-          detail = `${log.distance}km`;
+          // 距離0かつ完全休養タグなし（故障や未実施など）
+          status = "rest";
+          detail = "0km";
         }
       }
       return { ...runner, status, detail };
@@ -1159,27 +1199,23 @@ const App = () => {
       });
     }
   }, [view, currentProfile, targetPeriod]);
-  // --- ここから handleRegister 復活 ---
+
+  // 4. Handlers (修正版: ID固定化システム)
   const handleRegister = async () => {
     setErrorMsg("");
-
-    // 1. 入力漏れのチェック（IDも含める）
+    // 入力チェック (IDは5桁必須)
     if (
       !formData.lastName.trim() ||
       !formData.firstName.trim() ||
-      !formData.memberCode.trim()
+      formData.memberCode.length !== 5
     ) {
-      setErrorMsg("名前と選手番号を入力してください。");
+      setErrorMsg("名前と5桁の選手番号を入力してください。");
       return;
     }
-
-    // 2. チームパスコードのチェック
     if (formData.teamPass !== appSettings.teamPass) {
       setErrorMsg("チームパスコードが間違っています。");
       return;
     }
-
-    // 3. 個人パスコード（暗証番号）の形式チェック
     if (!formData.personalPin || !/^\d{4}$/.test(formData.personalPin)) {
       setErrorMsg("個人パスコードは4桁の数字で設定してください。");
       return;
@@ -1187,6 +1223,7 @@ const App = () => {
 
     setIsSubmitting(true);
     try {
+      const targetId = formData.memberCode.trim(); // ID = 選手番号
       const runnersRef = collection(
         db,
         "artifacts",
@@ -1196,49 +1233,34 @@ const App = () => {
         "runners",
       );
 
-      // 4. ★IDの重複チェック
-      const qCode = query(
-        runnersRef,
-        where("memberCode", "==", formData.memberCode.trim()),
-      );
-      const codeSnap = await getDocs(qCode);
-      if (!codeSnap.empty) {
+      // 重複チェック: IDで直接ドキュメントを探す
+      const docRef = doc(runnersRef, targetId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
         setErrorMsg(
-          `選手番号「${formData.memberCode}」は既に使用されています。`,
+          `選手番号 ${targetId} は既に登録されています。「ログイン」してください。`,
         );
         setIsSubmitting(false);
         return;
       }
 
-      // 5. 前任者のデータ残存チェック
-      const currentDocSnap = await getDoc(doc(runnersRef, user.uid));
-      if (currentDocSnap.exists()) {
-        const currentData = currentDocSnap.data();
-        if (
-          currentData.lastName !== formData.lastName.trim() ||
-          currentData.firstName !== formData.firstName.trim()
-        ) {
-          setErrorMsg(
-            "前の利用者のデータが残っています。一度再読み込みしてください。",
-          );
-          await signOut(auth);
-          return;
-        }
-      }
-
-      // 6. 保存データの作成
+      // 新規保存
       const newProfile = {
+        id: targetId, // IDを明示的に保存
+        memberCode: targetId,
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
-        memberCode: formData.memberCode.trim(),
         goalMonthly: 0,
         goalPeriod: 200,
         status: "active",
         pin: formData.personalPin,
         registeredAt: new Date().toISOString(),
+        lastLoginUid: user.uid, // ★現在の端末情報を紐付ける
       };
 
-      await setDoc(doc(runnersRef, user.uid), newProfile);
+      await setDoc(docRef, newProfile);
+
       setProfile(newProfile);
       setRole("runner");
       setView("menu");
@@ -1255,46 +1277,44 @@ const App = () => {
   const handleLogin = async () => {
     setErrorMsg("");
 
-    // --- 1. 管理者モード判定 ---
-    if (formData.memberCode.trim() === "admin") {
+    // ▼▼▼ 修正: 管理者コードを "99999" に変更 ▼▼▼
+    if (formData.memberCode === "99999") {
       setIsSubmitting(true);
       try {
-        const adminProfile = {
+        setProfile({
           lastName: "管理者",
           firstName: "モード",
-          memberCode: "admin",
-          goalMonthly: 0,
-          goalPeriod: 0,
+          memberCode: "99999", // 表示用IDも変更
           status: "active",
-          pin: formData.personalPin || "0000",
-          registeredAt: new Date().toISOString(),
-          id: "admin_temp_id",
-        };
-        setProfile(adminProfile);
+          pin: "0000",
+          id: "admin_temp",
+          lastLoginUid: user.uid,
+        });
         setRole("admin-runner");
         setView("menu");
         setSuccessMsg("管理者モード");
         setTimeout(() => setSuccessMsg(""), 3000);
       } catch (e) {
-        setErrorMsg("エラー: " + e.message);
-      } finally {
-        setIsSubmitting(false);
+        setErrorMsg(e.message);
       }
+      setIsSubmitting(false);
       return;
     }
+    // ▲▲▲ 修正ここまで ▲▲▲
 
-    // --- 2. 入力チェック ---
-    if (!formData.memberCode.trim()) {
-      setErrorMsg("選手番号を入力してください。");
+    // 通常ログインチェック
+    if (formData.memberCode.length !== 5) {
+      setErrorMsg("5桁の選手番号を入力してください。");
       return;
     }
-    if (!formData.personalPin || formData.personalPin.length !== 4) {
-      setErrorMsg("4桁の暗証番号を入力してください。");
+    if (!formData.personalPin) {
+      setErrorMsg("パスコードを入力してください。");
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const targetId = formData.memberCode.trim();
       const runnersRef = collection(
         db,
         "artifacts",
@@ -1303,84 +1323,109 @@ const App = () => {
         "data",
         "runners",
       );
+      const docRef = doc(runnersRef, targetId);
+      const docSnap = await getDoc(docRef);
 
-      // --- 3. 選手番号で検索 ---
-      const q = query(
-        runnersRef,
-        where("memberCode", "==", formData.memberCode.trim()),
-      );
-      const querySnapshot = await getDocs(q);
+      if (!docSnap.exists()) {
+        // ★重要: 古いデータ形式(ランダムID)からの移行ロジック
+        // ID検索で見つからない場合、memberCodeフィールドで検索する
+        const q = query(runnersRef, where("memberCode", "==", targetId));
+        const qSnap = await getDocs(q);
 
-      if (querySnapshot.empty) {
-        setErrorMsg("その番号の選手は見つかりません。");
+        if (!qSnap.empty) {
+          // 旧データ発見！ -> 新方式(ID=memberCode)へ移行・統合する
+          const oldDoc = qSnap.docs[0];
+          const oldData = oldDoc.data();
+
+          if (oldData.pin !== formData.personalPin) {
+            setErrorMsg("パスコードが違います。");
+            setIsSubmitting(false);
+            return;
+          }
+
+          // 1. 新しいID(選手番号)で保存
+          await setDoc(docRef, {
+            ...oldData,
+            id: targetId,
+            lastLoginUid: user.uid, // 端末紐付け更新
+            migratedAt: new Date().toISOString(),
+          });
+
+          // 2. ログデータの紐付けを更新 (バッチ処理)
+          const logsRef = collection(
+            db,
+            "artifacts",
+            appId,
+            "public",
+            "data",
+            "logs",
+          );
+          const logsQ = query(logsRef, where("runnerId", "==", oldDoc.id));
+          const logsSnap = await getDocs(logsQ);
+          const batch = writeBatch(db);
+
+          logsSnap.forEach((l) => {
+            batch.update(doc(logsRef, l.id), { runnerId: targetId });
+          });
+
+          // 3. フィードバックデータの紐付け更新 (バッチ処理)
+          const fbsRef = collection(
+            db,
+            "artifacts",
+            appId,
+            "public",
+            "data",
+            "feedbacks",
+          );
+          const fbsQ = query(fbsRef, where("runnerId", "==", oldDoc.id));
+          const fbsSnap = await getDocs(fbsQ);
+
+          fbsSnap.forEach((f) => {
+            // ID自体を作り直す必要がある (ex: global_period_oldId -> global_period_newId)
+            const oldFbId = f.id;
+            const newFbId = oldFbId.replace(oldDoc.id, targetId);
+            if (oldFbId !== newFbId) {
+              batch.set(doc(fbsRef, newFbId), {
+                ...f.data(),
+                runnerId: targetId,
+              });
+              batch.delete(doc(fbsRef, oldFbId));
+            }
+          });
+
+          // 4. 旧プロフィールの削除
+          batch.delete(doc(runnersRef, oldDoc.id));
+
+          // コミット実行
+          await batch.commit();
+
+          // 完了
+          setProfile({ ...oldData, id: targetId, lastLoginUid: user.uid });
+          setRole("runner");
+          setView("menu");
+          setSuccessMsg("システム更新: データを移行しました");
+          return;
+        }
+
+        setErrorMsg("データが見つかりません。");
         setIsSubmitting(false);
         return;
       }
 
-      // 見つかったデータ
-      const targetDoc =
-        querySnapshot.docs.find((d) => d.id === user.uid) ||
-        querySnapshot.docs[0];
-      const oldProfile = targetDoc.data();
-      const oldId = targetDoc.id;
-
-      // --- 4. 暗証番号の照合 ---
-      if (oldProfile.pin && oldProfile.pin !== formData.personalPin) {
-        setErrorMsg("暗証番号が違います。");
+      // 通常ログイン（IDが見つかった場合）
+      const profileData = docSnap.data();
+      if (profileData.pin !== formData.personalPin) {
+        setErrorMsg("パスコードが違います。");
         setIsSubmitting(false);
         return;
       }
 
-      // --- 5. 自動データ移行処理 ---
-      if (oldId !== user.uid) {
-        // 新しいIDで保存
-        await setDoc(doc(runnersRef, user.uid), {
-          ...oldProfile,
-          status: "active",
-          pin: oldProfile.pin || formData.personalPin,
-          previousId: oldId,
-          migratedAt: new Date().toISOString(),
-        });
+      // ★端末紐付けを更新（これがログイン状態の維持になる）
+      await updateDoc(docRef, {
+        lastLoginUid: user.uid,
+      });
 
-        // ログの紐付け直し
-        const logsRef = collection(
-          db,
-          "artifacts",
-          appId,
-          "public",
-          "data",
-          "logs",
-        );
-        const qLogs = query(logsRef, where("runnerId", "==", oldId));
-        const logSnap = await getDocs(qLogs);
-
-        if (!logSnap.empty) {
-          const logBatch = writeBatch(db);
-          logSnap.forEach((logDoc) => {
-            logBatch.update(logDoc.ref, { runnerId: user.uid });
-          });
-          await logBatch.commit();
-        }
-
-        // 旧データを移行済みに更新
-        await updateDoc(doc(runnersRef, oldId), {
-          status: "migrated",
-          newId: user.uid,
-          updatedAt: new Date().toISOString(),
-        });
-
-        setProfile({ ...oldProfile, pin: formData.personalPin });
-      } else {
-        // IDが変わっていない場合
-        if (!oldProfile.pin) {
-          await updateDoc(doc(runnersRef, user.uid), {
-            pin: formData.personalPin,
-          });
-        }
-        setProfile(oldProfile);
-      }
-
-      // --- 6. ログイン成功 ---
+      setProfile(profileData);
       setRole("runner");
       setView("menu");
       setSuccessMsg("ログイン完了");
@@ -1919,6 +1964,9 @@ const App = () => {
     // ... existing login logic ...
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        {/* ▼▼▼ 追加: スタイル定義の読み込み ▼▼▼ */}
+        <style>{globalStyles}</style>
+        <style>{printStyles}</style>
         {/* ... existing code ... */}
         <div className="absolute top-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-blue-50 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-blue-50 rounded-full blur-3xl pointer-events-none"></div>
@@ -2062,15 +2110,21 @@ const App = () => {
               <p className="text-[10px] font-bold text-slate-500 ml-1">
                 個人ID（kswc〇〇.△△△の数字5ｹﾀ）
               </p>
+              {/* ▼▼▼ 修正: 選手番号入力欄 (5桁制限・数字のみ) ▼▼▼ */}
               <div className="relative">
                 <input
-                  type="text"
-                  placeholder="例:24001" /* 中身はシンプルに */
-                  className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500 text-lg tracking-wider" // 数字を見やすく大きく
+                  type="tel" // スマホで数字キーボード
+                  maxLength={5} // 5文字制限
+                  placeholder="例:26001"
+                  className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500 text-lg tracking-wider"
                   value={formData.memberCode}
-                  onChange={(e) =>
-                    setFormData({ ...formData, memberCode: e.target.value })
-                  }
+                  onChange={(e) => {
+                    // 数字以外を削除し、先頭5文字だけをセット
+                    const val = e.target.value
+                      .replace(/[^0-9]/g, "")
+                      .slice(0, 5);
+                    setFormData({ ...formData, memberCode: val });
+                  }}
                 />
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-lg">
                   #
@@ -2168,20 +2222,25 @@ const App = () => {
             {" "}
             {/* 間隔を少し広げました */}
             {/* 選手番号入力 */}
-            <div className="space-y-1">
+            <div className="space-y-4">
               {/* ★説明文を外に出しました */}
               <p className="text-[10px] font-bold text-slate-500 ml-1">
                 個人ID;kswc〇〇.△△△の数字5ｹﾀ
               </p>
               <div className="relative">
                 <input
-                  type="text" // adminと打てるようにtext属性
-                  placeholder="例:24001"
-                  className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500 text-lg tracking-wider" // 文字サイズUP
+                  type="tel" // スマホで数字キーボードを出す
+                  maxLength={5}
+                  placeholder="選手番号 (例: 26001)"
+                  className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500 text-lg tracking-wider"
                   value={formData.memberCode}
-                  onChange={(e) =>
-                    setFormData({ ...formData, memberCode: e.target.value })
-                  }
+                  onChange={(e) => {
+                    // 数字以外を削除し、5文字制限
+                    const val = e.target.value
+                      .replace(/[^0-9]/g, "")
+                      .slice(0, 5);
+                    setFormData({ ...formData, memberCode: val });
+                  }}
                 />
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-lg">
                   #
@@ -2506,49 +2565,110 @@ const App = () => {
                   </p>
                 )}
               </div>
-
-              {/* Review Button */}
-              <button
-                onClick={() => changeView("review")}
-                className="w-full bg-white p-7 rounded-[2.5rem] shadow-md flex items-center justify-between group active:scale-95 transition-all"
-              >
-                <div className="flex items-center gap-5">
-                  <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-[1.2rem] flex items-center justify-center">
-                    <MessageSquare size={30} />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-black text-xl tracking-tight">
-                      振り返り (Review)
-                    </p>
-                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">
-                      Self Report & Feedback
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight size={24} className="text-slate-100" />
-              </button>
-
-              <button
-                onClick={() => changeView("entry")}
-                className="w-full bg-white p-7 rounded-[2.5rem] shadow-md flex items-center justify-between group active:scale-95 transition-all"
-              >
-                <div className="flex items-center gap-5">
-                  <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-[1.2rem] flex items-center justify-center">
-                    <Plus size={30} />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-black text-xl tracking-tight">
-                      練習を入力する
-                    </p>
-                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">
-                      Input Data
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight size={24} className="text-slate-100" />
-              </button>
             </>
           )}
+          {/* ▼▼▼ 追加: チーム活動ログ (直近7日間) ▼▼▼ */}
+          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
+                <Activity size={14} /> Team Activity (Last 7 Days)
+              </h3>
+            </div>
+
+            <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
+              {(() => {
+                // 1. 直近7日間の日付文字列を生成
+                const today = new Date();
+                const pastDate = new Date();
+                pastDate.setDate(today.getDate() - 6); // 今日含めて7日間
+                const minDateStr = pastDate.toLocaleDateString("sv-SE"); // YYYY-MM-DD形式
+
+                // 2. フィルタリングとソート
+                const teamLogs = allLogs
+                  .filter((l) => l.date >= minDateStr) // 7日前以降
+                  .sort((a, b) => {
+                    // 日付の新しい順 > 作成日時の新しい順
+                    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+                    return (b.createdAt || "").localeCompare(a.createdAt || "");
+                  })
+                  .slice(0, 10); // 表示が多くなりすぎないよう最新10件に制限（必要なら変更可）
+
+                if (teamLogs.length === 0) {
+                  return (
+                    <p className="text-center text-xs text-slate-300 py-4 font-bold">
+                      直近の活動記録はありません
+                    </p>
+                  );
+                }
+
+                return teamLogs.map((log) => {
+                  const isRest = log.category === "完全休養";
+
+                  return (
+                    <div
+                      key={log.id}
+                      className="flex items-start gap-3 relative pl-2"
+                    >
+                      {/* タイムラインの線 */}
+                      <div className="absolute left-[19px] top-8 bottom-[-16px] w-0.5 bg-slate-100 last:hidden"></div>
+
+                      {/* アバター */}
+                      <div
+                        className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-sm z-10 ${
+                          isRest ? "bg-emerald-400" : "bg-blue-500"
+                        }`}
+                      >
+                        {log.runnerName ? log.runnerName.charAt(0) : "?"}
+                      </div>
+
+                      {/* 内容 */}
+                      <div className="bg-slate-50 p-3 rounded-2xl w-full border border-slate-100">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400">
+                              {log.date.slice(5).replace("-", "/")} ·{" "}
+                              {log.runnerName}
+                            </p>
+                            <p
+                              className={`text-sm font-black ${isRest ? "text-emerald-600" : "text-slate-700"}`}
+                            >
+                              {isRest ? "完全休養" : `${log.distance}km`}
+                              {!isRest && (
+                                <span className="text-[10px] font-bold text-slate-400 ml-2 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                  {log.category}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          {/* RPE表示 (練習のみ) */}
+                          {!isRest && (
+                            <div
+                              className={`px-2 py-1 rounded-lg text-[10px] font-black ${
+                                log.rpe >= 8
+                                  ? "bg-rose-100 text-rose-600"
+                                  : log.rpe >= 5
+                                    ? "bg-orange-100 text-orange-600"
+                                    : "bg-blue-100 text-blue-600"
+                              }`}
+                            >
+                              RPE {log.rpe}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 一言コメントがあれば表示 */}
+                        {log.menuDetail && (
+                          <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed bg-white/50 p-1.5 rounded-lg">
+                            "{log.menuDetail}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
 
           {/* ADDED: Entry View */}
           {view === "entry" && (
@@ -2711,9 +2831,9 @@ const App = () => {
             </div>
           )}
 
-          {/* ADDED: Review View */}
+          {/* ▼▼▼ 修正: 振り返り画面 (Review View) ▼▼▼ */}
           {view === "review" && (
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
+            <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in">
               <div className="flex items-center gap-2 mb-2">
                 <button
                   onClick={() => setView("menu")}
@@ -2726,43 +2846,350 @@ const App = () => {
                 </h3>
               </div>
 
-              <div className="space-y-6">
-                <div className="bg-emerald-50 p-6 rounded-3xl space-y-4 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-12 bg-white/20 rounded-full -mr-6 -mt-6 blur-2xl"></div>
-                  <div className="relative z-10">
-                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1">
-                      <MessageSquare size={12} /> Coach Feedback
+              {/* 1. 達成度円グラフエリア */}
+              <div className="bg-slate-50 p-6 rounded-3xl relative overflow-hidden">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 text-center">
+                  Goal Achievement ({targetPeriod.name})
+                </h4>
+
+                {(() => {
+                  const goalVal = getGoalValue(
+                    currentProfile,
+                    targetPeriod.id,
+                    targetPeriod.type,
+                    "goalPeriod",
+                  );
+                  const currentVal = personalStats.period;
+                  const rate =
+                    goalVal > 0 ? Math.round((currentVal / goalVal) * 100) : 0;
+                  const chartData = [
+                    { name: "Achieved", value: currentVal },
+                    {
+                      name: "Remaining",
+                      value: Math.max(0, goalVal - currentVal),
+                    },
+                  ];
+
+                  return (
+                    <div className="flex flex-col items-center justify-center relative">
+                      <div className="w-full h-48 relative z-10">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={chartData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              startAngle={90}
+                              endAngle={-270}
+                              dataKey="value"
+                              stroke="none"
+                            >
+                              <Cell fill="#3b82f6" /> {/* 青: 達成 */}
+                              <Cell fill="#e2e8f0" /> {/* グレー: 残り */}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                        {/* 中央の％表示 */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                          <span className="text-4xl font-black text-slate-800 tracking-tighter">
+                            {rate}
+                            <span className="text-sm">%</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {currentVal} / {goalVal} km
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              {/* ▼▼▼ 追加提案: 練習強度バランス ▼▼▼ */}
+              <div className="bg-white border border-slate-100 p-6 rounded-3xl space-y-4">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <Activity size={16} /> Training Intensity
+                </h4>
+
+                {(() => {
+                  // 強度別の回数を集計
+                  const counts = { low: 0, mid: 0, high: 0 };
+                  periodLogs.forEach((l) => {
+                    if (l.rpe >= 8) counts.high++;
+                    else if (l.rpe >= 5) counts.mid++;
+                    else counts.low++;
+                  });
+                  const total = periodLogs.length || 1; // 0除算防止
+
+                  return (
+                    <div className="space-y-3">
+                      {/* High Intensity */}
+                      <div>
+                        <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                          <span className="text-rose-500 flex items-center gap-1">
+                            <AlertCircle size={10} /> Hard (RPE 8-10)
+                          </span>
+                          <span>
+                            {counts.high}回 (
+                            {Math.round((counts.high / total) * 100)}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-rose-500 h-full rounded-full transition-all duration-1000"
+                            style={{ width: `${(counts.high / total) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Mid Intensity */}
+                      <div>
+                        <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                          <span className="text-orange-400">
+                            Moderate (RPE 5-7)
+                          </span>
+                          <span>
+                            {counts.mid}回 (
+                            {Math.round((counts.mid / total) * 100)}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-orange-400 h-full rounded-full transition-all duration-1000"
+                            style={{ width: `${(counts.mid / total) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Low Intensity */}
+                      <div>
+                        <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                          <span className="text-emerald-500">
+                            Easy / Recovery (RPE 1-4)
+                          </span>
+                          <span>
+                            {counts.low}回 (
+                            {Math.round((counts.low / total) * 100)}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-emerald-500 h-full rounded-full transition-all duration-1000"
+                            style={{ width: `${(counts.low / total) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              {/* ▼▼▼ 追加: 痛みのヒートマップ (Pain Heatmap) ▼▼▼ */}
+              <div className="bg-white border border-slate-100 p-6 rounded-3xl space-y-4">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <HeartPulse size={16} /> Physical Condition Map
+                </h4>
+
+                {(() => {
+                  // 1. 期間内の全日付を取得（ヘルパー関数を使用）
+                  const dates = getDatesInRange(
+                    targetPeriod.start,
+                    targetPeriod.end,
+                  );
+
+                  // 2. ログを辞書形式に変換 (検索高速化 & 1日複数ログの場合は「最大の痛み」を採用)
+                  const painMap = {};
+                  periodLogs.forEach((l) => {
+                    if (!painMap[l.date] || painMap[l.date] < l.pain) {
+                      painMap[l.date] = l.pain;
+                    }
+                  });
+
+                  return (
+                    <div className="space-y-3">
+                      {/* ヒートマップ本体 (日付入り) */}
+                      <div className="flex flex-wrap gap-2">
+                        {dates.map((date) => {
+                          const pain = painMap[date];
+                          const day = parseInt(date.split("-")[2], 10); // 日付の数字を取り出す
+
+                          // 色分け設定
+                          let bgClass = "bg-slate-100 text-slate-300"; // 記録なし
+                          if (pain === 1)
+                            bgClass = "bg-emerald-300 text-emerald-800"; // Good
+                          if (pain === 2)
+                            bgClass = "bg-yellow-300 text-yellow-800"; // 違和感
+                          if (pain === 3) bgClass = "bg-orange-400 text-white"; // 痛み
+                          if (pain === 4) bgClass = "bg-rose-500 text-white"; // 強い痛み
+                          if (pain === 5) bgClass = "bg-purple-600 text-white"; // 激痛
+
+                          return (
+                            <div
+                              key={date}
+                              title={`${date}: Pain ${pain || "-"}`}
+                              className={`w-8 h-8 rounded-lg ${bgClass} flex items-center justify-center text-[10px] font-black shadow-sm transition-all hover:scale-110`}
+                            >
+                              {day}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* 簡易凡例 (Legend) */}
+                      <div className="flex justify-between items-center px-2 pt-2 border-t border-slate-50">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-emerald-300 rounded-full"></div>
+                            <span className="text-[9px] font-bold text-slate-400">
+                              Good
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                            <span className="text-[9px] font-bold text-slate-400">
+                              Pain
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
+                            <span className="text-[9px] font-bold text-slate-400">
+                              Danger
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-300">
+                          {dates.length} Days
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* 2. 自分の振り返り入力 (既存) */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  Self Review
+                </label>
+                <textarea
+                  className="w-full p-5 bg-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 min-h-[150px] text-sm leading-relaxed resize-none"
+                  placeholder="今期の振り返り、次期の目標など"
+                  defaultValue={currentFeedback?.runnerComment || ""}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                />
+              </div>
+
+              <button
+                onClick={handleSaveReview}
+                className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <Save size={18} /> 振り返りを保存
+              </button>
+
+              {/* 3. コーチからのフィードバック (既存) */}
+              <div className="bg-emerald-50 p-6 rounded-3xl space-y-4 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-12 bg-white/20 rounded-full -mr-6 -mt-6 blur-2xl"></div>
+                <div className="relative z-10">
+                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1">
+                    <MessageSquare size={12} /> Coach Feedback
+                  </p>
+                  {currentFeedback && currentFeedback.coachComment ? (
+                    <p className="text-sm font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">
+                      {currentFeedback.coachComment}
                     </p>
-                    {currentFeedback && currentFeedback.coachComment ? (
-                      <p className="text-sm font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">
-                        {currentFeedback.coachComment}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-slate-400 italic font-bold">
-                        まだフィードバックはありません
-                      </p>
-                    )}
-                  </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic font-bold">
+                      まだフィードバックはありません
+                    </p>
+                  )}
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    Self Review ({targetPeriod.name})
-                  </label>
-                  <textarea
-                    className="w-full p-5 bg-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 min-h-[200px] text-sm leading-relaxed resize-none"
-                    placeholder="今期の振り返り、次期の目標、監督へのメッセージなど"
-                    defaultValue={currentFeedback?.runnerComment || ""}
-                    onChange={(e) => setReviewComment(e.target.value)}
-                  />
+              {/* 4. 期間内の練習ログ詳細リスト (新規追加) */}
+              <div className="pt-8 border-t border-slate-100 space-y-4">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest text-center">
+                  Daily History
+                </h4>
+                <div className="space-y-3">
+                  {periodLogs.length === 0 ? (
+                    <p className="text-center text-xs text-slate-300 py-4">
+                      記録がありません
+                    </p>
+                  ) : (
+                    periodLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="bg-slate-50 p-4 rounded-2xl border border-slate-100"
+                      >
+                        {/* 日付・距離・種別 */}
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400">
+                              {log.date}{" "}
+                              <span className="bg-white px-1 rounded border border-slate-200 text-slate-500 ml-1">
+                                {log.category}
+                              </span>
+                            </p>
+                            <p className="text-sm font-bold text-slate-600 mt-1">
+                              {log.menuDetail || "メニュー記録なし"}
+                            </p>
+                          </div>
+                          <p className="text-lg font-black text-blue-600">
+                            {log.distance}
+                            <span className="text-xs text-slate-400 ml-0.5">
+                              km
+                            </span>
+                          </p>
+                        </div>
+
+                        {/* 強度(RPE)と痛み(Pain)の可視化 */}
+                        <div className="grid grid-cols-2 gap-4 mt-3">
+                          {/* RPE Bar */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                              <span>RPE (強度)</span>
+                              <span>{log.rpe}/10</span>
+                            </div>
+                            <div className="h-2 w-full bg-white rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  log.rpe >= 8
+                                    ? "bg-rose-500"
+                                    : log.rpe >= 5
+                                      ? "bg-orange-400"
+                                      : "bg-blue-400"
+                                }`}
+                                style={{ width: `${log.rpe * 10}%` }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          {/* Pain Indicator */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                              <span>Pain (痛み)</span>
+                              <span>{log.pain}/5</span>
+                            </div>
+                            <div className="flex gap-1">
+                              {[1, 2, 3, 4, 5].map((lvl) => (
+                                <div
+                                  key={lvl}
+                                  className={`h-2 flex-1 rounded-full ${
+                                    lvl <= log.pain
+                                      ? log.pain >= 3
+                                        ? "bg-rose-500"
+                                        : "bg-emerald-400"
+                                      : "bg-white"
+                                  }`}
+                                ></div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-
-                <button
-                  onClick={handleSaveReview}
-                  className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <Save size={18} /> 振り返りを保存
-                </button>
               </div>
             </div>
           )}
@@ -2865,8 +3292,177 @@ const App = () => {
               </div>
             </div>
           )}
+
+          {/* チーム状況画面 (Team Status View)  */}
+          {view === "team_status" && (
+            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  onClick={() => setView("menu")}
+                  className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
+                  Team Status
+                </h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-end px-2">
+                  <h4 className="font-black text-xl text-slate-800 flex items-center gap-2">
+                    <Users className="text-blue-500" /> ランキング
+                  </h4>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {targetPeriod.name}
+                  </p>
+                </div>
+
+                {/* ランキングリスト */}
+                <div className="space-y-3">
+                  {rankingData.map((runner, index) => {
+                    // 今日のログがあるか確認
+                    const todayLog = allLogs.find(
+                      (l) =>
+                        l.runnerId === runner.id && l.date === getTodayStr(),
+                    );
+
+                    return (
+                      <div
+                        key={runner.id}
+                        className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 relative overflow-hidden"
+                      >
+                        {/* 順位バッジ */}
+                        <div
+                          className={`absolute top-0 left-0 px-3 py-1 rounded-br-xl text-[10px] font-black ${
+                            index === 0
+                              ? "bg-yellow-400 text-yellow-900"
+                              : index === 1
+                                ? "bg-slate-300 text-slate-700"
+                                : index === 2
+                                  ? "bg-orange-300 text-orange-800"
+                                  : "bg-slate-200 text-slate-500"
+                          }`}
+                        >
+                          #{index + 1}
+                        </div>
+
+                        <div className="flex items-center gap-3 pl-8">
+                          <div>
+                            <p className="font-bold text-slate-700 text-sm">
+                              {runner.name}
+                            </p>
+                            {/* 今日の練習状況を表示 */}
+                            {todayLog ? (
+                              <p className="text-[10px] font-bold text-blue-500 flex items-center gap-1 mt-0.5">
+                                <Check size={10} /> 今日: {todayLog.distance}km
+                              </p>
+                            ) : (
+                              <p className="text-[10px] font-bold text-slate-300 mt-0.5">
+                                今日: -
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-lg font-black text-slate-800">
+                            {runner.total}
+                            <span className="text-xs ml-0.5 text-slate-400">
+                              km
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </main>
-        {/* ... navigation ... */}
+
+        {/* ▼▼▼ 下部ナビゲーションバー（ここから書き換え） ▼▼▼ */}
+        <nav className="fixed bottom-0 left-0 right-0 z-40 max-w-md mx-auto pointer-events-none">
+          <div className="bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-8 pt-2 px-6 rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] flex justify-between items-end h-24 pointer-events-auto">
+            {/* 1. Home */}
+            <button
+              onClick={() => setView("menu")}
+              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-14 ${
+                view === "menu"
+                  ? "text-blue-600 -translate-y-1"
+                  : "text-slate-300 hover:text-slate-400"
+              }`}
+            >
+              <Home size={24} strokeWidth={view === "menu" ? 3 : 2} />
+              <span
+                className={`text-[8px] font-black uppercase tracking-widest ${
+                  view === "menu" ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                Home
+              </span>
+            </button>
+
+            {/* 2. Team (New!) */}
+            <button
+              onClick={() => setView("team_status")}
+              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-14 ${
+                view === "team_status"
+                  ? "text-indigo-500 -translate-y-1"
+                  : "text-slate-300 hover:text-slate-400"
+              }`}
+            >
+              <Users size={24} strokeWidth={view === "team_status" ? 3 : 2} />
+              <span
+                className={`text-[8px] font-black uppercase tracking-widest ${
+                  view === "team_status" ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                Team
+              </span>
+            </button>
+
+            {/* 3. Entry (Center) */}
+            <div className="relative mx-1">
+              <button
+                onClick={() => {
+                  resetForm();
+                  setView("entry");
+                }}
+                className="bg-blue-600 text-white p-4 rounded-full shadow-xl shadow-blue-200 active:scale-95 transition-all -mb-8 border-[6px] border-slate-50 group hover:bg-blue-700"
+              >
+                <Plus
+                  size={30}
+                  strokeWidth={3}
+                  className="group-hover:rotate-90 transition-transform duration-300"
+                />
+              </button>
+            </div>
+
+            {/* 4. Review */}
+            <button
+              onClick={() => setView("review")}
+              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-14 ${
+                view === "review"
+                  ? "text-emerald-500 -translate-y-1"
+                  : "text-slate-300 hover:text-slate-400"
+              }`}
+            >
+              <MessageSquare
+                size={24}
+                strokeWidth={view === "review" ? 3 : 2}
+              />
+              <span
+                className={`text-[8px] font-black uppercase tracking-widest ${
+                  view === "review" ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                Review
+              </span>
+            </button>
+          </div>
+        </nav>
       </div>
     );
   }
@@ -3734,11 +4330,18 @@ const App = () => {
                           <p className="font-bold text-slate-800">
                             {r.lastName} {r.firstName}
                           </p>
+                          {/* ▼ 追加: IDとPINを並べて表示 */}
+                          <div className="flex items-center gap-2 mt-0.5 mb-0.5">
+                            <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                              ID: {r.memberCode || "-"}
+                            </span>
+                            <span className="text-[10px] text-slate-300 font-mono">
+                              PIN: {r.pin || "----"}
+                            </span>
+                          </div>
+                          {/* ▲ ここまで */}
                           <p className="text-[10px] text-slate-400 font-bold">
                             Goal: {r.goalMonthly}km/mo
-                          </p>
-                          <p className="text-[10px] text-slate-300 font-mono">
-                            PIN: {r.pin || "未設定"}
                           </p>
                         </div>
                       </div>
