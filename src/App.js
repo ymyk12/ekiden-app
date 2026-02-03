@@ -85,8 +85,7 @@ import {
 } from "lucide-react";
 
 // --- App Version ---
-const APP_LAST_UPDATED =
-  "Ver3.1-fix: データ表示不具合の修正とコンディション管理UIの改善";
+const APP_LAST_UPDATED = "Ver3.2";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -171,11 +170,19 @@ const calculateAutoQuartersFixed = (startStr, endStr) =>
 
 const getDatesInRange = (startDate, endDate) => {
   if (!startDate || !endDate) return [];
-  const dates = [];
   const start = new Date(startDate);
   const end = new Date(endDate);
   if (isNaN(start) || isNaN(end) || start > end) return [];
 
+  // ★安全装置: 期間が長すぎる場合（370日を超える場合）は空配列を返してフリーズを防ぐ
+  const diffTime = Math.abs(end - start);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays > 370) {
+    console.warn("期間が長すぎるため、日別レポートの生成をスキップしました。");
+    return [];
+  }
+
+  const dates = [];
   const current = new Date(start);
   while (current <= end) {
     dates.push(new Date(current).toLocaleDateString("sv-SE"));
@@ -194,10 +201,11 @@ const getMonthRange = (dateStr) => {
 };
 
 const getYearRange = (year) => {
+  // ★年度対応: その年の4月1日 〜 翌年の3月31日
   return {
-    start: `${year}-01-01`,
-    end: `${year}-12-31`,
-    name: `${year}年`,
+    start: `${year}-04-01`,
+    end: `${year + 1}-03-31`,
+    name: `${year}年度`,
   };
 };
 
@@ -546,12 +554,24 @@ const App = () => {
     getDoc(settingsDoc)
       .then((snap) => {
         if (!snap.exists()) {
-          const today = getTodayStr();
+          // ▼ 修正・追加したコード ▼
+          const todayDate = new Date();
+          // 今日の日付から「今年度」の開始・終了を作る
+          const currentMonth = todayDate.getMonth() + 1;
+          let fiscalYear = todayDate.getFullYear();
+
+          // 1~3月なら年度はマイナス1
+          if (currentMonth <= 3) fiscalYear -= 1;
+
+          const startStr = `${fiscalYear}-04-01`;
+          const endStr = `${fiscalYear + 1}-03-31`;
+          // ▲ ここまで ▲
+
           setDoc(settingsDoc, {
             coachPass: "1234",
             teamPass: "run2025",
-            startDate: today,
-            endDate: today,
+            startDate: startStr, // ★今年度の4/1が入る
+            endDate: endStr, // ★翌年の3/31が入る
             quarters: [],
             customPeriods: [],
             defaultPeriodId: "global_period",
@@ -674,21 +694,46 @@ const App = () => {
 
   const availablePeriods = useMemo(() => {
     const periods = [];
-    const globalStart = appSettings.startDate || "2000-01-01";
-    const globalEnd = appSettings.endDate || "2100-12-31";
-    periods.push({
-      id: "global_period",
-      name: "全期間 (通年設定)",
-      start: globalStart,
-      end: globalEnd,
-      quarters: appSettings.quarters || [],
-      type: "global",
-    });
+
+    // 1. チーム指定期間 (Global Period)
+    // 設定画面で入力された期間があれば表示（IDは維持）
+    const globalStart = appSettings.startDate;
+    const globalEnd = appSettings.endDate;
+
+    if (globalStart && globalEnd) {
+      periods.push({
+        id: "global_period",
+        name: "チーム指定期間 (シーズン)",
+        start: globalStart,
+        end: globalEnd,
+        quarters: appSettings.quarters || [],
+        type: "global",
+      });
+    }
+
+    // 2. カスタム期間 (合宿など)
     if (appSettings.customPeriods && appSettings.customPeriods.length > 0) {
       appSettings.customPeriods.forEach((p) => {
         periods.push({ ...p, type: "custom" });
       });
     }
+
+    // 3. ★年度単位を自動生成 (4月始まり)
+    const currentYear = new Date().getFullYear();
+    // 来年度(i=-1)〜2年前度(i=2)まで生成
+    for (let i = -1; i < 3; i++) {
+      const y = currentYear - i;
+      const yRange = getYearRange(y); // 修正したヘルパーが呼ばれ4/1~3/31になる
+      periods.push({
+        id: `year_${y}`,
+        name: yRange.name, // "2025年度" と表示
+        start: yRange.start,
+        end: yRange.end,
+        type: "year",
+      });
+    }
+
+    // 4. 月単位 (直近12ヶ月)
     const today = new Date();
     for (let i = 0; i < 12; i++) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -701,18 +746,7 @@ const App = () => {
         type: "month",
       });
     }
-    const currentYear = new Date().getFullYear();
-    for (let i = 0; i < 3; i++) {
-      const y = currentYear - i;
-      const yRange = getYearRange(y);
-      periods.push({
-        id: `year_${y}`,
-        name: yRange.name,
-        start: yRange.start,
-        end: yRange.end,
-        type: "year",
-      });
-    }
+
     return periods;
   }, [appSettings]);
 
@@ -731,9 +765,26 @@ const App = () => {
       } else {
         target = availablePeriods.find((p) => p.id === defaultId);
       }
-      if (!target)
-        target = availablePeriods.find((p) => p.id === "global_period");
+      // ▼ 修正・追加したコード ▼
+      // 設定されたIDが見つからない場合の自動選択ロジック
+      if (!target) {
+        const today = new Date();
+        const currentMonth = today.getMonth() + 1; // 1月=1, 2月=2...
+        let fiscalYear = today.getFullYear();
+
+        // ★重要: 1月, 2月, 3月の場合、年度は「昨年」になる
+        // 例: 2026年2月なら、年度は「2025年度」扱いにする
+        if (currentMonth <= 3) {
+          fiscalYear = fiscalYear - 1;
+        }
+
+        // 計算した年度ID (例: year_2025) を探す
+        target = availablePeriods.find((p) => p.id === `year_${fiscalYear}`);
+      }
+
+      // それでも見つからなければリストの先頭（カスタム期間など）にする
       if (!target) target = availablePeriods[0];
+      // ▲ 修正ここまで ▲
 
       if (target) {
         setSelectedPeriod(target);
@@ -2424,14 +2475,59 @@ const App = () => {
                 }}
                 style={{ color: "white", fontWeight: "bold" }}
               >
-                {availablePeriods.map((p) => (
-                  <option key={p.id} value={p.id} className="text-slate-900">
-                    {p.name}
-                    {p.start && p.end
-                      ? ` (${p.start.slice(5).replace("-", "/")}～${p.end.slice(5).replace("-", "/")})`
-                      : ""}
-                  </option>
-                ))}
+                {/* 1. 特別期間・カスタム */}
+                <optgroup
+                  label="🚩 指定期間・合宿など"
+                  className="text-slate-900 font-bold bg-slate-100"
+                >
+                  {availablePeriods
+                    .filter((p) => p.type === "global" || p.type === "custom")
+                    .map((p) => (
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        className="text-slate-900 bg-white"
+                      >
+                        {p.name}
+                      </option>
+                    ))}
+                </optgroup>
+
+                {/* 2. 年度 */}
+                <optgroup
+                  label="📂 年度アーカイブ"
+                  className="text-slate-900 font-bold bg-slate-100"
+                >
+                  {availablePeriods
+                    .filter((p) => p.type === "year")
+                    .map((p) => (
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        className="text-slate-900 bg-white"
+                      >
+                        {p.name}
+                      </option>
+                    ))}
+                </optgroup>
+
+                {/* 3. 月間 */}
+                <optgroup
+                  label="📅 月次レポート"
+                  className="text-slate-900 font-bold bg-slate-100"
+                >
+                  {availablePeriods
+                    .filter((p) => p.type === "month")
+                    .map((p) => (
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        className="text-slate-900 bg-white"
+                      >
+                        {p.name}
+                      </option>
+                    ))}
+                </optgroup>
               </select>
             </div>
           </div>
@@ -3522,7 +3618,7 @@ const App = () => {
             <span className="text-xs font-bold text-slate-400">Target:</span>
             {availablePeriods.length > 0 && selectedPeriod && (
               <select
-                className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-4 py-2 outline-none shadow-sm focus:border-blue-500"
+                className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-4 py-2 outline-none shadow-sm focus:border-blue-500 cursor-pointer"
                 value={selectedPeriod.id}
                 onChange={(e) => {
                   const period = availablePeriods.find(
@@ -3531,14 +3627,35 @@ const App = () => {
                   if (period) setSelectedPeriod(period);
                 }}
               >
-                {availablePeriods.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.start && p.end
-                      ? ` (${p.start.slice(5).replace("-", "/")}～${p.end.slice(5).replace("-", "/")})`
-                      : ""}
-                  </option>
-                ))}
+                <optgroup label="🚩 特別期間">
+                  {availablePeriods
+                    .filter((p) => p.type === "global" || p.type === "custom")
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </optgroup>
+
+                <optgroup label="📂 年度アーカイブ">
+                  {availablePeriods
+                    .filter((p) => p.type === "year")
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </optgroup>
+
+                <optgroup label="📅 月次レポート">
+                  {availablePeriods
+                    .filter((p) => p.type === "month")
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </optgroup>
               </select>
             )}
           </div>
@@ -5186,12 +5303,16 @@ const App = () => {
                         max="10"
                         className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm"
                         value={formData.rpe}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          // ▼ 修正コード ▼
+                          const val = e.target.value;
                           setFormData({
                             ...formData,
-                            rpe: parseInt(e.target.value),
-                          })
-                        }
+                            // 空文字なら空のまま、数字があれば変換する
+                            rpe: val === "" ? "" : parseInt(val, 10),
+                          });
+                          // ▲ 修正ここまで ▲
+                        }}
                       />
                     </div>
                     <div>
@@ -5204,12 +5325,16 @@ const App = () => {
                         max="5"
                         className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm"
                         value={formData.pain}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          // ▼ 修正コード ▼
+                          const val = e.target.value;
                           setFormData({
                             ...formData,
-                            pain: parseInt(e.target.value),
-                          })
-                        }
+                            // 空文字なら空のまま、数字があれば変換する
+                            rpe: val === "" ? "" : parseInt(val, 10),
+                          });
+                          // ▲ 修正ここまで ▲
+                        }}
                       />
                     </div>
                   </div>
