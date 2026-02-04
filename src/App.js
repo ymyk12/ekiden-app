@@ -85,7 +85,7 @@ import {
 } from "lucide-react";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "Ver3.2";
+const APP_LAST_UPDATED = "3.4";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
