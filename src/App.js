@@ -227,6 +227,8 @@ const getGoalValue = (runner, periodId, periodType, key) => {
 };
 
 // --- Print Styles (修正版: 改ページ完全対応) ---
+// --- Print Styles (修正版: 学年別テーブル先頭） ---
+// --- Print Styles (修正版: 印刷不具合の完全対策) ---
 const printStyles = `
   /* 通常画面のカードスタイル */
   .report-card-base { 
@@ -244,22 +246,22 @@ const printStyles = `
     display: block; 
   }
   
-  /* プレビュー画面のラッパー（画面上で見る時） */
+  /* プレビュー画面のラッパー */
   .preview-mode-wrapper { 
     position: fixed; 
     top: 0; left: 0; right: 0; bottom: 0; 
     background-color: #525659; 
     z-index: 9999; 
     overflow-y: auto; 
-    padding: 40px 0; /* 上下に余白 */
+    padding: 40px 0; 
     display: block; 
   }
   
-  /* プレビュー画面での「紙」のスタイル */
+  /* プレビュー画面での「紙」 */
   .preview-mode-wrapper .report-card-base { 
     width: 297mm; /* A4横幅 */
     min-height: 210mm; 
-    height: auto; /* 高さは中身に合わせて伸びる */
+    height: auto; 
     padding: 10mm; 
     margin: 0 auto 30px auto; 
     box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
@@ -268,7 +270,7 @@ const printStyles = `
     position: relative; 
     display: block; 
     background-color: white;
-    overflow: visible; /* ★重要：中身がはみ出ても切らない */
+    overflow: visible; 
   }
 
   /* テーブル共通設定 */
@@ -278,19 +280,17 @@ const printStyles = `
     border-collapse: collapse !important;
     font-size: 9px !important;
     font-family: 'Helvetica Neue', Arial, sans-serif !important;
-    margin-bottom: 20px; /* 表の下に少し余白 */
+    margin-bottom: 20px; 
   }
 
-  /* ★重要：2ページ目にもヘッダーを出す設定 */
   .preview-mode-wrapper thead,
   @media print thead {
     display: table-header-group !important;
   }
   
-  /* 行ごとの改ページ制御 */
   .preview-mode-wrapper tr,
   @media print tr {
-    page-break-inside: avoid !important; /* 行の途中では切らない */
+    page-break-inside: avoid !important; 
     break-inside: avoid !important;
   }
 
@@ -302,65 +302,90 @@ const printStyles = `
     border: 1px solid #94a3b8 !important; 
     white-space: normal !important; 
     word-wrap: break-word !important;
+    color: #000 !important; /* 印刷時は文字色を黒に強制 */
   }
 
-  /* 日付列 */
   .preview-mode-wrapper th:first-child, 
   .preview-mode-wrapper td:first-child,
   @media print th:first-child,
   @media print td:first-child { 
     width: 60px !important; 
-    white-space: nowrap !important;
-    text-align: center !important;
+    white-space: nowrap !important; 
+    text-align: center !important; 
     background-color: #f8fafc !important;
   }
 
-  /* ▼▼▼ 印刷時の設定（ここが重要） ▼▼▼ */
+  /* 強制改ページクラス */
+  .page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+    display: block !important;
+    clear: both !important;
+  }
+
+  /* ▼▼▼ 印刷時の設定（白紙・消滅対策） ▼▼▼ */
   @media print {
     @page { size: A4 landscape; margin: 10mm; }
     
-    body { 
-      background-color: white !important; 
-      -webkit-print-color-adjust: exact; 
-      margin: 0; padding: 0; 
-      height: auto !important; /* bodyの高さを制限しない */
-      overflow: visible !important; /* スクロールさせない */
+    html, body, #root, .min-h-screen, main {
+      height: auto !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      display: block !important;
+      background-color: white !important;
     }
     
     .no-print, header, nav, .fixed-ui, .coach-menu-bar { display: none !important; }
     
-    /* プレビューラッパーの固定配置を解除 */
     .preview-mode-wrapper { 
       position: static !important; 
-      background: white !important; 
       padding: 0 !important; 
       overflow: visible !important; 
-      z-index: auto; 
       display: block !important; 
       height: auto !important;
+      background: white !important;
     }
     
-    /* カードのスタイルを「ただのブロック」に戻す */
+    /* ★重要：Sticky解除（これが白紙の主原因） */
+    th, td {
+      position: static !important;
+      left: auto !important;
+    }
+
+    /* ★重要：スクロール解除 */
+    div {
+      overflow: visible !important;
+    }
+    
     .report-card-base,
     .preview-mode-wrapper .report-card-base { 
       width: 100% !important; 
       height: auto !important; 
-      min-height: 0 !important;
+      min-height: 0 !important; 
       box-shadow: none !important; 
       border-radius: 0 !important; 
-      border: none !important;
+      border: none !important; 
       margin: 0 !important; 
       padding: 0 !important; 
       display: block !important; 
-      overflow: visible !important; /* はみ出し許可 */
+      overflow: visible !important; 
       background: transparent !important;
     }
     
-    /* グラフなどは改ページしないようにする */
+    /* 最初の要素の余白を消して1ページ目に入れる */
+    .report-card-base:first-child,
+    .page-break:first-child {
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+      page-break-before: avoid !important;
+    }
+    
     .report-chart-container { 
       page-break-inside: avoid !important; 
-      break-inside: avoid !important;
-      margin-top: 20px;
+      break-inside: avoid !important; 
+      margin-top: 20px; 
       margin-bottom: 20px;
     }
   }
@@ -1077,8 +1102,8 @@ const App = () => {
       return row;
     });
 
-    // 全体の合計距離が多い順に並べ替え
-    return data.sort((a, b) => b.total - a.total);
+    // ★修正: 選手ID（memberCode）順に並べ替え
+    return data.sort((a, b) => a.id.localeCompare(b.id));
   }, [activeRunners, allLogs, targetPeriod, activeQuarters]);
 
   const reportDates = useMemo(() => {
@@ -1086,7 +1111,13 @@ const App = () => {
   }, [targetPeriod]);
 
   const reportMatrix = useMemo(() => {
-    const runnerIds = activeRunners.map((r) => r.id);
+    // ★修正: 選手リストをID順にソートして使用する
+    const sortedRunners = [...activeRunners].sort((a, b) =>
+      (a.memberCode || a.id).localeCompare(b.memberCode || b.id),
+    );
+    // ソートしたリストからIDを抽出
+    const runnerIds = sortedRunners.map((r) => r.id);
+
     const matrix = reportDates.map((date) => {
       const row = { date };
       runnerIds.forEach((id) => {
@@ -1608,10 +1639,9 @@ const App = () => {
           distance: parseFloat(formData.distance),
           category: formData.category,
           menuDetail: formData.menuDetail,
-          rpe: formData.rpe,
-          pain: formData.pain,
+          rpe: parseInt(formData.rpe, 10), // ★修正: 整数(Integer)に変換
+          pain: parseInt(formData.pain, 10), // ★修正: 整数(Integer)に変換
           updatedBy: "coach",
-          updatedAt: new Date().toISOString(),
         },
       );
       setSuccessMsg("修正しました");
@@ -1622,6 +1652,37 @@ const App = () => {
     } catch (e) {
       alert("エラー: " + e.message);
     }
+  };
+
+  const handleCoachDeleteLog = () => {
+    if (!editingLogId) return;
+
+    // 確認ダイアログを表示
+    setConfirmDialog({
+      isOpen: true,
+      message: "この記録を完全に削除しますか？（元に戻せません）",
+      onConfirm: async () => {
+        try {
+          // 1. Firestoreから削除
+          await deleteDoc(
+            doc(db, "artifacts", appId, "public", "data", "logs", editingLogId),
+          );
+
+          // 2. 成功メッセージとモーダル閉じる処理
+          setSuccessMsg("記録を削除しました");
+          setIsCoachEditModalOpen(false);
+          setEditingLogId(null);
+          resetForm();
+
+          // 3. 確認ダイアログを閉じる
+          setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+
+          setTimeout(() => setSuccessMsg(""), 2000);
+        } catch (e) {
+          alert("エラー: " + e.message);
+        }
+      },
+    });
   };
 
   const handleCoachEditRunner = (runner) => {
@@ -1761,6 +1822,43 @@ const App = () => {
       setIsSubmitting(false);
     }
   };
+
+  // ▼▼▼ 修正: 引数(targetId)を受け取れるように変更 ▼▼▼
+  // default引数をnullに設定
+  const handleDeleteLog = (targetId = null) => {
+    // 1. 引数でIDが渡されたらそれを、なければ現在編集中のID(editingLogId)を使う
+    // ※ここが重要！この行がないとリストからの削除が動きません
+    const idToDelete = targetId || editingLogId;
+
+    // 削除対象がなければ何もしない
+    if (!idToDelete) return;
+
+    setConfirmDialog({
+      isOpen: true,
+      message: "この記録を削除しますか？",
+      onConfirm: async () => {
+        try {
+          await deleteDoc(
+            doc(db, "artifacts", appId, "public", "data", "logs", idToDelete),
+          );
+          setSuccessMsg("削除しました");
+          setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+
+          // もし「現在編集中のデータ」を削除した場合は、フォームもクリアする
+          if (idToDelete === editingLogId) {
+            setEditingLogId(null);
+            resetForm();
+          }
+
+          setTimeout(() => setSuccessMsg(""), 2000);
+        } catch (e) {
+          console.error(e);
+          alert("エラー: " + e.message);
+        }
+      },
+    });
+  };
+  // ▲▲▲ 修正ここまで ▲▲▲
 
   const handleRestRegister = async () => {
     setIsSubmitting(true);
@@ -3068,14 +3166,36 @@ const App = () => {
                 </div>
 
                 <div className="pt-4 space-y-3">
+                  {/* ▼▼▼ 保存/更新ボタン ▼▼▼ */}
                   <button
                     onClick={handleSaveLog}
                     disabled={isSubmitting || !formData.distance}
-                    className={`w-full py-5 rounded-3xl font-black text-lg shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all ${isSubmitting || !formData.distance ? "bg-slate-200 text-slate-400" : "bg-blue-600 text-white"}`}
+                    className={`w-full py-5 rounded-3xl font-black text-lg shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all ${
+                      isSubmitting || !formData.distance
+                        ? "bg-slate-200 text-slate-400"
+                        : "bg-blue-600 text-white"
+                    }`}
                   >
-                    <Save size={20} /> 保存する
+                    <Save size={20} /> {editingLogId ? "更新する" : "保存する"}
                   </button>
 
+                  {/* ▼▼▼ 追加: 編集モード時のボタン（削除 & キャンセル） ▼▼▼ */}
+                  {editingLogId && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingLogId(null);
+                          resetForm();
+                        }}
+                        disabled={isSubmitting}
+                        className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-3xl font-bold text-sm shadow-md active:scale-95 transition-all"
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ▼▼▼ 完全休養ボタン（新規作成時のみ表示） ▼▼▼ */}
                   {!formData.distance && !editingLogId && (
                     <button
                       onClick={handleRestRegister}
@@ -3086,6 +3206,135 @@ const App = () => {
                     </button>
                   )}
                 </div>
+                {/* ▼▼▼ 追加: 個人の活動履歴 (My Recent Activity) ▼▼▼ */}
+                {/* ▼▼▼ 修正: My Activity (期間内全表示・スクロール対応) ▼▼▼ */}
+                <div className="pt-8 border-t border-slate-100 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                      <Activity size={14} /> My Activity
+                    </h4>
+                    {/* 現在の期間名を表示 */}
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                      {targetPeriod.name}
+                    </span>
+                  </div>
+
+                  {/* スクロールエリア (最大高さ400px) */}
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                    {(() => {
+                      // 1. 期間の範囲を定義
+                      const start = new Date(targetPeriod.start);
+                      const end = new Date(targetPeriod.end);
+                      end.setHours(23, 59, 59, 999); // 終了日の23:59まで含める
+
+                      // 2. 自分のログを抽出・期間でフィルタリング・日付順ソート
+                      const myPeriodLogs = allLogs
+                        .filter((l) => l.runnerId === currentUserId)
+                        .filter((l) => {
+                          const d = new Date(l.date);
+                          // 日付が無効な場合は弾く、有効なら範囲チェック
+                          return !isNaN(d) && d >= start && d <= end;
+                        })
+                        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                      if (myPeriodLogs.length === 0) {
+                        return (
+                          <p className="text-center text-xs text-slate-300 py-8 font-bold">
+                            この期間の記録はありません
+                          </p>
+                        );
+                      }
+
+                      return myPeriodLogs.map((log) => {
+                        const isRest = log.category === "完全休養";
+                        return (
+                          <div
+                            key={log.id}
+                            onClick={() => handleEditLog(log)} // タップで編集モードへ
+                            className="bg-slate-50 p-4 rounded-2xl border border-slate-100 cursor-pointer active:scale-95 transition-transform hover:border-blue-200 group relative"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <p className="text-[10px] font-black text-slate-400 flex items-center gap-2">
+                                  {log.date.slice(5).replace("-", "/")}
+                                  <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-500">
+                                    {log.category}
+                                  </span>
+                                </p>
+                                <p className="text-sm font-bold text-slate-700 mt-1 line-clamp-1">
+                                  {log.menuDetail || "メニュー記録なし"}
+                                </p>
+                              </div>
+                              <p
+                                className={`text-lg font-black ${
+                                  isRest ? "text-emerald-500" : "text-blue-600"
+                                }`}
+                              >
+                                {isRest ? "Rest" : log.distance}
+                                {!isRest && (
+                                  <span className="text-xs text-slate-400 ml-0.5">
+                                    km
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              {/* 左側: RPE & Pain バッジ */}
+                              <div className="flex gap-2">
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${
+                                    log.rpe >= 8
+                                      ? "bg-rose-100 text-rose-600 border-rose-200"
+                                      : log.rpe >= 5
+                                        ? "bg-orange-100 text-orange-600 border-orange-200"
+                                        : "bg-blue-50 text-blue-600 border-blue-100"
+                                  }`}
+                                >
+                                  RPE {log.rpe}
+                                </span>
+                                {log.pain > 1 && (
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[9px] font-black border flex items-center gap-1 ${
+                                      log.pain >= 4
+                                        ? "bg-purple-100 text-purple-600 border-purple-200 animate-pulse"
+                                        : log.pain === 3
+                                          ? "bg-rose-100 text-rose-600 border-rose-200"
+                                          : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                    }`}
+                                  >
+                                    <HeartPulse size={10} /> Pain {log.pain}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* 右側: 操作アイコンエリア */}
+                              <div className="flex items-center gap-4">
+                                {/* ゴミ箱ボタン */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // 編集画面への移動を阻止
+                                    handleDeleteLog(log.id);
+                                  }}
+                                  className="text-slate-300 hover:text-rose-500 transition-colors p-2 -mr-2"
+                                  title="削除する"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+
+                                {/* 編集アイコン */}
+                                <div className="text-slate-300 group-hover:text-blue-500 transition-colors">
+                                  <Edit size={16} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+                {/* ▲▲▲ 修正ここまで ▲▲▲ */}
               </div>
             </div>
           )}
@@ -3710,6 +3959,33 @@ const App = () => {
             </button>
           </div>
         </nav>
+        {/* ▼▼▼ 追加: 選手画面用の削除確認ダイアログ ▼▼▼ */}
+        {confirmDialog.isOpen && (
+          <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
+              <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">
+                {confirmDialog.message}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() =>
+                    setConfirmDialog({ ...confirmDialog, isOpen: false })
+                  }
+                  className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500 text-sm"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={confirmDialog.onConfirm}
+                  className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ▲▲▲ 追加ここまで ▲▲▲ */}
       </div>
     );
   }
@@ -4076,19 +4352,38 @@ const App = () => {
           )}
 
           {view === "coach-report" && (
-            // ... (Report view remains same) ...
             <>
-              {/* ... (Report view content from previous) ... */}
-              <div className="flex justify-end mb-4 no-print">
+              {/* ▼▼▼ 修正: 操作ボタンをレポートの外（上部）にまとめて配置 ▼▼▼ */}
+              <div className="flex flex-wrap justify-end items-center mb-6 gap-3 px-2 no-print">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExportMatrixCSV}
+                    className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl hover:bg-emerald-700 transition-colors shadow-md flex items-center gap-2 font-bold text-xs"
+                  >
+                    <FileSpreadsheet size={16} /> CSV出力
+                  </button>
+                  <button
+                    onClick={handlePrint}
+                    className="bg-slate-900 text-white px-4 py-2.5 rounded-xl hover:bg-slate-700 transition-colors shadow-md flex items-center gap-2 font-bold text-xs"
+                  >
+                    <Printer size={16} /> 印刷 / PDF
+                  </button>
+                </div>
+                <div className="w-px h-8 bg-slate-200 mx-1"></div>
                 <button
                   onClick={() => setIsPrintPreview(!isPrintPreview)}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center gap-2 ${isPrintPreview ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+                  className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 ${
+                    isPrintPreview
+                      ? "bg-slate-800 text-white"
+                      : "bg-white text-slate-500 hover:bg-slate-50"
+                  }`}
                 >
                   {isPrintPreview ? <X size={16} /> : <Eye size={16} />}
                   {isPrintPreview ? "プレビューを閉じる" : "印刷レイアウト確認"}
                 </button>
               </div>
-              {/* ... Report Content ... */}
+              {/* ▲▲▲ 修正ここまで ▲▲▲ */}
+
               <div className={isPrintPreview ? "preview-mode-wrapper" : ""}>
                 {isPrintPreview && (
                   <div className="flex justify-end mb-4 max-w-5xl mx-auto no-print">
@@ -4101,248 +4396,278 @@ const App = () => {
                   </div>
                 )}
                 <style>{printStyles}</style>
+
+                {/* ▼▼▼ レポート本編 ▼▼▼ */}
                 <div
                   id="printable-report"
-                  className={`${isPrintPreview ? "max-w-5xl mx-auto shadow-2xl scale-100 origin-top" : ""}`}
+                  className={`${
+                    isPrintPreview
+                      ? "max-w-5xl mx-auto scale-100 origin-top"
+                      : ""
+                  }`}
                 >
-                  {/* ... Report Tables and Charts ... */}
-                  {/* ... (Existing report structure) ... */}
-                  <div className="report-card-base">
-                    <div className="flex justify-between items-center pb-6 border-b border-slate-100 print:border-slate-800">
-                      <div>
-                        <h2 className="font-black text-2xl text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
-                          <FileText className="text-blue-600 print:text-black" />{" "}
-                          KSWC EKIDEN TEAM REPORT
-                        </h2>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
-                          Target Period: {targetPeriod.name} (
-                          {targetPeriod.start} - {targetPeriod.end})
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 no-print">
-                        <button
-                          onClick={handleExportMatrixCSV}
-                          className="bg-emerald-600 text-white px-4 py-3 rounded-xl hover:bg-emerald-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"
-                        >
-                          <FileSpreadsheet size={18} /> CSV出力
-                        </button>
-                        <button
-                          onClick={handlePrint}
-                          className="bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"
-                        >
-                          <Printer size={18} /> 印刷 / PDF
-                        </button>
-                      </div>
-                    </div>
-                    {/* ... (Report Matrix Table etc) ... */}
-                    {/* 1つ目のカード：タイトルとテーブル */}
-                    <div className="report-card-base">
-                      <div className="flex justify-between items-center pb-6 border-b border-slate-100 print:border-slate-800">
-                        <div>
-                          <h2 className="font-black text-2xl text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
-                            <FileText className="text-blue-600 print:text-black" />{" "}
-                            KSWC EKIDEN TEAM REPORT
-                          </h2>
-                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
-                            Target Period: {targetPeriod.name} (
-                            {targetPeriod.start} - {targetPeriod.end})
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 no-print">
-                          <button
-                            onClick={handleExportMatrixCSV}
-                            className="bg-emerald-600 text-white px-4 py-3 rounded-xl hover:bg-emerald-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"
-                          >
-                            <FileSpreadsheet size={18} /> CSV出力
-                          </button>
-                          <button
-                            onClick={handlePrint}
-                            className="bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-700 transition-colors active:scale-95 shadow-lg flex items-center gap-2 font-bold text-xs"
-                          >
-                            <Printer size={18} /> 印刷 / PDF
-                          </button>
-                        </div>
-                      </div>
+                  {/* 1. 学年ごとのテーブルエリア */}
+                  {(() => {
+                    const entranceYears = [
+                      ...new Set(
+                        activeRunners.map((r) =>
+                          (r.memberCode || r.id).substring(0, 2),
+                        ),
+                      ),
+                    ].sort();
 
-                      {/* テーブル本体 */}
-                      <div
-                        /* ★重要：印刷時は overflow-x-auto を無効化しないとページが切れます */
-                        style={{ overflow: "visible" }}
-                        className={`pb-4 ${isPrintPreview ? "" : "overflow-x-auto"}`}
-                      >
-                        <table className="w-full text-xs border-collapse">
-                          <thead>
-                            <tr>
-                              <th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">
-                                DATE
-                              </th>
-                              {activeRunners.map((r) => (
-                                <th
-                                  key={r.id}
-                                  className="p-3 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[80px] whitespace-nowrap text-center bg-slate-50/50"
-                                >
-                                  {r.lastName} {r.firstName.charAt(0)}.
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {reportMatrix.matrix.map((row, i) => (
-                              <tr
-                                key={row.date}
-                                className="hover:bg-slate-50 transition-colors"
-                              >
-                                <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">
-                                  {row.date.slice(5).replace("-", "/")}
-                                </td>
-                                {activeRunners.map((r) => {
-                                  const val = row[r.id];
-                                  let cellClass =
-                                    "p-2 border-b border-slate-100 text-center font-bold text-sm ";
-                                  if (val === "未")
-                                    cellClass += "text-rose-400 bg-rose-50/30";
-                                  else if (val === "休")
-                                    cellClass +=
-                                      "text-emerald-500 bg-emerald-50/30";
-                                  else if (val === "0")
-                                    cellClass += "text-slate-300";
-                                  else cellClass += "text-blue-600";
-                                  return (
-                                    <td key={r.id} className={cellClass}>
-                                      {val}
+                    return entranceYears.map((year, index) => {
+                      const groupRunners = activeRunners
+                        .filter((r) => (r.memberCode || r.id).startsWith(year))
+                        .sort((a, b) =>
+                          (a.memberCode || a.id).localeCompare(
+                            b.memberCode || b.id,
+                          ),
+                        );
+
+                      if (groupRunners.length === 0) return null;
+
+                      // 最初の要素は改ページしない、それ以降は改ページ
+                      const wrapperClass =
+                        index === 0 ? "mb-8" : "page-break mb-8";
+
+                      return (
+                        <div key={year} className={wrapperClass}>
+                          <div className="report-card-base">
+                            <div className="pb-4 mb-4 border-b-2 border-slate-100 print:border-slate-800">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h2 className="font-black text-xl text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
+                                    <FileText
+                                      className="text-blue-600 print:text-black"
+                                      size={20}
+                                    />
+                                    KSWC EKIDEN REPORT
+                                  </h2>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
+                                    Target Period: {targetPeriod.name} (
+                                    {targetPeriod.start} - {targetPeriod.end})
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-black border border-slate-200 print:border-slate-400 print:bg-white print:text-black">
+                                    <Users
+                                      className="inline mr-1 -mt-0.5"
+                                      size={12}
+                                    />
+                                    {year}年度生 (Grade {year})
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              style={{ overflow: "visible" }}
+                              className={`pb-4 print:overflow-visible ${isPrintPreview ? "" : "overflow-x-auto"}`}
+                            >
+                              <table className="w-full text-xs border-collapse">
+                                <thead>
+                                  <tr>
+                                    <th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">
+                                      DATE
+                                    </th>
+                                    {groupRunners.map((r) => (
+                                      <th
+                                        key={r.id}
+                                        className="p-3 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[80px] whitespace-nowrap text-center bg-slate-50/50"
+                                      >
+                                        {r.lastName} {r.firstName.charAt(0)}.
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {reportMatrix.matrix.map((row) => (
+                                    <tr
+                                      key={row.date}
+                                      className="hover:bg-slate-50 transition-colors"
+                                    >
+                                      <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">
+                                        {row.date.slice(5).replace("-", "/")}
+                                      </td>
+                                      {groupRunners.map((r) => {
+                                        const val = row[r.id];
+                                        let cellClass =
+                                          "p-2 border-b border-slate-100 text-center font-bold text-sm ";
+                                        if (val === "未")
+                                          cellClass +=
+                                            "text-rose-400 bg-rose-50/30";
+                                        else if (val === "休")
+                                          cellClass +=
+                                            "text-emerald-500 bg-emerald-50/30";
+                                        else if (val === "0")
+                                          cellClass += "text-slate-300";
+                                        else cellClass += "text-blue-600";
+                                        return (
+                                          <td key={r.id} className={cellClass}>
+                                            {val}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  ))}
+
+                                  {/* Q1-Q4 Total */}
+                                  {targetPeriod.type === "custom" &&
+                                    reportMatrix.qTotals.map((row, i) => (
+                                      <tr
+                                        key={`qtotal-${i}`}
+                                        className="bg-slate-50 font-bold text-slate-600"
+                                      >
+                                        <td
+                                          className="p-3 border-b border-slate-200 sticky left-0 bg-slate-50 whitespace-nowrap"
+                                          style={{ minWidth: "80px" }}
+                                        >
+                                          Q{i + 1} Total
+                                        </td>
+                                        {groupRunners.map((r) => {
+                                          const goalKey = `goalQ${i + 1}`;
+                                          const goal = getGoalValue(
+                                            r,
+                                            targetPeriod.id,
+                                            targetPeriod.type,
+                                            goalKey,
+                                          );
+                                          return (
+                                            <td
+                                              key={r.id}
+                                              className="p-3 text-center border-b border-slate-200"
+                                            >
+                                              <span style={{ fontSize: "1em" }}>
+                                                {row[r.id] || 0}
+                                              </span>
+                                              <span
+                                                style={{
+                                                  fontSize: "0.7em",
+                                                  color: "#94a3b8",
+                                                }}
+                                              >
+                                                {" "}
+                                                / {goal}
+                                              </span>
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    ))}
+
+                                  {/* Total Row */}
+                                  <tr className="bg-slate-100 font-black text-slate-800">
+                                    <td className="p-3 sticky left-0 bg-slate-100 border-t-2 border-slate-300">
+                                      TOTAL
                                     </td>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                            {/* Q1-Q4 Total rows */}
-                            {targetPeriod.type === "custom" &&
-                              reportMatrix.qTotals.map((row, i) => (
-                                <tr
-                                  key={`qtotal-${i}`}
-                                  className="bg-slate-50 font-bold text-slate-600"
-                                >
-                                  <td
-                                    className="p-3 border-b border-slate-200 sticky left-0 bg-slate-50 whitespace-nowrap"
-                                    style={{ minWidth: "80px" }}
-                                  >
-                                    Q{i + 1} Total
-                                  </td>
-                                  {activeRunners.map((r) => {
-                                    const goalKey = `goalQ${i + 1}`;
-                                    const goal = getGoalValue(
-                                      r,
-                                      targetPeriod.id,
-                                      targetPeriod.type,
-                                      goalKey,
-                                    );
-                                    return (
+                                    {groupRunners.map((r) => (
                                       <td
                                         key={r.id}
-                                        className="p-3 text-center border-b border-slate-200"
+                                        className="p-3 text-center text-blue-700 border-t-2 border-slate-300"
                                       >
-                                        <span style={{ fontSize: "1em" }}>
-                                          {row[r.id] || 0}
+                                        <span style={{ fontSize: "1.1em" }}>
+                                          {reportMatrix.totals[r.id] || 0}
                                         </span>
                                         <span
                                           style={{
-                                            fontSize: "0.7em",
-                                            color: "#94a3b8",
+                                            fontSize: "0.8em",
+                                            color: "#64748b",
                                           }}
                                         >
                                           {" "}
-                                          / {goal}
+                                          /{" "}
+                                          {getGoalValue(
+                                            r,
+                                            targetPeriod.id,
+                                            targetPeriod.type,
+                                            "goalPeriod",
+                                          )}
                                         </span>
                                       </td>
-                                    );
-                                  })}
-                                </tr>
-                              ))}
-                            {/* Total Row */}
-                            <tr className="bg-slate-100 font-black text-slate-800">
-                              <td className="p-3 sticky left-0 bg-slate-100 border-t-2 border-slate-300">
-                                TOTAL
-                              </td>
-                              {activeRunners.map((r) => (
-                                <td
-                                  key={r.id}
-                                  className="p-3 text-center text-blue-700 border-t-2 border-slate-300"
-                                >
-                                  <span style={{ fontSize: "1.1em" }}>
-                                    {reportMatrix.totals[r.id] || 0}
-                                  </span>
-                                  <span
-                                    style={{
-                                      fontSize: "0.8em",
-                                      color: "#64748b",
-                                    }}
-                                  >
-                                    {" "}
-                                    /{" "}
-                                    {getGoalValue(
-                                      r,
-                                      targetPeriod.id,
-                                      targetPeriod.type,
-                                      "goalPeriod",
-                                    )}
-                                  </span>
-                                </td>
-                              ))}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                                    ))}
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
 
-                    {/* ② 折れ線グラフ (Cumulative Distance Trends) */}
+                  {/* 2. グラフエリア (改ページして全員分表示) */}
+                  <div className="page-break">
                     <div className="report-card-base">
-                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">
-                        Cumulative Distance Trends
-                      </h3>
-                      {/* クラス名を削除し、styleのみで制御 */}
-                      <div style={{ width: "100%", height: "300px" }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={cumulativeData}
-                            margin={{ top: 10, right: 50, left: 0, bottom: 0 }}
-                          >
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={false}
-                              stroke="#f1f5f9"
-                            />
-                            <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} width={30} />
-                            <Tooltip />
-                            <Legend />
-                            {activeRunners.map((r, i) => (
-                              <Line
-                                key={r.id}
-                                type="monotone"
-                                dataKey={r.id}
-                                name={`${r.lastName} ${r.firstName}`}
-                                stroke={COLORS[i % COLORS.length]}
-                                strokeWidth={2}
-                                dot={false}
-                                activeDot={{ r: 6 }}
+                      <div className="pb-4 mb-4 border-b border-slate-100 print:border-slate-800">
+                        <h2 className="font-black text-xl text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
+                          <BarChart2
+                            className="text-blue-600 print:text-black"
+                            size={20}
+                          />
+                          TEAM ANALYTICS (ALL MEMBERS)
+                        </h2>
+                      </div>
+
+                      {/* ① 折れ線グラフ */}
+                      <div className="mt-4">
+                        <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">
+                          Cumulative Distance Trends
+                        </h3>
+                        <div style={{ width: "100%", height: "300px" }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={cumulativeData}
+                              margin={{
+                                top: 10,
+                                right: 50,
+                                left: 0,
+                                bottom: 0,
+                              }}
+                            >
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                vertical={false}
+                                stroke="#f1f5f9"
                               />
-                            ))}
-                          </LineChart>
-                        </ResponsiveContainer>
+                              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                              <YAxis tick={{ fontSize: 10 }} width={30} />
+                              <Tooltip />
+                              <Legend />
+                              {[...activeRunners]
+                                .sort((a, b) =>
+                                  (a.memberCode || a.id).localeCompare(
+                                    b.memberCode || b.id,
+                                  ),
+                                )
+                                .map((r, i) => (
+                                  <Line
+                                    key={r.id}
+                                    type="monotone"
+                                    dataKey={r.id}
+                                    name={`${r.lastName} ${r.firstName}`}
+                                    stroke={COLORS[i % COLORS.length]}
+                                    strokeWidth={2}
+                                    dot={false}
+                                    activeDot={{ r: 6 }}
+                                  />
+                                ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
                       </div>
                     </div>
 
-                    {/* ③ 棒グラフ（期間総距離・タテ向き） */}
+                    {/* ② 棒グラフ (Total) */}
                     <div className="report-card-base">
                       <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">
-                        Total Distance Ranking ({targetPeriod.name})
+                        Total Distance Ranking
                       </h3>
-                      {/* クラス名を削除し、styleのみで制御 */}
                       <div style={{ width: "100%", height: "400px" }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={reportChartData}
-                            layout="horizontal" // タテ向き（棒が上に向く）
+                            layout="horizontal"
                             margin={{
                               top: 20,
                               right: 30,
@@ -4401,85 +4726,8 @@ const App = () => {
                         </ResponsiveContainer>
                       </div>
                     </div>
-
-                    {/* ④ 棒グラフ（Q1～4） - 設定がある場合のみループ表示 */}
-                    {activeQuarters.length > 0 &&
-                      activeQuarters.map((q, idx) => (
-                        <div key={q.id} className="report-card-base">
-                          <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">
-                            Q{idx + 1} Ranking (
-                            {q.start ? q.start.slice(5).replace("-", "/") : ""}{" "}
-                            - {q.end ? q.end.slice(5).replace("-", "/") : ""})
-                          </h3>
-                          {/* クラス名を削除し、styleのみで制御 */}
-                          <div style={{ width: "100%", height: "400px" }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart
-                                data={reportChartData}
-                                layout="horizontal"
-                                margin={{
-                                  top: 20,
-                                  right: 30,
-                                  left: 20,
-                                  bottom: 60,
-                                }}
-                              >
-                                <CartesianGrid
-                                  strokeDasharray="3 3"
-                                  vertical={false}
-                                  stroke="#e2e8f0"
-                                />
-                                <XAxis
-                                  dataKey="name"
-                                  tick={{
-                                    fontSize: 10,
-                                    fill: "#64748b",
-                                    fontWeight: "bold",
-                                  }}
-                                  angle={-45}
-                                  textAnchor="end"
-                                  interval={0}
-                                />
-                                <YAxis
-                                  tick={{ fontSize: 10, fill: "#64748b" }}
-                                  axisLine={false}
-                                  tickLine={false}
-                                />
-                                <Tooltip
-                                  cursor={{ fill: "#f1f5f9" }}
-                                  contentStyle={{
-                                    borderRadius: "12px",
-                                    border: "none",
-                                    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                                  }}
-                                />
-                                <Bar
-                                  dataKey={`q${idx + 1}`}
-                                  name={`Q${idx + 1}`}
-                                  fill={COLORS[idx % COLORS.length]}
-                                  radius={[4, 4, 0, 0]}
-                                  barSize={activeRunners.length > 15 ? 15 : 30}
-                                >
-                                  <LabelList
-                                    dataKey={`q${idx + 1}`}
-                                    position="top"
-                                    formatter={(val) => (val > 0 ? val : "")}
-                                    style={{
-                                      fontSize: "10px",
-                                      fill: "#64748b",
-                                      fontWeight: "bold",
-                                    }}
-                                  />
-                                </Bar>
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      ))}
-                  </div>{" "}
-                  {/* 終了タグ: id="printable-report" */}
-                </div>{" "}
-                {/* 終了タグ: preview-mode-wrapper */}
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -5471,16 +5719,16 @@ const App = () => {
                         max="10"
                         className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm"
                         value={formData.rpe}
-                        onChange={(e) => {
-                          // ▼ 修正コード ▼
-                          const val = e.target.value;
+                        onChange={(e) =>
                           setFormData({
                             ...formData,
-                            // 空文字なら空のまま、数字があれば変換する
-                            rpe: val === "" ? "" : parseInt(val, 10),
-                          });
-                          // ▲ 修正ここまで ▲
-                        }}
+                            // 空文字の時はそのまま、それ以外は数値化
+                            rpe:
+                              e.target.value === ""
+                                ? ""
+                                : parseInt(e.target.value, 10),
+                          })
+                        }
                       />
                     </div>
                     <div>
@@ -5493,38 +5741,52 @@ const App = () => {
                         max="5"
                         className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm"
                         value={formData.pain}
-                        onChange={(e) => {
-                          // ▼ 修正コード ▼
-                          const val = e.target.value;
+                        onChange={(e) =>
                           setFormData({
                             ...formData,
-                            // 空文字なら空のまま、数字があれば変換する
-                            rpe: val === "" ? "" : parseInt(val, 10),
-                          });
-                          // ▲ 修正ここまで ▲
-                        }}
+                            // 空文字の時はそのまま、それ以外は数値化
+                            rpe:
+                              e.target.value === ""
+                                ? ""
+                                : parseInt(e.target.value, 10),
+                          })
+                        }
                       />
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-2 pt-2">
+                {/* ▼▼▼ 修正: ボタンエリアに削除ボタンを追加 ▼▼▼ */}
+                <div className="flex gap-2 pt-4 border-t border-slate-100 mt-2">
+                  {/* 1. 削除ボタン (赤) */}
+                  <button
+                    onClick={handleCoachDeleteLog}
+                    className="p-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs hover:bg-rose-100 transition-colors"
+                    title="この記録を削除"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+
+                  {/* 2. キャンセルボタン */}
                   <button
                     onClick={() => {
                       setIsCoachEditModalOpen(false);
                       setEditingLogId(null);
                       resetForm();
                     }}
-                    className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold text-xs"
+                    className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold text-xs hover:bg-slate-200 transition-colors"
                   >
                     キャンセル
                   </button>
+
+                  {/* 3. 更新ボタン (青) */}
                   <button
                     onClick={handleCoachUpdateLog}
-                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-lg"
+                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-lg hover:bg-blue-700 transition-colors"
                   >
                     更新して保存
                   </button>
                 </div>
+                {/* ▲▲▲ 修正ここまで ▲▲▲ */}
               </div>
             </div>
           )}
@@ -5630,7 +5892,7 @@ const App = () => {
 
         {/* ... (Confirm dialog remains same) ... */}
         {confirmDialog.isOpen && (
-          <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
               <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">
                 {confirmDialog.message}
