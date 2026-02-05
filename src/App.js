@@ -85,7 +85,7 @@ import {
 } from "lucide-react";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "3.4";
+const APP_LAST_UPDATED = "3.4.1";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -325,19 +325,51 @@ const printStyles = `
 
   /* ▼▼▼ 印刷時の設定（白紙・消滅対策） ▼▼▼ */
   @media print {
-    @page { size: A4 landscape; margin: 10mm; }
     
-    html, body, #root, .min-h-screen, main {
-      height: auto !important;
-      min-height: 0 !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      overflow: visible !important;
-      display: block !important;
-      background-color: white !important;
+      @page {
+        size: A4 portrait; /* ヨコからタテに変更 */
+        margin: 10mm;
+      }
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        background-color: white !important;
+      }
+      .no-print { display: none !important; }
+      .page-break { 
+        page-break-before: always; /* 確実に新しいページから開始 */
+      }
+      .report-card-base {
+        box-shadow: none !important;
+        border: 1px solid #e2e8f0 !important;
+        margin-bottom: 0 !important;
+        padding: 10px !important;
+        width: 100% !important;
+      }
+      /* テーブルの文字サイズをタテに収まるよう微調整 */
+      table {
+        font-size: 9px !important; 
+      }
+      th, td {
+        padding: 4px 2px !important;
+      }
+      /* ▼▼▼ 追加: グラフの印刷用高さ設定 ▼▼▼ */
+      /* ▼▼▼ 修正: 高さ90mm → 140mm に変更 ▼▼▼ */
+      /* 折れ線グラフ（上）: A4タテ上半分ほどの面積 */
+      .print-chart-line {
+        height: 140mm !important; 
+        width: 100% !important;
+        margin-bottom: 15mm !important;
+      }
+      /* 棒グラフ（下）: 項目が多いので高さを確保 */
+      .print-chart-bar {
+        height: 130mm !important; 
+        width: 100% !important;
+      }
+      /* ▲▲▲ 追加ここまで ▲▲▲ */
+      
+    .no-print, header, nav, .fixed-ui, .coach-menu-bar { display: none !important; 
     }
-    
-    .no-print, header, nav, .fixed-ui, .coach-menu-bar { display: none !important; }
     
     .preview-mode-wrapper { 
       position: static !important; 
@@ -841,9 +873,17 @@ const App = () => {
 
   const activeQuarters = useMemo(() => {
     if (targetPeriod.type === "global" || targetPeriod.type === "custom") {
-      if (targetPeriod.quarters && targetPeriod.quarters.length > 0) {
+      // 1. 保存されたquartersがあり、かつ「有効なデータ(日付が入っている)」かチェック
+      const hasValidQuarters =
+        targetPeriod.quarters &&
+        targetPeriod.quarters.length > 0 &&
+        targetPeriod.quarters.some((q) => q.start && q.end); // 少なくとも1つは日付があるか
+
+      if (hasValidQuarters) {
         return targetPeriod.quarters;
       }
+
+      // 2. データがない、または無効なら、期間から自動計算して表示する (救済措置)
       if (targetPeriod.start && targetPeriod.end) {
         return calculateAutoQuartersFixed(targetPeriod.start, targetPeriod.end);
       }
@@ -2858,59 +2898,7 @@ const App = () => {
                     {targetPeriod.name}
                   </p>
                 </div>
-
-                {/* Q1-Q4 */}
-                {activeQuarters.length > 0 &&
-                  (targetPeriod.type === "custom" ||
-                    targetPeriod.type === "global") && (
-                    <div className="pt-5 border-t border-slate-50">
-                      <h3 className="font-black text-emerald-500 text-[10px] uppercase tracking-widest mb-3 flex items-center gap-1">
-                        <Flag size={12} /> Focus Period Breakdown
-                      </h3>
-                      <div className="grid grid-cols-4 gap-2">
-                        {activeQuarters.map((q, idx) => {
-                          const goal = getGoalValue(
-                            currentProfile,
-                            targetPeriod.id,
-                            targetPeriod.type,
-                            `goalQ${idx + 1}`,
-                          );
-                          const actual = personalStats.qs[idx] || 0;
-                          return (
-                            <div
-                              key={idx}
-                              className={`p-2 rounded-xl flex flex-col items-center bg-slate-50`}
-                            >
-                              <span
-                                className={`text-[8px] font-black uppercase mb-1 text-slate-400`}
-                              >
-                                Q{idx + 1}
-                              </span>
-                              <div className="w-full h-12 bg-slate-200 rounded-lg relative overflow-hidden flex flex-col justify-end">
-                                <div
-                                  className={`w-full absolute bottom-0 transition-all duration-500 bg-emerald-400`}
-                                  style={{
-                                    height: `${goal > 0 ? Math.min(100, (actual / goal) * 100) : 0}%`,
-                                  }}
-                                ></div>
-                              </div>
-                              <span className="text-[9px] font-black mt-1 text-slate-600">
-                                {actual}
-                              </span>
-                              <span className="text-[7px] font-bold text-slate-400">
-                                / {goal || "-"}
-                              </span>
-                              {q.start && (
-                                <span className="text-[6px] text-slate-300 mt-0.5">
-                                  {q.start.slice(5).replace("-", "/")}~
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                {/* ★ここに書いてあった Q1-Q4 のコードを削除しました★ */}
               </div>
 
               {/* ... today's menu ... */}
@@ -4543,7 +4531,7 @@ const App = () => {
                                               </span>
                                               <span
                                                 style={{
-                                                  fontSize: "0.7em",
+                                                  fontSize: "0.8em",
                                                   color: "#94a3b8",
                                                 }}
                                               >
@@ -4557,33 +4545,38 @@ const App = () => {
                                     ))}
 
                                   {/* Total Row */}
-                                  <tr className="bg-slate-100 font-black text-slate-800">
-                                    <td className="p-3 sticky left-0 bg-slate-100 border-t-2 border-slate-300">
+                                  {/* Total Row (学年ごと) */}
+                                  <tr className="bg-slate-100 font-black text-slate-900 print:bg-slate-50">
+                                    <td className="p-3 sticky left-0 bg-slate-100 print:bg-slate-50 border-t-2 border-slate-300 text-[10px]">
                                       TOTAL
                                     </td>
                                     {groupRunners.map((r) => (
                                       <td
                                         key={r.id}
-                                        className="p-3 text-center text-blue-700 border-t-2 border-slate-300"
+                                        className="p-3 text-center border-t-2 border-slate-300"
                                       >
-                                        <span style={{ fontSize: "1.1em" }}>
-                                          {reportMatrix.totals[r.id] || 0}
-                                        </span>
-                                        <span
-                                          style={{
-                                            fontSize: "0.8em",
-                                            color: "#64748b",
-                                          }}
-                                        >
-                                          {" "}
-                                          /{" "}
-                                          {getGoalValue(
-                                            r,
-                                            targetPeriod.id,
-                                            targetPeriod.type,
-                                            "goalPeriod",
-                                          )}
-                                        </span>
+                                        {/* ▼ 実績値を大きく強調 (1.1em -> 1.5em) ▼ */}
+                                        <div className="flex flex-col items-center">
+                                          <span
+                                            className="text-blue-800 text-base font-black leading-none mb-1"
+                                            style={{ fontSize: "2.0em" }}
+                                          >
+                                            {reportMatrix.totals[r.id] || 0}
+                                          </span>
+                                          {/* ▼ 目標値は小さく控えめに ▼ */}
+                                          <span
+                                            className="text-slate-400 font-bold"
+                                            style={{ fontSize: "0.7em" }}
+                                          >
+                                            /{" "}
+                                            {getGoalValue(
+                                              r,
+                                              targetPeriod.id,
+                                              targetPeriod.type,
+                                              "goalPeriod",
+                                            )}
+                                          </span>
+                                        </div>
                                       </td>
                                     ))}
                                   </tr>
@@ -4614,16 +4607,13 @@ const App = () => {
                         <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">
                           Cumulative Distance Trends
                         </h3>
-                        <div style={{ width: "100%", height: "300px" }}>
+
+                        {/* ▼▼▼ 修正1: style属性を削除し、クラス名で高さを指定（これで印刷時に広がります） ▼▼▼ */}
+                        <div className="w-full h-[550px] print-chart-line">
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart
                               data={cumulativeData}
-                              margin={{
-                                top: 10,
-                                right: 50,
-                                left: 0,
-                                bottom: 0,
-                              }}
+                              margin={{ top: 5, right: 70, left: 0, bottom: 5 }}
                             >
                               <CartesianGrid
                                 strokeDasharray="3 3"
@@ -4631,39 +4621,96 @@ const App = () => {
                                 stroke="#f1f5f9"
                               />
                               <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                              <YAxis tick={{ fontSize: 10 }} width={30} />
+
+                              {/* ▼▼▼ 修正: interval={0} を追加して間引きを防止 ▼▼▼ */}
+                              <YAxis
+                                tick={{ fontSize: 10 }}
+                                width={30}
+                                type="number"
+                                domain={[0, "auto"]}
+                                interval={
+                                  0
+                                } /* ★重要: これで全ての目盛り(0,50,100...)が表示されます */
+                                ticks={(() => {
+                                  let maxVal = 0;
+                                  cumulativeData.forEach((day) => {
+                                    activeRunners.forEach((r) => {
+                                      if (day[r.id] > maxVal)
+                                        maxVal = day[r.id];
+                                    });
+                                  });
+                                  // 最大値まで50刻みの配列を作成
+                                  const ticks = [];
+                                  // 少し余裕を持たせるため +50 していますが、ぴったりが良ければ maxVal まででOK
+                                  const limit = Math.ceil(maxVal / 50) * 50;
+                                  for (let i = 0; i <= limit; i += 50) {
+                                    ticks.push(i);
+                                  }
+                                  return ticks;
+                                })()}
+                              />
+                              {/* ▲▲▲ 修正ここまで ▲▲▲ */}
+
                               <Tooltip />
                               <Legend />
+
+                              {/* 線と名前の描画（ここは前回のまま維持） */}
                               {[...activeRunners]
                                 .sort((a, b) =>
                                   (a.memberCode || a.id).localeCompare(
                                     b.memberCode || b.id,
                                   ),
                                 )
-                                .map((r, i) => (
-                                  <Line
-                                    key={r.id}
-                                    type="monotone"
-                                    dataKey={r.id}
-                                    name={`${r.lastName} ${r.firstName}`}
-                                    stroke={COLORS[i % COLORS.length]}
-                                    strokeWidth={2}
-                                    dot={false}
-                                    activeDot={{ r: 6 }}
-                                  />
-                                ))}
+                                .map((r, i) => {
+                                  const renderLabel = (props) => {
+                                    const { x, y, stroke, index } = props;
+                                    if (index === cumulativeData.length - 1) {
+                                      return (
+                                        <text
+                                          x={x + 5}
+                                          y={y}
+                                          dy={3}
+                                          fill={stroke}
+                                          fontSize={10}
+                                          fontWeight="bold"
+                                          textAnchor="start"
+                                        >
+                                          {r.lastName}
+                                        </text>
+                                      );
+                                    }
+                                    return null;
+                                  };
+
+                                  return (
+                                    <Line
+                                      key={r.id}
+                                      type="monotone"
+                                      dataKey={r.id}
+                                      name={`${r.lastName} ${r.firstName}`}
+                                      stroke={COLORS[i % COLORS.length]}
+                                      strokeWidth={2}
+                                      dot={false}
+                                      activeDot={{ r: 6 }}
+                                      label={renderLabel}
+                                    />
+                                  );
+                                })}
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
                       </div>
                     </div>
-
                     {/* ② 棒グラフ (Total) */}
                     <div className="report-card-base">
                       <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">
                         Total Distance Ranking
                       </h3>
-                      <div style={{ width: "100%", height: "400px" }}>
+                      {/* ▼▼▼ 修正: className="print-chart-bar" を追加 ▼▼▼ */}
+                      <div
+                        style={{ width: "100%", height: "550px" }}
+                        className="print-chart-bar"
+                      >
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={reportChartData}
