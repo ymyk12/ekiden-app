@@ -88,7 +88,7 @@ import {
 } from "lucide-react";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "4.0.0";
+const APP_LAST_UPDATED = "4.0.2";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -2044,7 +2044,10 @@ const App = () => {
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
 
-    const data = activeRunners.map((r) => {
+    // ★修正: マネージャーを除外してから処理を開始
+    const athletes = activeRunners.filter((r) => r.role !== "manager");
+
+    const data = athletes.map((r) => {
       // 1. 期間合計を計算
       const total = allLogs
         .filter(
@@ -2087,7 +2090,7 @@ const App = () => {
       return row;
     });
 
-    // ★修正: 選手ID（memberCode）順に並べ替え
+    // 選手ID順に並べ替え
     return data.sort((a, b) => a.id.localeCompare(b.id));
   }, [activeRunners, allLogs, targetPeriod, activeQuarters]);
 
@@ -2096,10 +2099,12 @@ const App = () => {
   }, [targetPeriod]);
 
   const reportMatrix = useMemo(() => {
-    // ★修正: 選手リストをID順にソートして使用する
-    const sortedRunners = [...activeRunners].sort((a, b) =>
-      (a.memberCode || a.id).localeCompare(b.memberCode || b.id),
-    );
+    // ★修正: マネージャーを除外し、選手ID順にソート
+    const sortedRunners = activeRunners
+      .filter((r) => r.role !== "manager")
+      .sort((a, b) =>
+        (a.memberCode || a.id).localeCompare(b.memberCode || b.id),
+      );
     // ソートしたリストからIDを抽出
     const runnerIds = sortedRunners.map((r) => r.id);
 
@@ -2160,7 +2165,11 @@ const App = () => {
     reportDates.forEach((date) => {
       data.push({ date: date.slice(5).replace("-", "/") });
     });
-    activeRunners.forEach((r) => {
+
+    // ★修正: マネージャーを除外
+    const athletes = activeRunners.filter((r) => r.role !== "manager");
+
+    athletes.forEach((r) => {
       let sum = 0;
       reportDates.forEach((date, idx) => {
         const dayLogs = allLogs.filter(
@@ -5706,8 +5715,10 @@ const App = () => {
                     ].sort();
 
                     return entranceYears.map((year, index) => {
+                      // ▼▼▼ 修正: ここに「マネージャー除外」を追加 ▼▼▼
                       const groupRunners = activeRunners
                         .filter((r) => (r.memberCode || r.id).startsWith(year))
+                        .filter((r) => r.role !== "manager") // ★この行を追加！
                         .sort((a, b) =>
                           (a.memberCode || a.id).localeCompare(
                             b.memberCode || b.id,
