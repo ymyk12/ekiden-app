@@ -82,10 +82,13 @@ import {
   HeartPulse,
   User,
   UserMinus,
+  Wind, // ←追加！
+  MapPin, // ★追加: 場所用
+  Dumbbell, // ★追加: 補強用
 } from "lucide-react";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "3.4.1";
+const APP_LAST_UPDATED = "4.0.0";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -434,6 +437,928 @@ const globalStyles = `
     scrollbar-width: none;  /* Firefox */
   }
 `;
+// --- Manager Dashboard Component (日誌一覧・入力切り替え機能付き) ---
+const ManagerDashboard = ({
+  profile,
+  allRunners,
+  allLogs,
+  teamLogs,
+  db,
+  appId,
+  setSuccessMsg,
+  handleLogout,
+}) => {
+  const [currentView, setCurrentView] = React.useState("check");
+  const [checkDate, setCheckDate] = React.useState(getTodayStr());
+
+  // ★追加: 日誌タブ内のモード管理 (list=一覧, edit=入力)
+  const [diaryMode, setDiaryMode] = React.useState("list");
+  // ★追加: 一覧表示用の対象月 (初期値は今月)
+  const [listMonth, setListMonth] = React.useState(new Date());
+
+  // 日誌入力用State
+  const [diaryInput, setDiaryInput] = React.useState({
+    weather: "晴れ",
+    temp: "",
+    wind: 3,
+    startTime: "16:30",
+    endTime: "18:30",
+    location: "1.53kmコース",
+    locationDetail: "",
+    reinforcements: [],
+    reinforcementDetail: "",
+    menu: "",
+    result: "",
+  });
+
+  const [selectedLog, setSelectedLog] = React.useState(null);
+  const [isDetailOpen, setIsDetailOpen] = React.useState(false);
+
+  const reinforcementOptions = [
+    "補強A",
+    "補強B",
+    "補強C",
+    "補強D",
+    "補強E",
+    "DM腹背",
+    "DM投げ",
+    "スタビライゼーション",
+    "その他",
+  ];
+
+  // データロード (編集画面用)
+  const existingLog = React.useMemo(() => {
+    return teamLogs.find((l) => l.date === checkDate);
+  }, [teamLogs, checkDate]);
+
+  React.useEffect(() => {
+    if (existingLog) {
+      setDiaryInput({
+        weather: existingLog.weather || "晴れ",
+        temp: existingLog.temp || "",
+        wind: existingLog.wind || 3,
+        startTime: existingLog.startTime || "",
+        endTime: existingLog.endTime || "",
+        location: existingLog.location || "1.53kmコース",
+        locationDetail: existingLog.locationDetail || "",
+        reinforcements: existingLog.reinforcements || [],
+        reinforcementDetail: existingLog.reinforcementDetail || "",
+        menu: existingLog.menu || "",
+        result: existingLog.result || "",
+      });
+    } else {
+      setDiaryInput({
+        weather: "晴れ",
+        temp: "",
+        wind: 3,
+        startTime: "16:30",
+        endTime: "18:30",
+        location: "1.53kmコース",
+        locationDetail: "",
+        reinforcements: [],
+        reinforcementDetail: "",
+        menu: "",
+        result: "",
+      });
+    }
+  }, [checkDate, existingLog]);
+
+  // 日付移動 (入力画面用)
+  const shiftDate = (days) => {
+    const d = new Date(checkDate);
+    d.setDate(d.getDate() + days);
+    setCheckDate(d.toLocaleDateString("sv-SE"));
+  };
+
+  // ★追加: 月移動 (一覧画面用)
+  const shiftMonth = (months) => {
+    const d = new Date(listMonth);
+    d.setMonth(d.getMonth() + months);
+    setListMonth(d);
+  };
+
+  // ★追加: 一覧表示用のデータフィルタリング
+  const monthlyLogs = React.useMemo(() => {
+    const year = listMonth.getFullYear();
+    const month = listMonth.getMonth() + 1;
+    const prefix = `${year}-${String(month).padStart(2, "0")}`;
+
+    return teamLogs
+      .filter((l) => l.date.startsWith(prefix))
+      .sort((a, b) => (a.date < b.date ? 1 : -1)); // 新しい順
+  }, [teamLogs, listMonth]);
+
+  const toggleReinforcement = (item) => {
+    setDiaryInput((prev) => {
+      const current = prev.reinforcements;
+      if (current.includes(item)) {
+        return { ...prev, reinforcements: current.filter((i) => i !== item) };
+      } else {
+        return { ...prev, reinforcements: [...current, item] };
+      }
+    });
+  };
+
+  // --- 計算ロジック ---
+  const submissionStatusList = React.useMemo(() => {
+    const targetDateStr = checkDate;
+    const targetMonthPrefix = targetDateStr.slice(0, 7);
+    return allRunners
+      .filter((runner) => runner.role !== "manager")
+      .map((runner) => {
+        const targetLog = allLogs.find(
+          (log) => log.runnerId === runner.id && log.date === targetDateStr,
+        );
+        const monthTotal = allLogs
+          .filter(
+            (l) =>
+              l.runnerId === runner.id && l.date.startsWith(targetMonthPrefix),
+          )
+          .reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+
+        let status = "unsubmitted";
+        let label = "未";
+        if (targetLog) {
+          const isRest = targetLog.category === "完全休養";
+          if (targetLog.distance > 0) {
+            status = "submitted";
+            label = `${targetLog.distance}km`;
+          } else if (isRest) {
+            status = "rest";
+            label = "休養";
+          } else {
+            status = "rest";
+            label = "0km";
+          }
+        }
+        return {
+          ...runner,
+          status,
+          label,
+          monthTotal: Math.round(monthTotal * 10) / 10,
+        };
+      });
+  }, [allRunners, allLogs, checkDate]);
+
+  const rankingData = React.useMemo(() => {
+    const targetMonthPrefix = checkDate.slice(0, 7);
+    return allRunners
+      .filter((runner) => runner.role !== "manager")
+      .map((r) => {
+        const total = allLogs
+          .filter(
+            (l) => l.runnerId === r.id && l.date.startsWith(targetMonthPrefix),
+          )
+          .reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+        return {
+          name: `${r.lastName} ${r.firstName}`,
+          id: r.id,
+          total: Math.round(total * 10) / 10,
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [allRunners, allLogs, checkDate]);
+
+  const teamActivityLogs = React.useMemo(() => {
+    const today = new Date();
+    const pastDate = new Date();
+    pastDate.setDate(today.getDate() - 6);
+    const minDateStr = pastDate.toLocaleDateString("sv-SE");
+    return allLogs
+      .filter(
+        (l) =>
+          l.date >= minDateStr &&
+          allRunners.some((r) => r.id === l.runnerId && r.role !== "manager"),
+      )
+      .sort((a, b) =>
+        a.date !== b.date
+          ? a.date < b.date
+            ? 1
+            : -1
+          : (b.createdAt || "").localeCompare(a.createdAt || ""),
+      )
+      .slice(0, 100);
+  }, [allLogs, allRunners]);
+
+  const saveDiary = async () => {
+    if (!diaryInput.menu) return alert("メニュー内容は必須です");
+    try {
+      await setDoc(
+        doc(db, "artifacts", appId, "public", "data", "team_logs", checkDate),
+        {
+          ...diaryInput,
+          date: checkDate,
+          updatedBy: `${profile.lastName} (MG)`,
+          updatedAt: new Date().toISOString(),
+        },
+      );
+      await setDoc(
+        doc(db, "artifacts", appId, "public", "data", "menus", checkDate),
+        { date: checkDate, text: diaryInput.menu },
+      );
+      setSuccessMsg(existingLog ? "日誌を更新しました" : "日誌を保存しました");
+      // 保存後は一覧に戻る？一旦そのまま編集画面に居続ける方が修正しやすいかも
+    } catch (e) {
+      alert("エラー: " + e.message);
+    }
+  };
+
+  const deleteDiary = async () => {
+    if (!window.confirm(`${checkDate} の日誌を削除しますか？`)) return;
+    try {
+      await deleteDoc(
+        doc(db, "artifacts", appId, "public", "data", "team_logs", checkDate),
+      );
+      await deleteDoc(
+        doc(db, "artifacts", appId, "public", "data", "menus", checkDate),
+      );
+      setSuccessMsg("日誌を削除しました");
+      setDiaryInput({
+        weather: "晴れ",
+        temp: "",
+        wind: 3,
+        startTime: "16:30",
+        endTime: "18:30",
+        location: "1.53kmコース",
+        locationDetail: "",
+        reinforcements: [],
+        reinforcementDetail: "",
+        menu: "",
+        result: "",
+      });
+      setDiaryMode("list"); // 削除したら一覧に戻る
+    } catch (e) {
+      alert("削除エラー: " + e.message);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <header className="bg-indigo-600 text-white pt-12 pb-8 px-6 rounded-b-[2.5rem] shadow-lg mb-6 relative overflow-hidden">
+        <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="relative z-10 flex justify-between items-end">
+          <div>
+            <p className="text-indigo-200 text-[10px] font-bold uppercase tracking-widest mb-1">
+              Manager Dashboard
+            </p>
+            <h1 className="text-2xl font-black tracking-tighter">
+              {profile.lastName} {profile.firstName}
+            </h1>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="bg-indigo-800/50 hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors"
+          >
+            <LogOut size={14} className="inline mr-1" /> ログアウト
+          </button>
+        </div>
+      </header>
+
+      <main className="px-5 max-w-md mx-auto space-y-6">
+        <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 flex">
+          {["check", "status", "diary"].map((view) => (
+            <button
+              key={view}
+              onClick={() => {
+                setCurrentView(view);
+                if (view === "diary") setDiaryMode("list"); // 日誌タブに行ったらまずは一覧を表示
+              }}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                currentView === view
+                  ? "bg-indigo-600 text-white shadow-md"
+                  : "text-slate-400 hover:bg-slate-50"
+              }`}
+            >
+              {view === "check" && <ClipboardList size={14} />}
+              {view === "status" && <BarChart2 size={14} />}
+              {view === "diary" && <BookOpen size={14} />}
+              {view === "check" ? "提出" : view === "status" ? "状況" : "日誌"}
+            </button>
+          ))}
+        </div>
+
+        {/* 3. 提出チェック */}
+        {currentView === "check" && (
+          <div className="bg-white p-5 rounded-[2rem] shadow-sm animate-in fade-in">
+            <div className="mb-6 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+              <div className="flex justify-between items-center mb-2 px-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Select Date
+                </span>
+                <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">
+                  {checkDate}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => shiftDate(-1)}
+                  className="p-3 bg-white rounded-xl shadow-sm border border-slate-200 text-slate-500 hover:bg-indigo-50"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <input
+                  type="date"
+                  className="flex-1 p-3 bg-white rounded-xl font-black text-slate-700 text-center outline-none border border-slate-200"
+                  value={checkDate}
+                  onChange={(e) => setCheckDate(e.target.value)}
+                />
+                <button
+                  onClick={() => shiftDate(1)}
+                  className="p-3 bg-white rounded-xl shadow-sm border border-slate-200 text-slate-500 hover:bg-indigo-50"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {submissionStatusList.map((r) => {
+                const targetLog = allLogs.find(
+                  (l) => l.runnerId === r.id && l.date === checkDate,
+                );
+                return (
+                  <div
+                    key={r.id}
+                    onClick={() => {
+                      if (targetLog) {
+                        setSelectedLog(targetLog);
+                        setIsDetailOpen(true);
+                      }
+                    }}
+                    className={`py-3 flex items-center justify-between px-2 rounded-xl transition-all ${targetLog ? "cursor-pointer hover:bg-indigo-50" : "opacity-70"}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white ${r.status === "unsubmitted" ? "bg-slate-200" : "bg-indigo-500"}`}
+                      >
+                        {r.lastName.charAt(0)}
+                      </div>
+                      <div>
+                        <span className="font-bold text-sm text-slate-700 block">
+                          {r.lastName} {r.firstName}
+                        </span>
+                        <div className="flex gap-2 items-center">
+                          <span className="text-[9px] text-slate-400 font-bold bg-slate-100 px-1.5 rounded">
+                            月間: {r.monthTotal}km
+                          </span>
+                          {targetLog && targetLog.pain >= 3 && (
+                            <span className="text-[9px] text-rose-500 font-bold flex items-center gap-0.5 animate-pulse">
+                              <HeartPulse size={9} /> Pain
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      {r.status === "unsubmitted" ? (
+                        <span className="text-[10px] font-bold text-rose-400 bg-rose-50 px-2 py-1 rounded-full border border-rose-100">
+                          未提出
+                        </span>
+                      ) : (
+                        <span
+                          className={`px-3 py-1 rounded-full text-[10px] font-black border flex items-center gap-1 ${r.status === "rest" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-blue-50 text-blue-600 border-blue-100"}`}
+                        >
+                          <Check size={10} /> {r.label}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 4. チーム状況 */}
+        {currentView === "status" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-black text-sm text-slate-700 flex items-center gap-2">
+                  <Trophy size={18} className="text-amber-400" /> 月間ランキング
+                </h3>
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">
+                  {new Date(checkDate).getMonth() + 1}月度
+                </span>
+              </div>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {rankingData.map((runner, idx) => (
+                  <div
+                    key={runner.id}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl relative overflow-hidden"
+                  >
+                    <div
+                      className={`absolute left-0 top-0 bottom-0 w-1 ${idx === 0 ? "bg-amber-400" : idx === 1 ? "bg-slate-300" : idx === 2 ? "bg-orange-300" : "bg-transparent"}`}
+                    ></div>
+                    <div className="flex items-center gap-3 pl-2">
+                      <span className="text-xs font-black text-slate-400 w-4">
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm font-bold text-slate-700">
+                        {runner.name}
+                      </span>
+                    </div>
+                    <span className="text-sm font-black text-slate-700">
+                      {runner.total}
+                      <span className="text-[10px] text-slate-400 ml-0.5">
+                        km
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm">
+              <h3 className="font-black text-sm text-slate-700 mb-4 flex items-center gap-2">
+                <Activity size={18} className="text-indigo-500" /> Team Activity
+              </h3>
+              <div className="space-y-4 pl-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {teamActivityLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-start gap-3 relative"
+                    onClick={() => {
+                      setSelectedLog(log);
+                      setIsDetailOpen(true);
+                    }}
+                  >
+                    <div className="absolute left-[19px] top-8 bottom-[-16px] w-0.5 bg-slate-100 last:hidden"></div>
+                    <div
+                      className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-sm z-10 ${log.category === "完全休養" ? "bg-emerald-400" : "bg-indigo-500"}`}
+                    >
+                      {log.runnerName ? log.runnerName.charAt(0) : "?"}
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-2xl w-full border border-slate-100 cursor-pointer hover:border-indigo-200">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400">
+                            {log.date.slice(5).replace("-", "/")}{" "}
+                            <span className="text-slate-300">·</span>{" "}
+                            {log.runnerName}
+                          </p>
+                          <p className="text-sm font-black mt-0.5 text-slate-700">
+                            {log.category === "完全休養"
+                              ? "完全休養"
+                              : `${log.distance}km`}
+                          </p>
+                        </div>
+                      </div>
+                      {log.menuDetail && (
+                        <p className="text-[10px] text-slate-500 mt-1.5 line-clamp-2">
+                          {log.menuDetail}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. 練習日誌 (一覧/入力切り替え版) */}
+        {currentView === "diary" && (
+          <div className="space-y-6">
+            {/* ▼ 一覧画面 (diaryMode === "list") ▼ */}
+            {diaryMode === "list" && (
+              <div className="animate-in fade-in space-y-4">
+                {/* ヘッダー＆月選択 */}
+                <div className="flex justify-between items-center bg-white p-4 rounded-[2rem] shadow-sm">
+                  <button
+                    onClick={() => shiftMonth(-1)}
+                    className="p-2 bg-slate-100 rounded-full hover:bg-indigo-50 text-slate-500"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
+                  <div className="text-center">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Target Month
+                    </p>
+                    <h2 className="text-lg font-black text-slate-800">
+                      {listMonth.getFullYear()}年 {listMonth.getMonth() + 1}月
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => shiftMonth(1)}
+                    className="p-2 bg-slate-100 rounded-full hover:bg-indigo-50 text-slate-500"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+
+                {/* 新規作成ボタン */}
+                <button
+                  onClick={() => {
+                    setCheckDate(getTodayStr()); // 新規は今日の日付で開始
+                    setDiaryMode("edit");
+                  }}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus size={20} /> 本日の練習を記録する
+                </button>
+
+                {/* 日誌一覧リスト */}
+                <div className="space-y-3">
+                  {monthlyLogs.length > 0 ? (
+                    monthlyLogs.map((log) => (
+                      <div
+                        key={log.date}
+                        onClick={() => {
+                          setCheckDate(log.date); // タップした日付で編集モードへ
+                          setDiaryMode("edit");
+                        }}
+                        className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center cursor-pointer active:scale-95 transition-all"
+                      >
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">
+                            {log.date.slice(5).replace("-", "/")} (
+                            {
+                              ["日", "月", "火", "水", "木", "金", "土"][
+                                new Date(log.date).getDay()
+                              ]
+                            }
+                            )
+                          </p>
+                          <h3 className="font-bold text-slate-700 text-sm line-clamp-1 mb-1">
+                            {log.menu || "メニューなし"}
+                          </h3>
+                          <div className="flex gap-2">
+                            <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold">
+                              {log.weather}
+                            </span>
+                            {log.location && (
+                              <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold flex items-center gap-0.5">
+                                <MapPin size={8} /> {log.location}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-slate-300">
+                          <ChevronRight size={18} />
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-10 text-slate-300 font-bold text-sm">
+                      この月の日誌はありません
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ▼ 入力画面 (diaryMode === "edit") ▼ */}
+            {diaryMode === "edit" && (
+              <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-5 animate-in slide-in-from-right-10 relative">
+                {/* 入力画面ヘッダー */}
+                <div className="flex justify-between items-center mb-2">
+                  <button
+                    onClick={() => setDiaryMode("list")}
+                    className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors"
+                  >
+                    <ArrowLeft size={16} /> 一覧に戻る
+                  </button>
+                  {existingLog && (
+                    <button
+                      onClick={deleteDiary}
+                      className="text-rose-400 hover:text-rose-600 bg-rose-50 p-2 rounded-xl transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpen size={18} className="text-indigo-500" />
+                  <h2 className="text-sm font-black text-slate-700">
+                    練習日誌の記録
+                  </h2>
+                </div>
+
+                {/* 日付選択 */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none border-2 border-transparent focus:border-indigo-500"
+                    value={checkDate}
+                    onChange={(e) => setCheckDate(e.target.value)}
+                  />
+                </div>
+
+                {/* 環境情報 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">
+                      Weather
+                    </label>
+                    <select
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-500"
+                      value={diaryInput.weather}
+                      onChange={(e) =>
+                        setDiaryInput({
+                          ...diaryInput,
+                          weather: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="晴れ">☀ 晴れ</option>
+                      <option value="曇り">☁ 曇り</option>
+                      <option value="雨">☂ 雨</option>
+                      <option value="雪">⛄ 雪</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">
+                      Temp (℃)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="25"
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-500"
+                      value={diaryInput.temp}
+                      onChange={(e) =>
+                        setDiaryInput({ ...diaryInput, temp: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* 風の強さ */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1 uppercase">
+                      <Wind size={12} /> Wind Strength
+                    </label>
+                    <span className="text-xs font-black text-indigo-600">
+                      {diaryInput.wind === 1
+                        ? "1 (無風)"
+                        : diaryInput.wind === 5
+                          ? "5 (強風)"
+                          : diaryInput.wind}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    step="1"
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                    value={diaryInput.wind}
+                    onChange={(e) =>
+                      setDiaryInput({
+                        ...diaryInput,
+                        wind: parseInt(e.target.value),
+                      })
+                    }
+                  />
+                  <div className="flex justify-between px-1">
+                    <span className="text-[8px] text-slate-400">弱</span>
+                    <span className="text-[8px] text-slate-400">強</span>
+                  </div>
+                </div>
+
+                {/* 時間 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">
+                      Start
+                    </label>
+                    <input
+                      type="time"
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-500"
+                      value={diaryInput.startTime}
+                      onChange={(e) =>
+                        setDiaryInput({
+                          ...diaryInput,
+                          startTime: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">
+                      End
+                    </label>
+                    <input
+                      type="time"
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-500"
+                      value={diaryInput.endTime}
+                      onChange={(e) =>
+                        setDiaryInput({
+                          ...diaryInput,
+                          endTime: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* 場所 */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
+                    <MapPin size={12} /> Location
+                  </label>
+                  <select
+                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-500"
+                    value={diaryInput.location}
+                    onChange={(e) =>
+                      setDiaryInput({ ...diaryInput, location: e.target.value })
+                    }
+                  >
+                    <option value="1.53kmコース">1.53kmコース</option>
+                    <option value="1.1kmコース">1.1kmコース</option>
+                    <option value="河川敷">河川敷</option>
+                    <option value="防災公園">防災公園</option>
+                    <option value="競技場">競技場 (詳細記入)</option>
+                    <option value="その他">その他 (詳細記入)</option>
+                  </select>
+                  {(diaryInput.location === "競技場" ||
+                    diaryInput.location === "その他") && (
+                    <input
+                      type="text"
+                      placeholder="詳細を入力 (例: 市営競技場)"
+                      className="w-full p-3 bg-white border-2 border-indigo-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:border-indigo-500 animate-in fade-in"
+                      value={diaryInput.locationDetail}
+                      onChange={(e) =>
+                        setDiaryInput({
+                          ...diaryInput,
+                          locationDetail: e.target.value,
+                        })
+                      }
+                    />
+                  )}
+                </div>
+
+                {/* メニュー */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">
+                    Menu Plan
+                  </label>
+                  <textarea
+                    className="w-full p-4 bg-slate-50 rounded-xl h-32 font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-500 text-sm resize-none"
+                    placeholder="本日の練習メニューを入力..."
+                    value={diaryInput.menu}
+                    onChange={(e) =>
+                      setDiaryInput({ ...diaryInput, menu: e.target.value })
+                    }
+                  />
+                </div>
+
+                {/* 補強 */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
+                    <Dumbbell size={12} /> Reinforcement
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {reinforcementOptions.map((option) => (
+                      <button
+                        key={option}
+                        onClick={() => toggleReinforcement(option)}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                          diaryInput.reinforcements.includes(option)
+                            ? "bg-indigo-500 text-white border-indigo-500 shadow-sm"
+                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                  {diaryInput.reinforcements.includes("その他") && (
+                    <input
+                      type="text"
+                      placeholder="その他の補強内容..."
+                      className="w-full p-3 bg-white border-2 border-indigo-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:border-indigo-500 mt-2 animate-in fade-in"
+                      value={diaryInput.reinforcementDetail}
+                      onChange={(e) =>
+                        setDiaryInput({
+                          ...diaryInput,
+                          reinforcementDetail: e.target.value,
+                        })
+                      }
+                    />
+                  )}
+                </div>
+
+                {/* 結果・メモ */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">
+                    Results / Notes
+                  </label>
+                  <textarea
+                    className="w-full p-4 bg-indigo-50 rounded-xl h-32 font-bold text-indigo-900 outline-none focus:ring-2 ring-indigo-500 text-sm resize-none"
+                    placeholder="練習の結果、雰囲気、ポイント練習のタイム設定など..."
+                    value={diaryInput.result}
+                    onChange={(e) =>
+                      setDiaryInput({ ...diaryInput, result: e.target.value })
+                    }
+                  />
+                </div>
+
+                <button
+                  onClick={saveDiary}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <Save size={18} />{" "}
+                  {existingLog ? "日誌を更新" : "日誌を保存・公開"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* 詳細モーダル (既存) */}
+      {isDetailOpen && selectedLog && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setIsDetailOpen(false)}
+        >
+          <div
+            className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl space-y-4 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Daily Report ({selectedLog.date})
+                </p>
+                <h3 className="text-xl font-black text-slate-800">
+                  {selectedLog.runnerName}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsDetailOpen(false)}
+                className="bg-slate-100 p-2 rounded-full text-slate-400 hover:bg-slate-200"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex-1 bg-indigo-50 p-3 rounded-2xl text-center">
+                <p className="text-[10px] font-bold text-indigo-400 uppercase">
+                  Distance
+                </p>
+                <p className="text-2xl font-black text-indigo-600">
+                  {selectedLog.distance}
+                  <span className="text-sm ml-1">km</span>
+                </p>
+              </div>
+              <div className="flex-1 bg-slate-50 p-3 rounded-2xl text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">
+                  Type
+                </p>
+                <p className="text-lg font-black text-slate-600">
+                  {selectedLog.category}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div
+                className={`p-3 rounded-2xl border flex flex-col items-center ${selectedLog.pain >= 3 ? "bg-rose-50 border-rose-200" : "bg-white border-slate-100"}`}
+              >
+                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  Pain
+                </span>
+                <span
+                  className={`text-xl font-black ${selectedLog.pain >= 3 ? "text-rose-500" : "text-slate-700"}`}
+                >
+                  {selectedLog.pain}{" "}
+                  <span className="text-xs text-slate-400">/5</span>
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl border border-slate-100 bg-white flex flex-col items-center">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  RPE
+                </span>
+                <span className="text-xl font-black text-slate-700">
+                  {selectedLog.rpe}{" "}
+                  <span className="text-xs text-slate-400">/10</span>
+                </span>
+              </div>
+            </div>
+            <div className="bg-slate-50 p-4 rounded-2xl">
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
+                Comment / Menu
+              </p>
+              <p className="text-sm font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">
+                {selectedLog.menuDetail || "（コメントなし）"}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsDetailOpen(false)}
+              className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold text-xs shadow-lg"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const App = () => {
   // 1. State Hooks
@@ -443,7 +1368,9 @@ const App = () => {
   const [allRunners, setAllRunners] = useState([]);
   const [allLogs, setAllLogs] = useState([]);
   const [practiceMenus, setPracticeMenus] = useState([]);
+  // existing states...
   const [allFeedbacks, setAllFeedbacks] = useState([]);
+  const [teamLogs, setTeamLogs] = useState([]); // ★追加: チーム日誌データ
 
   const [appSettings, setAppSettings] = useState({
     coachPass: "1234",
@@ -468,6 +1395,8 @@ const App = () => {
     onConfirm: null,
   });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // ★追加: 日誌の開閉状態管理用
+  const [expandedDiaryId, setExpandedDiaryId] = useState(null);
 
   // Coach specific states
   const [selectedRunner, setSelectedRunner] = useState(null);
@@ -507,6 +1436,7 @@ const App = () => {
     memberCode: "", // ★追加：選手ID（例：26001）
     teamPass: "",
     personalPin: "",
+    isManager: false, // ★追加: マネージャーフラグ
   });
 
   const [menuInput, setMenuInput] = useState({ date: getTodayStr(), text: "" });
@@ -702,6 +1632,20 @@ const App = () => {
       setAllFeedbacks(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
+    // ★追加: チーム日誌の読み込み
+    const teamLogsRef = collection(
+      db,
+      "artifacts",
+      appId,
+      "public",
+      "data",
+      "team_logs",
+    );
+    const unsubTeamLogs = onSnapshot(teamLogsRef, (snap) => {
+      // 日付(id)をキーにして配列化
+      setTeamLogs(snap.docs.map((d) => ({ date: d.id, ...d.data() })));
+    });
+
     return () => {
       unsubRunners();
       unsubLogs();
@@ -709,6 +1653,7 @@ const App = () => {
       unsubMenus();
       unsubFeedbacks();
       clearTimeout(timeout);
+      unsubTeamLogs();
     };
   }, [user, role]);
   // ★追加：データが更新されたら自分のプロフィールと役割を同期する
@@ -1385,6 +2330,7 @@ const App = () => {
       setErrorMsg("名前と5桁の選手番号を入力してください。");
       return;
     }
+
     if (formData.teamPass !== appSettings.teamPass) {
       setErrorMsg("チームパスコードが間違っています。");
       return;
@@ -1418,14 +2364,30 @@ const App = () => {
         return;
       }
 
+      // ★追加修正：IDは異なるが、memberCodeとして既に使われているか念のためチェック
+      const q = query(runnersRef, where("memberCode", "==", targetId));
+      const qSnap = await getDocs(q);
+
+      if (!qSnap.empty) {
+        setErrorMsg(
+          `選手番号 ${targetId} は既に使用されています（旧データ等）。管理者に連絡してください。`,
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
       // 新規保存
       const newProfile = {
         id: targetId, // IDを明示的に保存
         memberCode: targetId,
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
+        // ★追加: 役割を保存
+        role: formData.isManager ? "manager" : "athlete",
+        // マネージャーなら目標は不要ですが、エラー防止のため0を入れておく
+
         goalMonthly: 0,
-        goalPeriod: 200,
+        goalPeriod: 0,
         status: "active",
         pin: formData.personalPin,
         registeredAt: new Date().toISOString(),
@@ -2195,6 +3157,7 @@ const App = () => {
   };
 
   // 5. Render Logic
+  // ① ロード中画面
   if (loading)
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50">
@@ -2202,6 +3165,7 @@ const App = () => {
       </div>
     );
 
+  // ② 未ログイン画面
   if (!role) {
     // ... existing login logic ...
     return (
@@ -2275,7 +3239,7 @@ const App = () => {
     );
   }
 
-  // ... (auth/register screens remain the same) ...
+  // ③ コーチ認証・新規登録・ログイン入力画面
   if (role === "coach-auth") {
     // ... existing coach auth ...
     return (
@@ -2305,7 +3269,6 @@ const App = () => {
       </div>
     );
   }
-
   if (role === "registering") {
     const isReady =
       formData.lastName &&
@@ -2313,7 +3276,6 @@ const App = () => {
       formData.memberCode &&
       formData.teamPass &&
       formData.personalPin.length === 4;
-
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="w-full max-w-sm bg-white p-10 rounded-[3rem] shadow-2xl space-y-6">
@@ -2346,9 +3308,29 @@ const App = () => {
                 />
               </div>
             </div>
+            {/* マネージャー選択チェックボックス */}
+            <div
+              className="flex items-center gap-3 bg-slate-100 p-4 rounded-2xl cursor-pointer"
+              onClick={() =>
+                setFormData({ ...formData, isManager: !formData.isManager })
+              }
+            >
+              <div
+                className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${formData.isManager ? "bg-blue-600 border-blue-600" : "border-slate-300 bg-white"}`}
+              >
+                {formData.isManager && (
+                  <Check size={16} className="text-white" />
+                )}
+              </div>
+              <div>
+                <p className="font-bold text-slate-700 text-sm">
+                  マネージャーとして登録
+                </p>
+              </div>
+            </div>
             {/* 選手番号（ID）入力欄 */}
             <div className="space-y-1">
-              {/* ★ここ！長い説明を外に出しました */}
+              {/* 長い説明を外に出しました */}
               <p className="text-[10px] font-bold text-slate-500 ml-1">
                 個人ID（kswc〇〇.△△△の数字5ｹﾀ）
               </p>
@@ -2544,7 +3526,28 @@ const App = () => {
     );
   }
 
-  // --- RUNNER VIEW OR PREVIEW ---
+  // 「役割がrunner(選手枠)」かつ「プロフィールが存在」し、かつ「プロフィールのroleが "manager"」の場合
+  if (role === "runner" && profile && profile.role === "manager") {
+    return (
+      <ManagerDashboard
+        // マネージャー画面に必要なデータを「小包」のように渡します
+        profile={profile} // 誰がログインしているか
+        allRunners={activeRunners} // 選手全員のリスト
+        allLogs={allLogs} // 練習日誌データ全部
+        teamLogs={teamLogs}
+        practiceMenus={practiceMenus} // 練習メニュー
+        handleLogout={handleLogout} // ログアウトする機能
+        appId={appId} // ID
+        db={db} // データベースを使う道具
+        setSuccessMsg={setSuccessMsg} // 成功メッセージを出す道具
+        menuInput={menuInput} // メニュー入力用ステート
+        setMenuInput={setMenuInput} // メニュー入力用セット関数
+      />
+    );
+  }
+
+  // ④ 既存の選手・監督画面
+  // マネージャーは上のif文で捕まえられるので、ここには選手と監督だけが流れてきます
   if (
     (role === "runner" && profile) ||
     (role === "coach" && previewRunner) ||
@@ -2901,20 +3904,113 @@ const App = () => {
                 {/* ★ここに書いてあった Q1-Q4 のコードを削除しました★ */}
               </div>
 
-              {/* ... today's menu ... */}
-              <div className="bg-slate-900 p-7 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-                <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <Calendar size={12} /> Today's Menu
-                </p>
-                {practiceMenus.find((m) => m.date === getTodayStr()) ? (
-                  <p className="font-bold text-lg leading-snug">
-                    {practiceMenus.find((m) => m.date === getTodayStr()).text}
-                  </p>
-                ) : (
-                  <p className="text-slate-500 italic text-sm">
-                    指示はありません
-                  </p>
-                )}
+              {/* --- 練習日誌・メニュー表示カード (Runner View) --- */}
+              <div className="bg-slate-900 p-7 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden mb-6">
+                {/* 背景装飾 */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl -mr-10 -mt-10"></div>
+
+                {(() => {
+                  const todayStr = getTodayStr();
+                  // 1. 今日のチーム日誌(teamLogs)があるか探す
+                  const diary = teamLogs.find((l) => l.date === todayStr);
+                  // 2. なければ従来のメニュー(practiceMenus)を探す
+                  const simpleMenu = practiceMenus.find(
+                    (m) => m.date === todayStr,
+                  );
+
+                  if (diary) {
+                    return (
+                      <div className="relative z-10 space-y-4">
+                        {/* 1. 天気・時間 */}
+                        <div className="flex justify-between items-start">
+                          <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                            <BookOpen size={12} /> Team Practice Diary
+                          </p>
+                          <div className="flex gap-2">
+                            <span className="text-[10px] font-bold bg-white/10 px-2 py-1 rounded-lg border border-white/10">
+                              {diary.weather}{" "}
+                              {diary.temp ? `${diary.temp}℃` : ""}
+                            </span>
+                            {diary.startTime && (
+                              <span className="text-[10px] font-bold bg-white/10 px-2 py-1 rounded-lg border border-white/10">
+                                {diary.startTime} - {diary.endTime}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* ★追加: 場所の表示 */}
+                        {diary.location && (
+                          <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                            <MapPin size={14} className="text-blue-400" />
+                            {diary.location}
+                            {/* 詳細がある場合はカッコ書きで追加 */}
+                            {(diary.location === "競技場" ||
+                              diary.location === "その他") &&
+                              diary.locationDetail && (
+                                <span className="text-slate-400 ml-1">
+                                  ({diary.locationDetail})
+                                </span>
+                              )}
+                          </div>
+                        )}
+
+                        {/* 2. メニュー */}
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 mb-1">
+                            MENU
+                          </p>
+                          <p className="font-bold text-lg leading-snug whitespace-pre-wrap">
+                            {diary.menu}
+                          </p>
+                        </div>
+
+                        {/* ★追加: 補強メニューの表示 */}
+                        {diary.reinforcements &&
+                          diary.reinforcements.length > 0 && (
+                            <div className="bg-blue-900/30 p-3 rounded-xl border border-blue-500/20">
+                              <p className="text-[10px] font-bold text-blue-300 mb-2 flex items-center gap-1">
+                                <Dumbbell size={10} /> REINFORCEMENT
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {diary.reinforcements.map((item, i) => (
+                                  <span
+                                    key={i}
+                                    className="text-[10px] font-bold bg-blue-500/20 text-blue-100 px-2 py-1 rounded"
+                                  >
+                                    {item}
+                                  </span>
+                                ))}
+                                {/* その他詳細の表示 */}
+                                {diary.reinforcements.includes("その他") &&
+                                  diary.reinforcementDetail && (
+                                    <span className="text-[10px] font-bold text-slate-400 self-center">
+                                      : {diary.reinforcementDetail}
+                                    </span>
+                                  )}
+                              </div>
+                            </div>
+                          )}
+
+                        {/* 3. 結果・メモ */}
+                        {diary.result && (
+                          <div className="bg-white/10 p-3 rounded-xl border border-white/10">
+                            <p className="text-[10px] font-bold text-blue-300 mb-1 flex items-center gap-1">
+                              <Activity size={10} /> RESULT / NOTES
+                            </p>
+                            <p className="text-xs font-bold leading-relaxed text-slate-200 whitespace-pre-wrap">
+                              {diary.result}
+                            </p>
+                          </div>
+                        )}
+
+                        <p className="text-[9px] text-slate-500 text-right">
+                          Updated by: {diary.updatedBy}
+                        </p>
+                      </div>
+                    );
+                  }
+                })()}
               </div>
 
               {/* ▼▼▼ 追加: チーム活動ログ (直近7日間) ▼▼▼ */}
@@ -3090,7 +4186,7 @@ const App = () => {
                     Menu Detail
                   </label>
                   <textarea
-                    placeholder="メニューの内容、タイム、感想など"
+                    placeholder="メニューの内容、タイムなど"
                     className="w-full p-4 bg-slate-50 rounded-3xl font-bold text-slate-600 outline-none focus:ring-2 ring-blue-500 min-h-[100px] text-sm resize-none"
                     value={formData.menuDetail}
                     onChange={(e) =>
@@ -3119,7 +4215,11 @@ const App = () => {
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            rpe: parseInt(e.target.value),
+                            // 空文字ならそのまま、数値があれば整数化
+                            rpe:
+                              e.target.value === ""
+                                ? ""
+                                : parseInt(e.target.value, 10),
                           })
                         }
                       />
@@ -3145,7 +4245,11 @@ const App = () => {
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            pain: parseInt(e.target.value),
+                            // 空文字ならそのまま、数値があれば整数化
+                            pain:
+                              e.target.value === ""
+                                ? ""
+                                : parseInt(e.target.value, 10),
                           })
                         }
                       />
@@ -3326,7 +4430,188 @@ const App = () => {
               </div>
             </div>
           )}
+          {/* ▼▼▼ 追加: 選手用DIARY一覧画面 ▼▼▼ */}
+          {view === "diary" && (
+            <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in pb-24">
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  onClick={() => setView("menu")}
+                  className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
+                  TEAM DIARY
+                </h3>
+                <div className="w-9" /> {/* レイアウト調整用ダミー */}
+              </div>
 
+              <div className="text-center">
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                  Target: {targetPeriod.name}
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {(() => {
+                  // 1. 選択期間内の日誌を抽出してソート
+                  const start = new Date(targetPeriod.start);
+                  const end = new Date(targetPeriod.end);
+                  // 終了日の23:59まで含める
+                  end.setHours(23, 59, 59, 999);
+
+                  const filteredLogs = teamLogs
+                    .filter((l) => {
+                      const d = new Date(l.date);
+                      return d >= start && d <= end;
+                    })
+                    .sort((a, b) => (a.date < b.date ? 1 : -1)); // 新しい順
+
+                  if (filteredLogs.length === 0) {
+                    return (
+                      <div className="text-center py-10">
+                        <p className="text-xs font-bold text-slate-300">
+                          この期間の日誌はありません
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return filteredLogs.map((log) => {
+                    const isExpanded = expandedDiaryId === log.date;
+                    return (
+                      <div
+                        key={log.date}
+                        onClick={() =>
+                          setExpandedDiaryId(isExpanded ? null : log.date)
+                        }
+                        className={`rounded-2xl border transition-all cursor-pointer overflow-hidden ${
+                          isExpanded
+                            ? "bg-slate-50 border-blue-200 shadow-md"
+                            : "bg-white border-slate-100 hover:border-blue-100"
+                        }`}
+                      >
+                        {/* カードヘッダー部分 */}
+                        <div className="p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
+                                {log.date.slice(5).replace("-", "/")}
+                                <span className="text-slate-300">
+                                  (
+                                  {
+                                    ["日", "月", "火", "水", "木", "金", "土"][
+                                      new Date(log.date).getDay()
+                                    ]
+                                  }
+                                  )
+                                </span>
+                              </p>
+                            </div>
+                            <div className="flex gap-1">
+                              <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded">
+                                {log.weather}
+                              </span>
+                              {log.location && (
+                                <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                  <MapPin size={8} /> {log.location}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* メニュー（未展開時は1行、展開時は全文） */}
+                          <div>
+                            <p
+                              className={`font-bold text-slate-700 text-sm leading-relaxed ${isExpanded ? "" : "line-clamp-1"}`}
+                            >
+                              {log.menu}
+                            </p>
+                          </div>
+
+                          {/* 展開ヒント */}
+                          {!isExpanded && (
+                            <div className="flex justify-center mt-2">
+                              <ChevronRight
+                                size={16}
+                                className="text-slate-300 rotate-90"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 詳細部分（アコーディオン） */}
+                        {isExpanded && (
+                          <div className="px-4 pb-4 space-y-4 border-t border-slate-200/50 pt-4 animate-in slide-in-from-top-2">
+                            {/* 詳細情報グリッド */}
+                            <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
+                              <div className="bg-white p-2 rounded-lg border border-slate-100">
+                                <span className="text-indigo-400 block text-[9px] uppercase">
+                                  Time
+                                </span>
+                                {log.startTime
+                                  ? `${log.startTime} - ${log.endTime}`
+                                  : "-"}
+                              </div>
+                              <div className="bg-white p-2 rounded-lg border border-slate-100">
+                                <span className="text-indigo-400 block text-[9px] uppercase">
+                                  Cond
+                                </span>
+                                {log.temp ? `${log.temp}℃` : "-"} / Wind:{" "}
+                                {log.wind || "-"}
+                              </div>
+                            </div>
+
+                            {/* 補強 */}
+                            {log.reinforcements &&
+                              log.reinforcements.length > 0 && (
+                                <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                                  <p className="text-[9px] font-black text-blue-400 uppercase mb-2 flex items-center gap-1">
+                                    <Dumbbell size={10} /> Reinforcement
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {log.reinforcements.map((item, i) => (
+                                      <span
+                                        key={i}
+                                        className="text-[10px] font-bold bg-white text-slate-600 px-2 py-1 rounded border border-blue-100"
+                                      >
+                                        {item}
+                                      </span>
+                                    ))}
+                                    {log.reinforcementDetail && (
+                                      <span className="text-[10px] font-bold text-slate-400 self-center">
+                                        ({log.reinforcementDetail})
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                            {/* 結果・メモ */}
+                            {log.result && (
+                              <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+                                <p className="text-[9px] font-black text-indigo-400 uppercase mb-1 flex items-center gap-1">
+                                  <Activity size={10} /> Result / Notes
+                                </p>
+                                <p className="text-xs font-bold leading-relaxed text-slate-700 whitespace-pre-wrap">
+                                  {log.result}
+                                </p>
+                              </div>
+                            )}
+
+                            <p className="text-[9px] text-right text-slate-300">
+                              Updated by: {log.updatedBy}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
+          {/* ▲▲▲ 追加ここまで ▲▲▲ */}
           {/* ▼▼▼ 修正: 振り返り画面 (Review View) ▼▼▼ */}
           {view === "review" && (
             <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in">
@@ -3880,32 +5165,32 @@ const App = () => {
 
         {/* ▼▼▼ 下部ナビゲーションバー（ここから書き換え） ▼▼▼ */}
         <nav className="fixed bottom-0 left-0 right-0 z-40 max-w-md mx-auto pointer-events-none">
-          <div className="bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-8 pt-2 px-6 rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] flex justify-between items-end h-24 pointer-events-auto">
+          <div className="bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-8 pt-2 px-4 rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] flex justify-between items-end h-24 pointer-events-auto">
             {/* 1. Home */}
             <button
               onClick={() => setView("menu")}
-              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-14 ${
+              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${
                 view === "menu"
                   ? "text-blue-600 -translate-y-1"
                   : "text-slate-300 hover:text-slate-400"
               }`}
             >
-              <Home size={24} strokeWidth={view === "menu" ? 3 : 2} />
+              <Home size={22} strokeWidth={view === "menu" ? 3 : 2} />
               <span className="text-[8px] font-black uppercase tracking-widest">
                 Home
               </span>
             </button>
 
-            {/* 2. Team (New!) */}
+            {/* 2. Team */}
             <button
               onClick={() => setView("team_status")}
-              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-14 ${
+              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${
                 view === "team_status"
                   ? "text-indigo-500 -translate-y-1"
                   : "text-slate-300 hover:text-slate-400"
               }`}
             >
-              <Users size={24} strokeWidth={view === "team_status" ? 3 : 2} />
+              <Users size={22} strokeWidth={view === "team_status" ? 3 : 2} />
               <span className="text-[8px] font-black uppercase tracking-widest">
                 Team
               </span>
@@ -3918,27 +5203,43 @@ const App = () => {
                   resetForm();
                   setView("entry");
                 }}
-                className="bg-blue-600 text-white p-4 rounded-full shadow-xl shadow-blue-200 active:scale-95 transition-all -mb-8 border-[6px] border-slate-50 group hover:bg-blue-700"
+                className="bg-blue-600 text-white p-3.5 rounded-full shadow-xl shadow-blue-200 active:scale-95 transition-all -mb-8 border-[6px] border-slate-50 group hover:bg-blue-700"
               >
                 <Plus
-                  size={30}
+                  size={28}
                   strokeWidth={3}
                   className="group-hover:rotate-90 transition-transform duration-300"
                 />
               </button>
             </div>
 
-            {/* 4. Review */}
+            {/* 4. Diary (New!) */}
+            <button
+              onClick={() => setView("diary")}
+              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${
+                view === "diary"
+                  ? "text-orange-500 -translate-y-1"
+                  : "text-slate-300 hover:text-slate-400"
+              }`}
+            >
+              {/* アイコンは BookOpen を使用 */}
+              <BookOpen size={22} strokeWidth={view === "diary" ? 3 : 2} />
+              <span className="text-[8px] font-black uppercase tracking-widest">
+                Diary
+              </span>
+            </button>
+
+            {/* 5. Review */}
             <button
               onClick={() => setView("review")}
-              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-14 ${
+              className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${
                 view === "review"
                   ? "text-emerald-500 -translate-y-1"
                   : "text-slate-300 hover:text-slate-400"
               }`}
             >
               <MessageSquare
-                size={24}
+                size={22}
                 strokeWidth={view === "review" ? 3 : 2}
               />
               <span className="text-[8px] font-black uppercase tracking-widest">
@@ -5769,7 +7070,6 @@ const App = () => {
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            // 空文字の時はそのまま、それ以外は数値化
                             rpe:
                               e.target.value === ""
                                 ? ""
@@ -5791,8 +7091,7 @@ const App = () => {
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            // 空文字の時はそのまま、それ以外は数値化
-                            rpe:
+                            pain:
                               e.target.value === ""
                                 ? ""
                                 : parseInt(e.target.value, 10),
