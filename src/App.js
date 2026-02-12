@@ -458,12 +458,12 @@ const ManagerDashboard = ({
 
   // 日誌入力用State
   const [diaryInput, setDiaryInput] = React.useState({
-    weather: "晴れ",
+    weather: "",
     temp: "",
-    wind: 3,
-    startTime: "16:30",
+    wind: 1,
+    startTime: "15:50",
     endTime: "18:30",
-    location: "1.53kmコース",
+    location: "",
     locationDetail: "",
     reinforcements: [],
     reinforcementDetail: "",
@@ -6226,63 +6226,138 @@ const App = () => {
           )}
 
           {view === "coach-roster" && (
-            // ... (Roster view remains same) ...
             <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in">
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
                 Team Roster
               </h3>
-              <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
-                  <UserCheck size={16} /> Active Members ({activeRunners.length}
-                  )
-                </h4>
-                <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">
-                  {activeRunners.map((r) => (
-                    <div
-                      key={r.id}
-                      className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2"
-                      onClick={() => handleCoachEditRunner(r)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">
-                          {r.lastName.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800">
-                            {r.lastName} {r.firstName}
-                          </p>
-                          {/* ▼ 追加: IDとPINを並べて表示 */}
-                          <div className="flex items-center gap-2 mt-0.5 mb-0.5">
-                            <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                              ID: {r.memberCode || "-"}
-                            </span>
-                            <span className="text-[10px] text-slate-300 font-mono">
-                              PIN: {r.pin || "----"}
-                            </span>
+
+              {/* ▼▼▼ データを選手とマネージャーに分離 ▼▼▼ */}
+              {(() => {
+                const athletes = activeRunners.filter(
+                  (r) => r.role !== "manager",
+                );
+                const managers = activeRunners.filter(
+                  (r) => r.role === "manager",
+                );
+
+                return (
+                  <>
+                    {/* --- 1. 選手リスト --- */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
+                        <UserCheck size={16} /> Athletes ({athletes.length})
+                      </h4>
+                      <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">
+                        {athletes.map((r) => (
+                          <div
+                            key={r.id}
+                            className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2"
+                            onClick={() => handleCoachEditRunner(r)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">
+                                {r.lastName.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-800">
+                                  {r.lastName} {r.firstName}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5 mb-0.5">
+                                  <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    ID: {r.memberCode || "-"}
+                                  </span>
+                                  <span className="text-[10px] text-slate-300 font-mono">
+                                    PIN: {r.pin || "----"}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-bold">
+                                  Goal: {r.goalMonthly}km/mo
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartPreview(r);
+                                }}
+                                className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors"
+                                title="本人視点でプレビュー"
+                              >
+                                <Eye size={18} />
+                              </button>
+                              <ChevronRight
+                                className="text-slate-300"
+                                size={20}
+                              />
+                            </div>
                           </div>
-                          {/* ▲ ここまで */}
-                          <p className="text-[10px] text-slate-400 font-bold">
-                            Goal: {r.goalMonthly}km/mo
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStartPreview(r);
-                          }}
-                          className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors"
-                          title="本人視点でプレビュー"
-                        >
-                          <Eye size={18} />
-                        </button>
-                        <ChevronRight className="text-slate-300" size={20} />
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+
+                    {/* --- 2. マネージャーリスト (存在する場合のみ表示) --- */}
+                    {managers.length > 0 && (
+                      <div className="space-y-4 pt-6 border-t border-slate-100">
+                        <h4 className="text-xs font-black uppercase text-indigo-600 flex items-center gap-2">
+                          <ClipboardList size={16} /> Managers (
+                          {managers.length})
+                        </h4>
+                        <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">
+                          {managers.map((r) => (
+                            <div
+                              key={r.id}
+                              className="py-4 flex items-center justify-between group cursor-pointer hover:bg-indigo-50/50 transition-colors rounded-xl px-2"
+                              onClick={() => handleCoachEditRunner(r)}
+                            >
+                              <div className="flex items-center gap-3">
+                                {/* マネージャーはインディゴ色 */}
+                                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center font-black text-indigo-600">
+                                  {r.lastName.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-slate-800">
+                                    {r.lastName} {r.firstName}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-0.5 mb-0.5">
+                                    <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                      ID: {r.memberCode || "-"}
+                                    </span>
+                                    <span className="text-[10px] text-slate-300 font-mono">
+                                      PIN: {r.pin || "----"}
+                                    </span>
+                                  </div>
+                                  <span className="text-[9px] font-black text-white bg-indigo-400 px-2 py-0.5 rounded-full">
+                                    MANAGER
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStartPreview(r);
+                                  }}
+                                  className="text-slate-400 hover:text-indigo-600 p-2 rounded-lg bg-slate-50 transition-colors"
+                                  title="ダッシュボードをプレビュー"
+                                >
+                                  <Eye size={18} />
+                                </button>
+                                <ChevronRight
+                                  className="text-slate-300"
+                                  size={20}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* --- 3. 引退/アーカイブ (既存のまま) --- */}
               <div className="space-y-4 pt-8 border-t border-slate-100">
                 <h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
                   <Archive size={16} /> Retired / Inactive
@@ -6381,6 +6456,13 @@ const App = () => {
                   )}
                 </div>
               </div>
+
+              <button
+                onClick={() => setView("coach-stats")}
+                className="w-full py-3 text-slate-400 font-bold text-xs uppercase tracking-widest"
+              >
+                ホームに戻る
+              </button>
             </div>
           )}
 
