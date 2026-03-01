@@ -480,7 +480,113 @@ const AthleteView = (props) => {
                   {targetPeriod.name}
                 </p>
               </div>
-              {/* ★ここに書いてあった Q1-Q4 のコードを削除しました★ */}
+              {/* ▼▼▼ ここから復活＆超進化：Q1〜Q4の分割達成状況 ▼▼▼ */}
+              {activeQuarters &&
+                activeQuarters.length > 0 &&
+                targetPeriod.type !== "month" && (
+                  <div className="pt-4 border-t border-slate-100 space-y-3">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                      <Target size={12} /> Quarterly Progress
+                    </h4>
+                    <div className="space-y-2">
+                      {activeQuarters.map((q, idx) => {
+                        const qKey = `q${idx + 1}`;
+                        // 各Qの目標値を取得
+                        const qGoal =
+                          getGoalValue(
+                            currentProfile,
+                            targetPeriod.id,
+                            targetPeriod.type,
+                            qKey,
+                          ) || 0;
+
+                        // 各Qの実績値（走行距離）をアプリ内の全データから自動計算！
+                        let currentQVal = 0;
+                        let isActive = false;
+                        if (q.start && q.end) {
+                          const qStart = new Date(q.start);
+                          const qEnd = new Date(q.end);
+                          qEnd.setHours(23, 59, 59, 999);
+
+                          const qTotal = allLogs
+                            .filter((l) => l.runnerId === currentUserId)
+                            .filter((l) => {
+                              const d = new Date(l.date);
+                              return !isNaN(d) && d >= qStart && d <= qEnd;
+                            })
+                            .reduce(
+                              (sum, l) => sum + (Number(l.distance) || 0),
+                              0,
+                            );
+
+                          currentQVal = Math.round(qTotal * 10) / 10;
+
+                          // 今日の日付が、このQの期間内に入っているかを判定（ハイライト用）
+                          const now = new Date();
+                          isActive = now >= qStart && now <= qEnd;
+                        }
+
+                        // 進捗率の計算（最大100%）
+                        const progressRate =
+                          qGoal > 0
+                            ? Math.min(100, (currentQVal / qGoal) * 100)
+                            : 0;
+
+                        return (
+                          <div
+                            key={qKey}
+                            className={`p-3 rounded-2xl border transition-all ${isActive ? "bg-blue-50/50 border-blue-200 shadow-sm" : "bg-slate-50 border-slate-100 opacity-90"}`}
+                          >
+                            <div className="flex justify-between items-end mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-xs font-black ${isActive ? "text-blue-600" : "text-slate-500"}`}
+                                >
+                                  Q{idx + 1}
+                                </span>
+                                {q.start && q.end && (
+                                  <span className="text-[9px] font-bold text-slate-400">
+                                    {q.start.slice(5).replace("-", "/")} -{" "}
+                                    {q.end.slice(5).replace("-", "/")}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <span
+                                  className={`text-sm font-black ${isActive ? "text-blue-600" : "text-slate-700"}`}
+                                >
+                                  {currentQVal}
+                                </span>
+                                <span className="text-[9px] font-bold text-slate-400 mx-0.5">
+                                  /
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-400">
+                                  {qGoal} km
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* プログレスバー（メーター）の表示 */}
+                            {qGoal > 0 ? (
+                              <div className="w-full bg-slate-200/50 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-1000 ${isActive ? "bg-gradient-to-r from-blue-400 to-blue-600" : "bg-slate-300"}`}
+                                  style={{ width: `${progressRate}%` }}
+                                ></div>
+                              </div>
+                            ) : (
+                              <div className="w-full bg-slate-100 h-1.5 rounded-full flex items-center justify-center">
+                                <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest scale-75">
+                                  No Goal
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
             </div>
 
             {/* --- 練習日誌・メニュー表示カード (Runner View) --- */}
@@ -1586,28 +1692,32 @@ const AthleteView = (props) => {
                   {targetPeriod.name} の目標
                 </h4>
 
-                {/* Monthly Goal - Always relevant */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    月間目標走行距離 (km)
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="例: 200"
-                    className="w-full p-4 bg-white rounded-2xl font-black text-xl text-slate-700 outline-none border-2 border-transparent focus:border-blue-500 transition-all shadow-sm"
-                    value={goalInput.monthly}
-                    onChange={(e) =>
-                      setGoalInput({ ...goalInput, monthly: e.target.value })
-                    }
-                  />
-                  <p className="text-[10px] text-slate-400 font-bold ml-1">
-                    ※この期間の各月の目標値です
-                  </p>
-                </div>
+                {/* 1. 月間目標（月次レポートを選んでいる時だけ表示！） */}
+                {targetPeriod.type === "month" && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      月間目標走行距離 (km)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="例: 200"
+                      className="w-full p-4 bg-white rounded-2xl font-black text-xl text-slate-700 outline-none border-2 border-transparent focus:border-blue-500 transition-all shadow-sm"
+                      value={goalInput.monthly}
+                      onChange={(e) =>
+                        setGoalInput({ ...goalInput, monthly: e.target.value })
+                      }
+                    />
+                    <p className="text-[10px] text-slate-400 font-bold ml-1">
+                      ※この期間の各月の目標値です
+                    </p>
+                  </div>
+                )}
 
-                {/* Period Total Goal - Only if not month type */}
+                {/* 2. 期間合計目標（月間「以外」を選んでいる時に表示！） */}
                 {targetPeriod.type !== "month" && (
-                  <div className="space-y-2 pt-4 border-t border-slate-200">
+                  <div className="space-y-2">
+                    {" "}
+                    {/* ← 余分な上線を消してスッキリさせました */}
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       期間合計目標 (km)
                     </label>

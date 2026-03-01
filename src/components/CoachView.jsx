@@ -2047,7 +2047,11 @@ const CoachView = (props) => {
                   マネージャー画面
                 </button>
                 <button
-                  onClick={() => setDemoMode("admin")}
+                  onClick={() => {
+                    setDemoMode("admin");
+                    setView("menu"); // ✨ 魔法の1行：最初から「HOME」を開くように指示！
+                    window.scrollTo(0, 0); // ついでに画面の一番上からスタートさせる
+                  }}
                   className="p-4 bg-purple-50 text-purple-700 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-purple-100 transition-colors"
                 >
                   選手画面（管理者）
