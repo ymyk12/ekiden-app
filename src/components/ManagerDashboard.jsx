@@ -18,14 +18,17 @@ import {
   Save,
   Plus,
   Trash2,
-  Wind, // ←不足していたアイコンを追加
+  Wind,
+  Sparkles,
 } from "lucide-react";
 
 // Utilsから読み込む（役割ROLESと練習カテゴリーの定義）
-import { ROLES, CATEGORY } from "../utils/constants";
+import { ROLES } from "../utils/constants";
 
 // ▼ 新しく作った道具箱から、日付取得の関数をインポート
 import { getTodayStr } from "../utils/dateUtils";
+
+import { toast } from "react-hot-toast";
 
 // --- Manager Dashboard Component (日誌一覧・入力切り替え機能付き) ---
 const ManagerDashboard = ({
@@ -226,20 +229,18 @@ const ManagerDashboard = ({
   }, [allLogs, allRunners]);
 
   const saveDiary = async () => {
-    if (!diaryInput.menu) return alert("メニュー内容は必須です");
+    // 🚨 古い alert() を toast.error() に変更
+    if (!diaryInput.menu) return toast.error("メニュー内容は必須です");
 
-    // ▼▼▼ 追加：デモモードの時のガードバリア！ ▼▼▼
     if (isDemoMode) {
-      // 保存したふり（通知を出すだけ）
-      setSuccessMsg(
+      // ✨ 古い setSuccessMsg を toast.success に変更
+      toast.success(
         existingLog
           ? "【デモ】日誌を更新しました"
           : "【デモ】日誌を保存しました",
       );
-      // Firebaseに通信する前に、ここで処理を強制終了する！
       return;
     }
-    // ▲▲▲ 追加ここまで ▲▲▲
 
     try {
       await setDoc(
@@ -255,22 +256,25 @@ const ManagerDashboard = ({
         doc(db, "artifacts", appId, "public", "data", "menus", checkDate),
         { date: checkDate, text: diaryInput.menu },
       );
-      setSuccessMsg(existingLog ? "日誌を更新しました" : "日誌を保存しました");
+      // ✨ ここも toast.success に変更！
+      toast.success(
+        existingLog ? "日誌を更新しました！" : "日誌を保存しました！",
+      );
     } catch (e) {
-      alert("エラー: " + e.message);
+      // 🚨 古い alert() を toast.error() に変更
+      toast.error("エラー: " + e.message);
     }
   };
 
   const deleteDiary = async () => {
     if (!window.confirm(`${checkDate} の日誌を削除しますか？`)) return;
 
-    // ▼▼▼ 追加：デモモードの時のガードバリア！ ▼▼▼
     if (isDemoMode) {
-      setSuccessMsg("【デモ】日誌を削除しました");
-      setDiaryMode("list"); // 一覧画面に戻してあげる
-      return; // ここで強制終了！
+      // ✨ 古い setSuccessMsg を toast.success に変更
+      toast.success("【デモ】日誌を削除しました");
+      setDiaryMode("list");
+      return;
     }
-    // ▲▲▲ 追加ここまで ▲▲▲
 
     try {
       await deleteDoc(
@@ -279,7 +283,8 @@ const ManagerDashboard = ({
       await deleteDoc(
         doc(db, "artifacts", appId, "public", "data", "menus", checkDate),
       );
-      setSuccessMsg("日誌を削除しました");
+      // ✨ ここも toast.success に変更！
+      toast.success("日誌を削除しました🗑️");
       setDiaryInput({
         weather: "晴れ",
         temp: "",
@@ -295,10 +300,10 @@ const ManagerDashboard = ({
       });
       setDiaryMode("list");
     } catch (e) {
-      alert("削除エラー: " + e.message);
+      // 🚨 古い alert() を toast.error() に変更
+      toast.error("削除エラー: " + e.message);
     }
   };
-
   // ▼▼▼ ここから下が「画面の見た目」を作る部分です ▼▼▼
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
@@ -582,8 +587,10 @@ const ManagerDashboard = ({
                             }
                             )
                           </p>
-                          <h3 className="font-bold text-slate-700 text-sm line-clamp-1 mb-1">
-                            {log.menu || "メニューなし"}
+                          <h3 className="font-bold text-slate-700 text-sm truncate mb-1">
+                            {log.menu
+                              ? log.menu.split("\n")[0]
+                              : "メニューなし"}
                           </h3>
                           <div className="flex gap-2">
                             <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold">
@@ -591,7 +598,13 @@ const ManagerDashboard = ({
                             </span>
                             {log.location && (
                               <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold flex items-center gap-0.5">
-                                <MapPin size={8} /> {log.location}
+                                <MapPin size={8} />{" "}
+                                {log.location === "その他" && log.locationDetail
+                                  ? log.locationDetail
+                                  : log.location === "競技場" &&
+                                      log.locationDetail
+                                    ? `${log.location} (${log.locationDetail})`
+                                    : log.location}
                               </span>
                             )}
                           </div>
@@ -753,6 +766,7 @@ const ManagerDashboard = ({
                   </div>
                 </div>
 
+                {/* 1. Location */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
                     <MapPin size={12} /> Location
@@ -776,7 +790,7 @@ const ManagerDashboard = ({
                     <input
                       type="text"
                       placeholder="詳細を入力 (例: 市営競技場)"
-                      className="w-full p-3 bg-white border-2 border-indigo-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:border-indigo-500 animate-in fade-in"
+                      className="w-full p-3 bg-white border-2 border-indigo-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:border-indigo-500 mt-2 animate-in fade-in"
                       value={diaryInput.locationDetail}
                       onChange={(e) =>
                         setDiaryInput({
@@ -788,20 +802,7 @@ const ManagerDashboard = ({
                   )}
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">
-                    Menu Plan
-                  </label>
-                  <textarea
-                    className="w-full p-4 bg-slate-50 rounded-xl h-32 font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-500 text-sm resize-none"
-                    placeholder="本日の練習メニューを入力..."
-                    value={diaryInput.menu}
-                    onChange={(e) =>
-                      setDiaryInput({ ...diaryInput, menu: e.target.value })
-                    }
-                  />
-                </div>
-
+                {/* 2. Reinforcement (補強) */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
                     <Dumbbell size={12} /> Reinforcement
@@ -837,6 +838,34 @@ const ManagerDashboard = ({
                   )}
                 </div>
 
+                {/* 3. AIアシスタントボタン (独立させて目立たせる) */}
+                <div className="flex justify-end pt-2 pb-1">
+                  <a
+                    href="https://gemini.google.com/share/e682f490749f"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs bg-indigo-100 text-indigo-700 px-4 py-2.5 rounded-xl font-black flex items-center gap-1.5 active:scale-95 transition-all hover:bg-indigo-200 shadow-sm"
+                  >
+                    <Sparkles size={16} /> AIアシスタントで日誌を作成
+                  </a>
+                </div>
+
+                {/* 4. Menu Plan */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">
+                    Menu Plan
+                  </label>
+                  <textarea
+                    className="w-full p-4 bg-slate-50 rounded-xl h-32 font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-500 text-sm resize-none"
+                    placeholder="本日の練習メニューを入力..."
+                    value={diaryInput.menu}
+                    onChange={(e) =>
+                      setDiaryInput({ ...diaryInput, menu: e.target.value })
+                    }
+                  />
+                </div>
+
+                {/* 5. Results / Notes */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">
                     Results / Notes

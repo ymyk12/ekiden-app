@@ -1,4 +1,6 @@
-// 一番上の行付近
+// ==========================================
+//   import
+// ==========================================
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Eye,
@@ -26,6 +28,15 @@ import {
   User,
   AlertCircle,
   Loader2,
+  Flag,
+  Timer,
+  Thermometer,
+  Cloud,
+  Droplets,
+  Navigation,
+  ClipboardCheck,
+  Calendar,
+  Bell,
 } from "lucide-react";
 import {
   BarChart,
@@ -40,7 +51,12 @@ import {
   PieChart,
   Pie,
 } from "recharts";
-import { ROLES, CATEGORY } from "../utils/constants";
+import {
+  ROLES,
+  CATEGORY,
+  RACE_TYPES,
+  RACE_DISTANCES,
+} from "../utils/constants";
 import { getGoalValue, getTodayStr, getDatesInRange } from "../utils/dateUtils";
 
 // グラフ用のカラーパレット
@@ -108,40 +124,183 @@ const AthleteView = (props) => {
     resetForm,
     updateGoals,
     handleSaveReview,
+    tournaments,
+    raceCards,
+    editingRaceCardId,
+    setEditingRaceCardId,
+    raceCardInput,
+    setRaceCardInput,
+    handleSaveRaceCard,
+    handleDeleteRaceCard,
   } = props;
 
-  // 画面（view）が切り替わるたびに、スクロールを一番上（0, 0）に戻す魔法
+  // フィードバック開閉用の「状態（State）」
+  const [isRaceFeedbackOpen, setIsRaceFeedbackOpen] = useState(false);
+
+  // 画面（view）が切り替わるたびに、スクロールを一番上（0, 0）に戻す
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [view]);
 
   const isPreview = role === ROLES.COACH && previewRunner;
 
+  // 通知管理システム
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [lastReadTime, setLastReadTime] = useState(() => {
+    return (
+      localStorage.getItem(`notif_read_${currentUserId}`) ||
+      "2000-01-01T00:00:00.000Z"
+    );
+  });
+  const [notifiedIds, setNotifiedIds] = useState(() => {
+    return JSON.parse(
+      localStorage.getItem(`notified_ids_${currentUserId}`) || "[]",
+    );
+  });
+
+  // アプリ内のデータから「お知らせ」を自動でリストアップ
+  const notifications = useMemo(() => {
+    const list = [];
+
+    // 1. 大会ノートへのフィードバック
+    const myCards = raceCards.filter(
+      (c) => c.runnerId === currentUserId && c.coachFeedback,
+    );
+    myCards.forEach((c) => {
+      const tour = tournaments.find((t) => t.id === c.tournamentId);
+      list.push({
+        id: `fb_race_${c.id}_${c.updatedAt || ""}`,
+        type: "Feedback",
+        title: "大会ノートにコメントが届きました",
+        message: `「${tour?.name || "大会"}」のシートに監督からフィードバックがあります！`,
+        time: c.updatedAt || "2024-01-01T00:00:00.000Z",
+        onClick: () => {
+          setIsNotifOpen(false);
+          setRaceCardInput(c);
+          setEditingRaceCardId(c.id);
+          setView("race-entry");
+        },
+      });
+    });
+
+    // 2. 振り返りへのフィードバック
+    if (currentFeedback && currentFeedback.coachComment) {
+      list.push({
+        id: `fb_period_${targetPeriod.id}`,
+        type: "Feedback",
+        title: "振り返りにコメントが届きました",
+        message: `「${targetPeriod.name}」の目標・振り返りに監督からフィードバックがあります！`,
+        time: currentFeedback.updatedAt || "2024-01-01T00:00:00.000Z",
+        onClick: () => {
+          setIsNotifOpen(false);
+          setView("review");
+        },
+      });
+    }
+
+    // 3. 新しい大会が追加された（便宜上、トーナメント一覧の最後を最新とみなす）
+    if (tournaments && tournaments.length > 0) {
+      const latestTour = tournaments[tournaments.length - 1];
+      list.push({
+        id: `tour_${latestTour.id}`,
+        type: "New Event",
+        title: "新しい大会が設定されました",
+        message: `「${latestTour.name}」が予定に追加されました。出場種目を登録しましょう！`,
+        time:
+          latestTour.createdAt || new Date(latestTour.startDate).toISOString(),
+        onClick: () => {
+          setIsNotifOpen(false);
+          setView("race");
+        },
+      });
+    }
+    // 4. チーム日誌の追加・更新
+    if (teamLogs && teamLogs.length > 0) {
+      teamLogs.forEach((diary) => {
+        // 更新日時（または作成日時）がある場合のみ通知対象にする
+        const timeStr = diary.updatedAt || diary.createdAt;
+        if (timeStr) {
+          list.push({
+            id: `diary_${diary.date}_${timeStr}`,
+            type: "Diary", // 通知バッジの種類
+            title: "チーム日誌が更新されました",
+            message: `${diary.date.slice(5).replace("-", "/")} の日誌（メニューや報告）が追加・更新されました！`,
+            time: timeStr,
+            onClick: () => {
+              setIsNotifOpen(false); // 通知モーダルを閉じる
+              setExpandedDiaryId(diary.date); // タップされた日誌のアコーディオンを自動で開く！
+              setView("diary"); // 日誌画面へ移動
+            },
+          });
+        }
+      });
+    }
+    // 新しい順に並び替え
+    return list.sort((a, b) => (a.time < b.time ? 1 : -1));
+  }, [raceCards, currentFeedback, tournaments, targetPeriod, currentUserId]);
+
+  // 未読件数の計算
+  const unreadCount = notifications.filter((n) => n.time > lastReadTime).length;
+
+  // ベルを開いた時の処理（既読にする）
+  const handleOpenNotif = () => {
+    setIsNotifOpen(true);
+    const nowStr = new Date().toISOString();
+    setLastReadTime(nowStr);
+    localStorage.setItem(`notif_read_${currentUserId}`, nowStr);
+  };
+
+  // 【スマホへのプッシュ通知機能】（初回許可取り）
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // 【スマホへのプッシュ通知機能】（未読があれば鳴らす）
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      const newNotifs = notifications.filter(
+        (n) => !notifiedIds.includes(n.id) && n.time > lastReadTime,
+      );
+      if (newNotifs.length > 0) {
+        newNotifs.forEach((n) => {
+          new Notification("駅伝・陸上アプリ", {
+            body: n.title,
+            icon: "/favicon.ico",
+          });
+        });
+        const updatedIds = [...notifiedIds, ...newNotifs.map((n) => n.id)];
+        setNotifiedIds(updatedIds);
+        localStorage.setItem(
+          `notified_ids_${currentUserId}`,
+          JSON.stringify(updatedIds),
+        );
+      }
+    }
+  }, [notifications, notifiedIds, currentUserId, lastReadTime]);
+
   const safeChangeView = (targetView) => {
-    // 現在が「入力画面(entry)」で、かつ別の画面に行こうとしていて、かつ「距離かメニュー」に文字が入力されている場合
     if (
       view === "entry" &&
       targetView !== "entry" &&
       (formData.distance !== "" || formData.menuDetail !== "")
     ) {
-      // 警告ダイアログを出す！
       setConfirmDialog({
         isOpen: true,
         message: "入力中の内容が消えてしまいますが、移動しますか？",
         onConfirm: () => {
-          resetForm(); // フォームを空にする
-          setView(targetView); // 画面を移動する
-          setConfirmDialog({ isOpen: false, message: "", onConfirm: null }); // ダイアログを閉じる
+          resetForm();
+          setView(targetView);
+          setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
         },
       });
     } else {
-      // それ以外（何も入力されていない、または別の画面からの移動）なら普通に移動
       if (view === "entry" && targetView !== "entry") resetForm();
       setView(targetView);
     }
   };
 
-  // ... (Runner UI rendering) ...
   return (
     <div
       className={`min-h-screen bg-slate-50 pb-28 ${isPreview ? "border-4 border-amber-400" : ""}`}
@@ -159,8 +318,8 @@ const AthleteView = (props) => {
           </span>
           <button
             onClick={() => {
-              setPreviewRunner(null); // ① プレビューを解除する
-              setView("coach-roster"); // ✨② ロースター（名簿）画面に戻る！
+              setPreviewRunner(null);
+              setView("coach-roster");
             }}
             className="bg-slate-900 text-white px-4 py-1 rounded-full text-xs font-bold hover:bg-slate-800 transition-colors"
           >
@@ -181,6 +340,17 @@ const AthleteView = (props) => {
             <h3 className="font-black text-center text-slate-400 uppercase tracking-widest text-xs">
               Menu
             </h3>
+            {/* 大会ノート*/}
+            <button
+              onClick={() => {
+                safeChangeView("race");
+                setIsMenuOpen(false);
+              }}
+              className="w-full py-4 bg-indigo-50 text-indigo-700 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+            >
+              <Flag size={20} /> 大会ノート (Race Card)
+            </button>
+            {/* 目標設定 */}
             <button
               onClick={() => {
                 safeChangeView("goal");
@@ -209,7 +379,6 @@ const AthleteView = (props) => {
       <header
         className={`bg-blue-600 text-white pt-14 pb-28 px-8 rounded-b-[4rem] relative overflow-hidden ${isPreview ? "mt-8" : ""}`}
       >
-        {/* ... header content ... */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
         <div className="flex justify-between items-center relative z-10 max-w-md mx-auto">
           <button
@@ -218,7 +387,6 @@ const AthleteView = (props) => {
           >
             <Menu size={20} />
           </button>
-
           <div className="text-center">
             <p className="text-blue-100 text-[10px] font-black tracking-widest uppercase mb-1">
               Athlete Dashboard
@@ -227,7 +395,24 @@ const AthleteView = (props) => {
               {currentProfile.lastName} {currentProfile.firstName}
             </h1>
           </div>
-          <div className="w-10"></div>
+          {/* 通知ベルアイコン  */}
+          <div className="relative">
+            <button
+              onClick={handleOpenNotif}
+              className="bg-white/20 p-2.5 rounded-2xl active:scale-90 transition-all text-white relative shadow-sm hover:bg-white/30"
+            >
+              <Bell size={20} />
+              {/* 未読がある場合、ピカピカ光る赤丸バッジを表示！ */}
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-5 w-5 bg-rose-500 border-2 border-blue-600 text-[9px] font-black text-white items-center justify-center shadow-md">
+                    {unreadCount}
+                  </span>
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -246,7 +431,6 @@ const AthleteView = (props) => {
               }}
               style={{ color: "white", fontWeight: "bold" }}
             >
-              {/* 1. 特別期間・カスタム */}
               <optgroup
                 label="🚩 指定期間"
                 className="text-slate-900 font-bold bg-slate-100"
@@ -259,14 +443,11 @@ const AthleteView = (props) => {
                       value={p.id}
                       className="text-slate-900 bg-white"
                     >
-                      {/* ▼▼▼ 修正: 年を削って「月/日」だけにしました ▼▼▼ */}
                       {p.name} ({p.start.slice(5).replace("-", "/")}~
                       {p.end.slice(5).replace("-", "/")})
                     </option>
                   ))}
               </optgroup>
-
-              {/* 2. 年度 */}
               <optgroup
                 label="📂 年度アーカイブ"
                 className="text-slate-900 font-bold bg-slate-100"
@@ -283,8 +464,6 @@ const AthleteView = (props) => {
                     </option>
                   ))}
               </optgroup>
-
-              {/* 3. 月間 */}
               <optgroup
                 label="📅 月次レポート"
                 className="text-slate-900 font-bold bg-slate-100"
@@ -309,21 +488,17 @@ const AthleteView = (props) => {
       <main className="px-5 space-y-6 relative z-20 max-w-md mx-auto">
         {view === "menu" && (
           <>
-            {/* ▼▼▼ 追加: 目標未設定時のアラートバナー ▼▼▼ */}
             {(() => {
-              // 現在の期間の目標値を取得
               const currentGoal = getGoalValue(
                 currentProfile,
                 targetPeriod.id,
                 targetPeriod.type,
-                "goalPeriod", // 期間合計目標、または月間目標
+                "goalPeriod",
               );
-
-              // 目標が 0 または 未設定の場合に表示
               if (!currentGoal || currentGoal === 0) {
                 return (
                   <div
-                    onClick={() => setView("goal")} // タップで目標設定へ
+                    onClick={() => setView("goal")}
                     className="bg-rose-500 text-white p-4 rounded-2xl shadow-lg mb-6 flex items-center justify-between cursor-pointer active:scale-95 transition-transform animate-in slide-in-from-top-2"
                   >
                     <div className="flex items-center gap-3">
@@ -347,20 +522,15 @@ const AthleteView = (props) => {
               }
               return null;
             })()}
-            {/* ▲▲▲ 追加ここまで ▲▲▲ */}
 
-            {/* ▼▼▼ 追加: 未入力日の警告 (Missing Report Alert) ▼▼▼ */}
             {missingDates.length > 0 && (
               <div className="mb-6 animate-in slide-in-from-top-4">
-                {/* ヘッダー部分：何件あるか表示 */}
                 <div className="flex items-center justify-between mb-2 px-2">
                   <p className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
                     <AlertTriangle size={14} /> Missing Reports (
                     {missingDates.length})
                   </p>
                 </div>
-
-                {/* スクロールエリア */}
                 <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
                   {missingDates.map((dateStr) => {
                     const d = new Date(dateStr);
@@ -371,14 +541,10 @@ const AthleteView = (props) => {
                           setFormData({ ...formData, date: dateStr });
                           setView("entry");
                         }}
-                        // ★高さ（padding）を py-2 に減らし、角丸を rounded-xl に縮小
                         className="bg-amber-400 text-slate-900 py-2 px-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer active:scale-95 transition-transform border border-slate-900/10"
                       >
                         <div className="flex items-center gap-3">
-                          {/* アイコンも小さくシンプルに */}
                           <AlertTriangle size={16} className="text-slate-800" />
-
-                          {/* 日付とテキストを1行にまとめる */}
                           <div className="flex items-baseline gap-2">
                             <span className="font-black text-sm">
                               {d.getMonth() + 1}/{d.getDate()}
@@ -388,8 +554,6 @@ const AthleteView = (props) => {
                             </span>
                           </div>
                         </div>
-
-                        {/* ボタンも小さく */}
                         <div className="bg-white/90 text-slate-900 px-2 py-1 rounded text-[10px] font-black min-w-[40px] text-center">
                           入力
                         </div>
@@ -397,15 +561,11 @@ const AthleteView = (props) => {
                     );
                   })}
                 </div>
-
                 {missingDates.length > 3 && (
                   <p className="text-center text-[10px] text-slate-400 font-bold mt-2">
                     ↑ スクロールして過去分も確認できます
                   </p>
                 )}
-
-                {/* ▲▲▲ 修正ここまで ▲▲▲ */}
-                {/* 未入力が多い場合の励ましメッセージ（オプション） */}
                 {missingDates.length >= 2 && (
                   <p className="text-center text-[10px] text-slate-400 font-bold">
                     休みだった場合も「完全休養」として記録しましょう！
@@ -413,9 +573,7 @@ const AthleteView = (props) => {
                 )}
               </div>
             )}
-            {/* ▲▲▲ 追加ここまで ▲▲▲ */}
 
-            {/* Dual Goal Status Card */}
             <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-blue-900/5 space-y-6">
               <div>
                 <div className="flex justify-between items-center mb-3">
@@ -447,7 +605,6 @@ const AthleteView = (props) => {
                     km
                   </span>
                 </div>
-
                 {getGoalValue(
                   currentProfile,
                   targetPeriod.id,
@@ -458,29 +615,16 @@ const AthleteView = (props) => {
                     <div
                       className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-1000"
                       style={{
-                        width: `${Math.min(
-                          100,
-                          ((targetPeriod.type === "month"
-                            ? personalStats.monthly
-                            : personalStats.period) /
-                            getGoalValue(
-                              currentProfile,
-                              targetPeriod.id,
-                              targetPeriod.type,
-                              "goalPeriod",
-                            )) *
-                            100,
-                        )}%`,
+                        width: `${Math.min(100, ((targetPeriod.type === "month" ? personalStats.monthly : personalStats.period) / getGoalValue(currentProfile, targetPeriod.id, targetPeriod.type, "goalPeriod")) * 100)}%`,
                       }}
                     ></div>
                   </div>
                 )}
-
                 <p className="text-[9px] text-right text-slate-400 font-bold mt-1">
                   {targetPeriod.name}
                 </p>
               </div>
-              {/* ▼▼▼ ここから復活＆超進化：Q1〜Q4の分割達成状況 ▼▼▼ */}
+
               {activeQuarters &&
                 activeQuarters.length > 0 &&
                 targetPeriod.type !== "month" && (
@@ -491,7 +635,6 @@ const AthleteView = (props) => {
                     <div className="space-y-2">
                       {activeQuarters.map((q, idx) => {
                         const qKey = `q${idx + 1}`;
-                        // 各Qの目標値を取得
                         const qGoal =
                           getGoalValue(
                             currentProfile,
@@ -499,15 +642,12 @@ const AthleteView = (props) => {
                             targetPeriod.type,
                             qKey,
                           ) || 0;
-
-                        // 各Qの実績値（走行距離）をアプリ内の全データから自動計算！
                         let currentQVal = 0;
                         let isActive = false;
                         if (q.start && q.end) {
                           const qStart = new Date(q.start);
                           const qEnd = new Date(q.end);
                           qEnd.setHours(23, 59, 59, 999);
-
                           const qTotal = allLogs
                             .filter((l) => l.runnerId === currentUserId)
                             .filter((l) => {
@@ -518,20 +658,14 @@ const AthleteView = (props) => {
                               (sum, l) => sum + (Number(l.distance) || 0),
                               0,
                             );
-
                           currentQVal = Math.round(qTotal * 10) / 10;
-
-                          // 今日の日付が、このQの期間内に入っているかを判定（ハイライト用）
                           const now = new Date();
                           isActive = now >= qStart && now <= qEnd;
                         }
-
-                        // 進捗率の計算（最大100%）
                         const progressRate =
                           qGoal > 0
                             ? Math.min(100, (currentQVal / qGoal) * 100)
                             : 0;
-
                         return (
                           <div
                             key={qKey}
@@ -565,8 +699,6 @@ const AthleteView = (props) => {
                                 </span>
                               </div>
                             </div>
-
-                            {/* プログレスバー（メーター）の表示 */}
                             {qGoal > 0 ? (
                               <div className="w-full bg-slate-200/50 h-1.5 rounded-full overflow-hidden">
                                 <div
@@ -589,24 +721,14 @@ const AthleteView = (props) => {
                 )}
             </div>
 
-            {/* --- 練習日誌・メニュー表示カード (Runner View) --- */}
             <div className="bg-slate-900 p-7 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden mb-6">
-              {/* 背景装飾 */}
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl -mr-10 -mt-10"></div>
-
               {(() => {
                 const todayStr = getTodayStr();
-                // 1. 今日のチーム日誌(teamLogs)があるか探す
                 const diary = teamLogs.find((l) => l.date === todayStr);
-                // 2. なければ従来のメニュー(practiceMenus)を探す
-                const simpleMenu = practiceMenus.find(
-                  (m) => m.date === todayStr,
-                );
-
                 if (diary) {
                   return (
                     <div className="relative z-10 space-y-4">
-                      {/* 1. 天気・時間 */}
                       <div className="flex justify-between items-start">
                         <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                           <BookOpen size={12} /> Team Practice Diary
@@ -622,24 +744,17 @@ const AthleteView = (props) => {
                           )}
                         </div>
                       </div>
-
-                      {/* ★追加: 場所の表示 */}
                       {diary.location && (
                         <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
                           <MapPin size={14} className="text-blue-400" />
-                          {diary.location}
-                          {/* 詳細がある場合はカッコ書きで追加 */}
-                          {(diary.location === "競技場" ||
-                            diary.location === "その他") &&
-                            diary.locationDetail && (
-                              <span className="text-slate-400 ml-1">
-                                ({diary.locationDetail})
-                              </span>
-                            )}
+                          {diary.location === "その他" && diary.locationDetail
+                            ? diary.locationDetail
+                            : diary.location === "競技場" &&
+                                diary.locationDetail
+                              ? `${diary.location} (${diary.locationDetail})`
+                              : diary.location}
                         </div>
                       )}
-
-                      {/* 2. メニュー */}
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 mb-1">
                           MENU
@@ -648,8 +763,6 @@ const AthleteView = (props) => {
                           {diary.menu}
                         </p>
                       </div>
-
-                      {/* ★追加: 補強メニューの表示 */}
                       {diary.reinforcements &&
                         diary.reinforcements.length > 0 && (
                           <div className="bg-blue-900/30 p-3 rounded-xl border border-blue-500/20">
@@ -665,7 +778,6 @@ const AthleteView = (props) => {
                                   {item}
                                 </span>
                               ))}
-                              {/* その他詳細の表示 */}
                               {diary.reinforcements.includes("その他") &&
                                 diary.reinforcementDetail && (
                                   <span className="text-[10px] font-bold text-slate-400 self-center">
@@ -675,8 +787,6 @@ const AthleteView = (props) => {
                             </div>
                           </div>
                         )}
-
-                      {/* 3. 結果・メモ */}
                       {diary.result && (
                         <div className="bg-white/10 p-3 rounded-xl border border-white/10">
                           <p className="text-[10px] font-bold text-blue-300 mb-1 flex items-center gap-1">
@@ -687,7 +797,17 @@ const AthleteView = (props) => {
                           </p>
                         </div>
                       )}
-
+                      {/* ▼▼▼ 監督からの追記 (ホーム画面用デザイン) ▼▼▼ */}
+                      {diary.coachNote && (
+                        <div className="bg-amber-400/10 p-3 rounded-xl border border-amber-400/20 mt-3">
+                          <p className="text-[10px] font-black text-amber-300 mb-1 flex items-center gap-1 uppercase tracking-widest">
+                            <MessageSquare size={10} /> Coach's Note
+                          </p>
+                          <p className="text-xs font-bold leading-relaxed text-amber-50 whitespace-pre-wrap">
+                            {diary.coachNote}
+                          </p>
+                        </div>
+                      )}
                       <p className="text-[9px] text-slate-500 text-right">
                         Updated by: {diary.updatedBy}
                       </p>
@@ -697,39 +817,33 @@ const AthleteView = (props) => {
               })()}
             </div>
 
-            {/* ▼▼▼ 追加: チーム活動ログ (直近7日間) ▼▼▼ */}
             <div className="bg-white p-6 rounded-[2.5rem] shadow-sm space-y-4">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
                   <Activity size={14} /> Team Activity (Last 7 Days)
                 </h3>
               </div>
-
               <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
                 {(() => {
-                  // 1. 直近7日間の日付文字列を生成
                   const today = new Date();
                   const pastDate = new Date();
-                  pastDate.setDate(today.getDate() - 6); // 今日含めて7日間
-                  const minDateStr = pastDate.toLocaleDateString("sv-SE"); // YYYY-MM-DD形式
+                  pastDate.setDate(today.getDate() - 6);
+                  const minDateStr = pastDate.toLocaleDateString("sv-SE");
 
-                  // 2. フィルタリングとソート
-                  const teamLogs = allLogs
-                    .filter((l) => l.date >= minDateStr) // 7日前以降
-                    // ★追加：現役選手リストに含まれるIDのログだけを通す
+                  const teamLogsList = allLogs
+                    .filter((l) => l.date >= minDateStr)
                     .filter((l) =>
                       activeRunners.some((r) => r.id === l.runnerId),
                     )
                     .sort((a, b) => {
-                      // 日付の新しい順 > 作成日時の新しい順
                       if (a.date !== b.date) return a.date < b.date ? 1 : -1;
                       return (b.createdAt || "").localeCompare(
                         a.createdAt || "",
                       );
                     })
-                    .slice(0, 10); // 表示が多くなりすぎないよう最新10件に制限
+                    .slice(0, 10);
 
-                  if (teamLogs.length === 0) {
+                  if (teamLogsList.length === 0) {
                     return (
                       <p className="text-center text-xs text-slate-300 py-4 font-bold">
                         直近の活動記録はありません
@@ -737,27 +851,19 @@ const AthleteView = (props) => {
                     );
                   }
 
-                  return teamLogs.map((log) => {
+                  return teamLogsList.map((log) => {
                     const isRest = log.category === "完全休養";
-
                     return (
                       <div
                         key={log.id}
                         className="flex items-start gap-3 relative pl-2"
                       >
-                        {/* タイムラインの線 */}
                         <div className="absolute left-[19px] top-8 bottom-[-16px] w-0.5 bg-slate-100 last:hidden"></div>
-
-                        {/* アバター */}
                         <div
-                          className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-sm z-10 ${
-                            isRest ? "bg-emerald-400" : "bg-blue-500"
-                          }`}
+                          className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-sm z-10 ${isRest ? "bg-emerald-400" : "bg-blue-500"}`}
                         >
                           {log.runnerName ? log.runnerName.charAt(0) : "?"}
                         </div>
-
-                        {/* 内容 */}
                         <div className="bg-slate-50 p-3 rounded-2xl w-full border border-slate-100">
                           <div className="flex justify-between items-start">
                             <div>
@@ -776,10 +882,7 @@ const AthleteView = (props) => {
                                 )}
                               </p>
                             </div>
-                            {/* ★RPE表示ブロックを削除しました */}
                           </div>
-
-                          {/* 一言コメントがあれば表示 */}
                           {log.menuDetail && (
                             <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed bg-white/50 p-1.5 rounded-lg">
                               "{log.menuDetail}"
@@ -795,7 +898,7 @@ const AthleteView = (props) => {
           </>
         )}
 
-        {/* ADDED: Entry View */}
+        {/* Entry View */}
         {view === "entry" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
             <div className="flex items-center gap-2 mb-2">
@@ -809,9 +912,7 @@ const AthleteView = (props) => {
                 Daily Entry
               </h3>
             </div>
-
             <div className="space-y-4">
-              {/* Date and Category */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
@@ -837,7 +938,6 @@ const AthleteView = (props) => {
                       setFormData({ ...formData, category: e.target.value })
                     }
                   >
-                    {/* CATEGORY（練習カテゴリー）から自動で <option> を作る！ */}
                     {Object.values(CATEGORY).map((cat) => (
                       <option key={cat} value={cat}>
                         {cat}
@@ -846,8 +946,6 @@ const AthleteView = (props) => {
                   </select>
                 </div>
               </div>
-
-              {/* Distance */}
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
                   Distance (km)
@@ -863,8 +961,6 @@ const AthleteView = (props) => {
                   }
                 />
               </div>
-
-              {/* Menu Detail */}
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
                   Menu Detail
@@ -878,8 +974,6 @@ const AthleteView = (props) => {
                   }
                 />
               </div>
-
-              {/* Metrics */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 p-4 rounded-3xl space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -899,7 +993,6 @@ const AthleteView = (props) => {
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          // 空文字ならそのまま、数値があれば整数化
                           rpe:
                             e.target.value === ""
                               ? ""
@@ -929,7 +1022,6 @@ const AthleteView = (props) => {
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          // 空文字ならそのまま、数値があれば整数化
                           pain:
                             e.target.value === ""
                               ? ""
@@ -940,32 +1032,24 @@ const AthleteView = (props) => {
                   </div>
                 </div>
               </div>
-
               <div className="pt-4 space-y-3">
-                {/* ▼▼▼ 変更後：保存/更新ボタン ▼▼▼ */}
                 <button
                   onClick={handleSaveLog}
                   disabled={isSubmitting || !formData.distance}
-                  className={`w-full py-5 rounded-3xl font-black text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${
-                    isSubmitting || !formData.distance
-                      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                      : "bg-blue-600 text-white active:scale-95"
-                  }`}
+                  className={`w-full py-5 rounded-3xl font-black text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${isSubmitting || !formData.distance ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white active:scale-95"}`}
                 >
                   {isSubmitting ? (
                     <>
-                      <Loader2 size={20} className="animate-spin" />
+                      <Loader2 size={20} className="animate-spin" />{" "}
                       {editingLogId ? "更新中..." : "保存中..."}
                     </>
                   ) : (
                     <>
-                      <Save size={20} />
+                      <Save size={20} />{" "}
                       {editingLogId ? "更新する" : "保存する"}
                     </>
                   )}
                 </button>
-
-                {/* ▼▼▼ 追加: 編集モード時のボタン（削除 & キャンセル） ▼▼▼ */}
                 {editingLogId && (
                   <div className="flex gap-2">
                     <button
@@ -980,8 +1064,6 @@ const AthleteView = (props) => {
                     </button>
                   </div>
                 )}
-
-                {/* ▼▼▼ 完全休養ボタン（新規作成時のみ表示） ▼▼▼ */}
                 {!formData.distance && !editingLogId && (
                   <button
                     onClick={handleRestRegister}
@@ -992,33 +1074,24 @@ const AthleteView = (props) => {
                   </button>
                 )}
               </div>
-              {/* ▼▼▼ 追加: 個人の活動履歴 (My Recent Activity) ▼▼▼ */}
-              {/* ▼▼▼ 修正: My Activity (期間内全表示・スクロール対応) ▼▼▼ */}
               <div className="pt-8 border-t border-slate-100 space-y-4">
                 <div className="flex justify-between items-center">
                   <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                     <Activity size={14} /> My Activity
                   </h4>
-                  {/* 現在の期間名を表示 */}
                   <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
                     {targetPeriod.name}
                   </span>
                 </div>
-
-                {/* スクロールエリア (最大高さ400px) */}
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                   {(() => {
-                    // 1. 期間の範囲を定義
                     const start = new Date(targetPeriod.start);
                     const end = new Date(targetPeriod.end);
-                    end.setHours(23, 59, 59, 999); // 終了日の23:59まで含める
-
-                    // 2. 自分のログを抽出・期間でフィルタリング・日付順ソート
+                    end.setHours(23, 59, 59, 999);
                     const myPeriodLogs = allLogs
                       .filter((l) => l.runnerId === currentUserId)
                       .filter((l) => {
                         const d = new Date(l.date);
-                        // 日付が無効な場合は弾く、有効なら範囲チェック
                         return !isNaN(d) && d >= start && d <= end;
                       })
                       .sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1036,7 +1109,7 @@ const AthleteView = (props) => {
                       return (
                         <div
                           key={log.id}
-                          onClick={() => handleEditLog(log)} // タップで編集モードへ
+                          onClick={() => handleEditLog(log)}
                           className="bg-slate-50 p-4 rounded-2xl border border-slate-100 cursor-pointer active:scale-95 transition-transform hover:border-blue-200 group relative"
                         >
                           <div className="flex justify-between items-start mb-2">
@@ -1052,9 +1125,7 @@ const AthleteView = (props) => {
                               </p>
                             </div>
                             <p
-                              className={`text-lg font-black ${
-                                isRest ? "text-emerald-500" : "text-blue-600"
-                              }`}
+                              className={`text-lg font-black ${isRest ? "text-emerald-500" : "text-blue-600"}`}
                             >
                               {isRest ? "Rest" : log.distance}
                               {!isRest && (
@@ -1064,42 +1135,25 @@ const AthleteView = (props) => {
                               )}
                             </p>
                           </div>
-
                           <div className="flex items-center justify-between">
-                            {/* 左側: RPE & Pain バッジ */}
                             <div className="flex gap-2">
                               <span
-                                className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${
-                                  log.rpe >= 8
-                                    ? "bg-rose-100 text-rose-600 border-rose-200"
-                                    : log.rpe >= 5
-                                      ? "bg-orange-100 text-orange-600 border-orange-200"
-                                      : "bg-blue-50 text-blue-600 border-blue-100"
-                                }`}
+                                className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${log.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : log.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-blue-50 text-blue-600 border-blue-100"}`}
                               >
                                 RPE {log.rpe}
                               </span>
                               {log.pain > 1 && (
                                 <span
-                                  className={`px-2 py-0.5 rounded-md text-[9px] font-black border flex items-center gap-1 ${
-                                    log.pain >= 4
-                                      ? "bg-purple-100 text-purple-600 border-purple-200 animate-pulse"
-                                      : log.pain === 3
-                                        ? "bg-rose-100 text-rose-600 border-rose-200"
-                                        : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                                  }`}
+                                  className={`px-2 py-0.5 rounded-md text-[9px] font-black border flex items-center gap-1 ${log.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200 animate-pulse" : log.pain === 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}
                                 >
                                   <HeartPulse size={10} /> Pain {log.pain}
                                 </span>
                               )}
                             </div>
-
-                            {/* 右側: 操作アイコンエリア */}
                             <div className="flex items-center gap-4">
-                              {/* ゴミ箱ボタン */}
                               <button
                                 onClick={(e) => {
-                                  e.stopPropagation(); // 編集画面への移動を阻止
+                                  e.stopPropagation();
                                   handleDeleteLog(log.id);
                                 }}
                                 className="text-slate-300 hover:text-rose-500 transition-colors p-2 -mr-2"
@@ -1107,8 +1161,6 @@ const AthleteView = (props) => {
                               >
                                 <Trash2 size={18} />
                               </button>
-
-                              {/* 編集アイコン */}
                               <div className="text-slate-300 group-hover:text-blue-500 transition-colors">
                                 <Edit size={16} />
                               </div>
@@ -1120,11 +1172,11 @@ const AthleteView = (props) => {
                   })()}
                 </div>
               </div>
-              {/* ▲▲▲ 修正ここまで ▲▲▲ */}
             </div>
           </div>
         )}
-        {/* ▼▼▼ 追加: 選手用DIARY一覧画面 ▼▼▼ */}
+
+        {/* TEAM DIARY */}
         {view === "diary" && (
           <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in pb-24">
             <div className="flex items-center justify-between mb-2">
@@ -1137,29 +1189,24 @@ const AthleteView = (props) => {
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
                 TEAM DIARY
               </h3>
-              <div className="w-9" /> {/* レイアウト調整用ダミー */}
+              <div className="w-9" />
             </div>
-
             <div className="text-center">
               <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
                 Target: {targetPeriod.name}
               </span>
             </div>
-
             <div className="space-y-4">
               {(() => {
-                // 1. 選択期間内の日誌を抽出してソート
                 const start = new Date(targetPeriod.start);
                 const end = new Date(targetPeriod.end);
-                // 終了日の23:59まで含める
                 end.setHours(23, 59, 59, 999);
-
                 const filteredLogs = teamLogs
                   .filter((l) => {
                     const d = new Date(l.date);
                     return d >= start && d <= end;
                   })
-                  .sort((a, b) => (a.date < b.date ? 1 : -1)); // 新しい順
+                  .sort((a, b) => (a.date < b.date ? 1 : -1));
 
                 if (filteredLogs.length === 0) {
                   return (
@@ -1179,13 +1226,8 @@ const AthleteView = (props) => {
                       onClick={() =>
                         setExpandedDiaryId(isExpanded ? null : log.date)
                       }
-                      className={`rounded-2xl border transition-all cursor-pointer overflow-hidden ${
-                        isExpanded
-                          ? "bg-slate-50 border-blue-200 shadow-md"
-                          : "bg-white border-slate-100 hover:border-blue-100"
-                      }`}
+                      className={`rounded-2xl border transition-all cursor-pointer overflow-hidden ${isExpanded ? "bg-slate-50 border-blue-200 shadow-md" : "bg-white border-slate-100 hover:border-blue-100"}`}
                     >
-                      {/* カードヘッダー部分 */}
                       <div className="p-4">
                         <div className="flex justify-between items-start mb-2">
                           <div>
@@ -1208,22 +1250,29 @@ const AthleteView = (props) => {
                             </span>
                             {log.location && (
                               <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                <MapPin size={8} /> {log.location}
+                                <MapPin size={8} />{" "}
+                                {log.location === "その他" && log.locationDetail
+                                  ? log.locationDetail
+                                  : log.location === "競技場" &&
+                                      log.locationDetail
+                                    ? `${log.location} (${log.locationDetail})`
+                                    : log.location}
                               </span>
                             )}
                           </div>
                         </div>
-
-                        {/* メニュー（未展開時は1行、展開時は全文） */}
                         <div>
                           <p
-                            className={`font-bold text-slate-700 text-sm leading-relaxed ${isExpanded ? "" : "line-clamp-1"}`}
+                            className={`font-bold text-slate-700 text-sm leading-relaxed ${isExpanded ? "whitespace-pre-wrap" : "truncate"}`}
                           >
-                            {log.menu}
+                            {/* 開いている時は全文、閉じている時は改行で区切って1行目だけ表示 */}
+                            {isExpanded
+                              ? log.menu
+                              : log.menu
+                                ? log.menu.split("\n")[0]
+                                : "メニューなし"}
                           </p>
                         </div>
-
-                        {/* 展開ヒント */}
                         {!isExpanded && (
                           <div className="flex justify-center mt-2">
                             <ChevronRight
@@ -1233,11 +1282,8 @@ const AthleteView = (props) => {
                           </div>
                         )}
                       </div>
-
-                      {/* 詳細部分（アコーディオン） */}
                       {isExpanded && (
                         <div className="px-4 pb-4 space-y-4 border-t border-slate-200/50 pt-4 animate-in slide-in-from-top-2">
-                          {/* 詳細情報グリッド */}
                           <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
                             <div className="bg-white p-2 rounded-lg border border-slate-100">
                               <span className="text-indigo-400 block text-[9px] uppercase">
@@ -1255,8 +1301,6 @@ const AthleteView = (props) => {
                               {log.wind || "-"}
                             </div>
                           </div>
-
-                          {/* 補強 */}
                           {log.reinforcements &&
                             log.reinforcements.length > 0 && (
                               <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
@@ -1280,8 +1324,6 @@ const AthleteView = (props) => {
                                 </div>
                               </div>
                             )}
-
-                          {/* 結果・メモ */}
                           {log.result && (
                             <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
                               <p className="text-[9px] font-black text-indigo-400 uppercase mb-1 flex items-center gap-1">
@@ -1292,7 +1334,17 @@ const AthleteView = (props) => {
                               </p>
                             </div>
                           )}
-
+                          {/* ▼▼▼ 監督からの追記 (一覧画面用デザイン) ▼▼▼ */}
+                          {log.coachNote && (
+                            <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 mt-3">
+                              <p className="text-[9px] font-black text-amber-600 uppercase mb-1 flex items-center gap-1 tracking-widest">
+                                <MessageSquare size={10} /> Coach's Note
+                              </p>
+                              <p className="text-xs font-bold leading-relaxed text-slate-800 whitespace-pre-wrap">
+                                {log.coachNote}
+                              </p>
+                            </div>
+                          )}
                           <p className="text-[9px] text-right text-slate-300">
                             Updated by: {log.updatedBy}
                           </p>
@@ -1305,8 +1357,8 @@ const AthleteView = (props) => {
             </div>
           </div>
         )}
-        {/* ▲▲▲ 追加ここまで ▲▲▲ */}
-        {/* ▼▼▼ 修正: 振り返り画面 (Review View) ▼▼▼ */}
+
+        {/* Review View */}
         {view === "review" && (
           <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in">
             <div className="flex items-center gap-2 mb-2">
@@ -1321,12 +1373,10 @@ const AthleteView = (props) => {
               </h3>
             </div>
 
-            {/* 1. 達成度円グラフエリア */}
             <div className="bg-slate-50 p-6 rounded-3xl relative overflow-hidden">
               <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 text-center">
                 Goal Achievement ({targetPeriod.name})
               </h4>
-
               {(() => {
                 const goalVal = getGoalValue(
                   currentProfile,
@@ -1344,7 +1394,6 @@ const AthleteView = (props) => {
                     value: Math.max(0, goalVal - currentVal),
                   },
                 ];
-
                 return (
                   <div className="flex flex-col items-center justify-center relative">
                     <div className="w-full h-48 relative z-10">
@@ -1361,12 +1410,11 @@ const AthleteView = (props) => {
                             dataKey="value"
                             stroke="none"
                           >
-                            <Cell fill="#3b82f6" /> {/* 青: 達成 */}
-                            <Cell fill="#e2e8f0" /> {/* グレー: 残り */}
+                            <Cell fill="#3b82f6" />
+                            <Cell fill="#e2e8f0" />
                           </Pie>
                         </PieChart>
                       </ResponsiveContainer>
-                      {/* 中央の％表示 */}
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                         <span className="text-4xl font-black text-slate-800 tracking-tighter">
                           {rate}
@@ -1381,25 +1429,21 @@ const AthleteView = (props) => {
                 );
               })()}
             </div>
-            {/* ▼▼▼ 追加提案: 練習強度バランス ▼▼▼ */}
+
             <div className="bg-white border border-slate-100 p-6 rounded-3xl space-y-4">
               <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Activity size={16} /> Training Intensity
               </h4>
-
               {(() => {
-                // 強度別の回数を集計
                 const counts = { low: 0, mid: 0, high: 0 };
                 periodLogs.forEach((l) => {
                   if (l.rpe >= 8) counts.high++;
                   else if (l.rpe >= 5) counts.mid++;
                   else counts.low++;
                 });
-                const total = periodLogs.length || 1; // 0除算防止
-
+                const total = periodLogs.length || 1;
                 return (
                   <div className="space-y-3">
-                    {/* High Intensity */}
                     <div>
                       <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
                         <span className="text-rose-500 flex items-center gap-1">
@@ -1417,8 +1461,6 @@ const AthleteView = (props) => {
                         ></div>
                       </div>
                     </div>
-
-                    {/* Mid Intensity */}
                     <div>
                       <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
                         <span className="text-orange-400">
@@ -1436,8 +1478,6 @@ const AthleteView = (props) => {
                         ></div>
                       </div>
                     </div>
-
-                    {/* Low Intensity */}
                     <div>
                       <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
                         <span className="text-emerald-500">
@@ -1459,45 +1499,35 @@ const AthleteView = (props) => {
                 );
               })()}
             </div>
-            {/* ▼▼▼ 追加: 痛みのヒートマップ (Pain Heatmap) ▼▼▼ */}
+
             <div className="bg-white border border-slate-100 p-6 rounded-3xl space-y-4">
               <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <HeartPulse size={16} /> Physical Condition Map
               </h4>
-
               {(() => {
-                // 1. 期間内の全日付を取得（ヘルパー関数を使用）
                 const dates = getDatesInRange(
                   targetPeriod.start,
                   targetPeriod.end,
                 );
-
-                // 2. ログを辞書形式に変換 (検索高速化 & 1日複数ログの場合は「最大の痛み」を採用)
                 const painMap = {};
                 periodLogs.forEach((l) => {
-                  if (!painMap[l.date] || painMap[l.date] < l.pain) {
+                  if (!painMap[l.date] || painMap[l.date] < l.pain)
                     painMap[l.date] = l.pain;
-                  }
                 });
-
                 return (
                   <div className="space-y-3">
-                    {/* ヒートマップ本体 (日付入り) */}
                     <div className="flex flex-wrap gap-2">
                       {dates.map((date) => {
                         const pain = painMap[date];
-                        const day = parseInt(date.split("-")[2], 10); // 日付の数字を取り出す
-
-                        // 色分け設定
-                        let bgClass = "bg-slate-100 text-slate-300"; // 記録なし
+                        const day = parseInt(date.split("-")[2], 10);
+                        let bgClass = "bg-slate-100 text-slate-300";
                         if (pain === 1)
-                          bgClass = "bg-emerald-300 text-emerald-800"; // Good
+                          bgClass = "bg-emerald-300 text-emerald-800";
                         if (pain === 2)
-                          bgClass = "bg-yellow-300 text-yellow-800"; // 違和感
-                        if (pain === 3) bgClass = "bg-orange-400 text-white"; // 痛み
-                        if (pain === 4) bgClass = "bg-rose-500 text-white"; // 強い痛み
-                        if (pain === 5) bgClass = "bg-purple-600 text-white"; // 激痛
-
+                          bgClass = "bg-yellow-300 text-yellow-800";
+                        if (pain === 3) bgClass = "bg-orange-400 text-white";
+                        if (pain === 4) bgClass = "bg-rose-500 text-white";
+                        if (pain === 5) bgClass = "bg-purple-600 text-white";
                         return (
                           <div
                             key={date}
@@ -1509,8 +1539,6 @@ const AthleteView = (props) => {
                         );
                       })}
                     </div>
-
-                    {/* 簡易凡例 (Legend) */}
                     <div className="flex justify-between items-center px-2 pt-2 border-t border-slate-50">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-1">
@@ -1541,7 +1569,6 @@ const AthleteView = (props) => {
               })()}
             </div>
 
-            {/* 2. 自分の振り返り入力 (既存) */}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                 Self Review
@@ -1553,7 +1580,6 @@ const AthleteView = (props) => {
                 onChange={(e) => setReviewComment(e.target.value)}
               />
             </div>
-
             <button
               onClick={handleSaveReview}
               className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -1561,7 +1587,6 @@ const AthleteView = (props) => {
               <Save size={18} /> 振り返りを保存
             </button>
 
-            {/* 3. コーチからのフィードバック (既存) */}
             <div className="bg-emerald-50 p-6 rounded-3xl space-y-4 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-12 bg-white/20 rounded-full -mr-6 -mt-6 blur-2xl"></div>
               <div className="relative z-10">
@@ -1580,7 +1605,6 @@ const AthleteView = (props) => {
               </div>
             </div>
 
-            {/* 4. 期間内の練習ログ詳細リスト (新規追加) */}
             <div className="pt-8 border-t border-slate-100 space-y-4">
               <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest text-center">
                 Daily History
@@ -1596,7 +1620,6 @@ const AthleteView = (props) => {
                       key={log.id}
                       className="bg-slate-50 p-4 rounded-2xl border border-slate-100"
                     >
-                      {/* 日付・距離・種別 */}
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <p className="text-[10px] font-black text-slate-400">
@@ -1616,10 +1639,7 @@ const AthleteView = (props) => {
                           </span>
                         </p>
                       </div>
-
-                      {/* 強度(RPE)と痛み(Pain)の可視化 */}
                       <div className="grid grid-cols-2 gap-4 mt-3">
-                        {/* RPE Bar */}
                         <div className="space-y-1">
                           <div className="flex justify-between text-[9px] font-bold text-slate-400">
                             <span>RPE (強度)</span>
@@ -1627,19 +1647,11 @@ const AthleteView = (props) => {
                           </div>
                           <div className="h-2 w-full bg-white rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${
-                                log.rpe >= 8
-                                  ? "bg-rose-500"
-                                  : log.rpe >= 5
-                                    ? "bg-orange-400"
-                                    : "bg-blue-400"
-                              }`}
+                              className={`h-full rounded-full ${log.rpe >= 8 ? "bg-rose-500" : log.rpe >= 5 ? "bg-orange-400" : "bg-blue-400"}`}
                               style={{ width: `${log.rpe * 10}%` }}
                             ></div>
                           </div>
                         </div>
-
-                        {/* Pain Indicator */}
                         <div className="space-y-1">
                           <div className="flex justify-between text-[9px] font-bold text-slate-400">
                             <span>Pain (痛み)</span>
@@ -1649,13 +1661,7 @@ const AthleteView = (props) => {
                             {[1, 2, 3, 4, 5].map((lvl) => (
                               <div
                                 key={lvl}
-                                className={`h-2 flex-1 rounded-full ${
-                                  lvl <= log.pain
-                                    ? log.pain >= 3
-                                      ? "bg-rose-500"
-                                      : "bg-emerald-400"
-                                    : "bg-white"
-                                }`}
+                                className={`h-2 flex-1 rounded-full ${lvl <= log.pain ? (log.pain >= 3 ? "bg-rose-500" : "bg-emerald-400") : "bg-white"}`}
                               ></div>
                             ))}
                           </div>
@@ -1669,7 +1675,7 @@ const AthleteView = (props) => {
           </div>
         )}
 
-        {/* ADDED: Goal View (Requested Fix) */}
+        {/* Goal View */}
         {view === "goal" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
             <div className="flex items-center justify-between mb-4">
@@ -1682,17 +1688,15 @@ const AthleteView = (props) => {
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">
                 Target Setting
               </h3>
-              <div className="w-9" /> {/* レイアウト調整用ダミー */}
+              <div className="w-9" />
             </div>
 
             <div className="bg-slate-50 p-6 rounded-3xl space-y-6 border border-slate-100">
               <div className="space-y-4">
                 <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2">
-                  <Target size={18} className="text-blue-500" />
+                  <Target size={18} className="text-blue-500" />{" "}
                   {targetPeriod.name} の目標
                 </h4>
-
-                {/* 1. 月間目標（月次レポートを選んでいる時だけ表示！） */}
                 {targetPeriod.type === "month" && (
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -1712,12 +1716,8 @@ const AthleteView = (props) => {
                     </p>
                   </div>
                 )}
-
-                {/* 2. 期間合計目標（月間「以外」を選んでいる時に表示！） */}
                 {targetPeriod.type !== "month" && (
                   <div className="space-y-2">
-                    {" "}
-                    {/* ← 余分な上線を消してスッキリさせました */}
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       期間合計目標 (km)
                     </label>
@@ -1732,8 +1732,6 @@ const AthleteView = (props) => {
                     />
                   </div>
                 )}
-
-                {/* Quarterly Goals - If quarters exist */}
                 {activeQuarters.length > 0 && (
                   <div className="space-y-3 pt-4 border-t border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -1763,7 +1761,6 @@ const AthleteView = (props) => {
                 )}
               </div>
             </div>
-
             <div className="space-y-3">
               <button
                 onClick={updateGoals}
@@ -1775,7 +1772,7 @@ const AthleteView = (props) => {
           </div>
         )}
 
-        {/* チーム状況画面 (Team Status View)  */}
+        {/* Team Status View */}
         {view === "team_status" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
             <div className="flex items-center gap-2 mb-2">
@@ -1789,7 +1786,6 @@ const AthleteView = (props) => {
                 Team Status
               </h3>
             </div>
-
             <div className="space-y-4">
               <div className="flex justify-between items-end px-2">
                 <h4 className="font-black text-xl text-slate-800 flex items-center gap-2">
@@ -1799,41 +1795,26 @@ const AthleteView = (props) => {
                   {targetPeriod.name}
                 </p>
               </div>
-
-              {/* ランキングリスト */}
               <div className="space-y-3">
                 {rankingData.map((runner, index) => {
-                  // 今日のログがあるか確認
                   const todayLog = allLogs.find(
                     (l) => l.runnerId === runner.id && l.date === getTodayStr(),
                   );
-
                   return (
                     <div
                       key={runner.id}
                       className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 relative overflow-hidden"
                     >
-                      {/* 順位バッジ */}
                       <div
-                        className={`absolute top-0 left-0 px-3 py-1 rounded-br-xl text-[10px] font-black ${
-                          index === 0
-                            ? "bg-yellow-400 text-yellow-900"
-                            : index === 1
-                              ? "bg-slate-300 text-slate-700"
-                              : index === 2
-                                ? "bg-orange-300 text-orange-800"
-                                : "bg-slate-200 text-slate-500"
-                        }`}
+                        className={`absolute top-0 left-0 px-3 py-1 rounded-br-xl text-[10px] font-black ${index === 0 ? "bg-yellow-400 text-yellow-900" : index === 1 ? "bg-slate-300 text-slate-700" : index === 2 ? "bg-orange-300 text-orange-800" : "bg-slate-200 text-slate-500"}`}
                       >
                         #{index + 1}
                       </div>
-
                       <div className="flex items-center gap-3 pl-8">
                         <div>
                           <p className="font-bold text-slate-700 text-sm">
                             {runner.name}
                           </p>
-                          {/* 今日の練習状況を表示 */}
                           {todayLog ? (
                             <p className="text-[10px] font-bold text-blue-500 flex items-center gap-1 mt-0.5">
                               <Check size={10} /> 今日: {todayLog.distance}km
@@ -1845,7 +1826,6 @@ const AthleteView = (props) => {
                           )}
                         </div>
                       </div>
-
                       <div className="text-right">
                         <p className="text-lg font-black text-slate-800">
                           {runner.total}
@@ -1861,42 +1841,701 @@ const AthleteView = (props) => {
             </div>
           </div>
         )}
+
+        {/* RACE HUB */}
+        {view === "race" && (
+          <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in pb-24">
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => safeChangeView("menu")}
+                className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
+                Race Cards
+              </h3>
+              <div className="w-9" />
+            </div>
+
+            <div className="space-y-6">
+              {tournaments.length === 0 ? (
+                <div className="text-center py-10">
+                  <Flag size={40} className="mx-auto text-slate-200 mb-3" />
+                  <p className="text-xs font-bold text-slate-400">
+                    予定されている大会はありません
+                  </p>
+                </div>
+              ) : (
+                tournaments.map((tour) => {
+                  const myCards = raceCards.filter(
+                    (c) =>
+                      c.tournamentId === tour.id &&
+                      c.runnerId === currentUserId,
+                  );
+                  const now = new Date().toISOString().slice(0, 10);
+                  const isOngoing =
+                    now >= tour.startDate && now <= tour.endDate;
+                  return (
+                    <div
+                      key={tour.id}
+                      className={`p-5 rounded-3xl border transition-all ${isOngoing ? "bg-blue-50/30 border-blue-200 shadow-md" : "bg-slate-50 border-slate-100"}`}
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-black text-slate-800">
+                            {tour.name}
+                          </h4>
+                          <p className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1">
+                            <Calendar size={12} />{" "}
+                            {tour.startDate.replace(/-/g, "/")} 〜{" "}
+                            {tour.endDate.replace(/-/g, "/")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        {myCards.map((card) => (
+                          <div
+                            key={card.id}
+                            onClick={() => {
+                              setRaceCardInput(card);
+                              setEditingRaceCardId(card.id);
+                              setView("race-entry");
+                            }}
+                            className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer active:scale-95 transition-all group"
+                          >
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="bg-slate-800 text-white text-[10px] font-black px-2 py-1 rounded-lg">
+                                  {card.raceType}
+                                </span>
+                                {/* ✨ フィードバックがあれば通知バッジを表示 ✨ */}
+                                {card.coachFeedback && (
+                                  <span className="bg-indigo-500 text-white text-[9px] font-black px-2 py-1 rounded-full animate-pulse flex items-center gap-1 shadow-sm">
+                                    <MessageSquare size={10} /> コメントあり
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs font-black text-slate-400 group-hover:text-blue-500 flex items-center gap-1">
+                                編集 <ChevronRight size={14} />
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-end">
+                              <div>
+                                <p className="font-black text-lg text-slate-700">
+                                  {card.raceType === "駅伝"
+                                    ? `${card.distance} (${card.ekidenDistance}km)`
+                                    : card.distance}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 mt-1">
+                                  目標: {card.targetTime || "未設定"}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                {card.resultTime ? (
+                                  <>
+                                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+                                      Result
+                                    </p>
+                                    <p className="font-black text-emerald-600">
+                                      {card.resultTime}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-1 rounded">
+                                    レース前
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => {
+                            setEditingRaceCardId(null);
+                            setRaceCardInput({
+                              tournamentId: tour.id,
+                              raceType: "トラック",
+                              distance: "1500m",
+                              ekidenDistance: "",
+                              targetTime: "",
+                              wupPlan: "",
+                              racePlan: "",
+                              condition: 3,
+                              weather: "",
+                              wind: "",
+                              temp: "",
+                              humidity: "",
+                              resultTime: "",
+                              lapTimes: "",
+                              goodPoints: "",
+                              issues: "",
+                              teammateGoodPoints: "",
+                              nextGoal: "",
+                            });
+                            setView("race-entry");
+                          }}
+                          className="w-full py-3 border-2 border-dashed border-blue-200 text-blue-500 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors"
+                        >
+                          <Plus size={16} /> 出場種目を追加
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/*  RACE ENTRY  */}
+        {view === "race-entry" && (
+          <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in slide-in-from-bottom-8 pb-24">
+            {/* 2. 大会名と期日のバナー（面積を小さく、細長いバーに変更） */}
+            {(() => {
+              const currentTour = tournaments.find(
+                (t) => t.id === raceCardInput.tournamentId,
+              );
+              const tourName = currentTour
+                ? currentTour.name
+                : "大会情報読み込み中...";
+              const tourDates = currentTour
+                ? `${currentTour.startDate.replace(/-/g, "/")} 〜 ${currentTour.endDate.replace(/-/g, "/")}`
+                : "日程未定";
+
+              return (
+                <div className="bg-white px-5 py-3.5 rounded-2xl shadow-sm flex items-center justify-between border border-slate-200 mb-4">
+                  <h2 className="font-black text-sm text-slate-800 tracking-tight truncate pr-4">
+                    {tourName}
+                  </h2>
+                  <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 whitespace-nowrap">
+                    <Calendar size={12} className="text-blue-500" />
+                    {tourDates}
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* ▼▼▼ 監督からのフィードバック表示（アコーディオン式に変更） ▼▼▼ */}
+            {editingRaceCardId && raceCardInput.coachFeedback && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setIsRaceFeedbackOpen(!isRaceFeedbackOpen)}
+                  className={`w-full flex items-center justify-between px-4 py-3 border active:scale-95 transition-all ${
+                    isRaceFeedbackOpen
+                      ? "bg-indigo-50 border-indigo-200 rounded-t-2xl"
+                      : "bg-indigo-50/50 border-indigo-100 rounded-2xl hover:bg-indigo-50"
+                  }`}
+                >
+                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                    <MessageSquare size={14} /> 監督からのフィードバック
+                  </span>
+                  <ChevronRight
+                    size={16}
+                    className={`text-indigo-400 transition-transform duration-300 ${isRaceFeedbackOpen ? "rotate-90" : ""}`}
+                  />
+                </button>
+
+                {/* 開いた中身 */}
+                {isRaceFeedbackOpen && (
+                  <div className="bg-white border border-t-0 border-indigo-200 p-5 rounded-b-2xl shadow-inner animate-in slide-in-from-top-2">
+                    <p className="font-bold text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
+                      {raceCardInput.coachFeedback}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* ▲▲▲ 追加ここまで ▲▲▲ */}
+
+            {/* 戻るボタンとタイトル */}
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => setView("race")}
+                className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
+                {editingRaceCardId ? "Edit Race Card" : "New Race Card"}
+              </h3>
+              <div className="w-9" />
+            </div>
+
+            {/* 種目選択 */}
+            <div className="space-y-4 bg-slate-50 p-5 rounded-3xl border border-slate-100">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">
+                    区分
+                  </label>
+                  <select
+                    className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500"
+                    value={raceCardInput.raceType}
+                    onChange={(e) =>
+                      setRaceCardInput({
+                        ...raceCardInput,
+                        raceType: e.target.value,
+                        distance: RACE_DISTANCES[e.target.value][0],
+                      })
+                    }
+                  >
+                    {Object.values(RACE_TYPES).map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">
+                    種目/区間
+                  </label>
+                  <select
+                    className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500"
+                    value={raceCardInput.distance}
+                    onChange={(e) =>
+                      setRaceCardInput({
+                        ...raceCardInput,
+                        distance: e.target.value,
+                      })
+                    }
+                  >
+                    {RACE_DISTANCES[raceCardInput.raceType].map((dist) => (
+                      <option key={dist} value={dist}>
+                        {dist}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {(raceCardInput.raceType === RACE_TYPES.EKIDEN ||
+                raceCardInput.distance === "その他") && (
+                <div className="space-y-1 animate-in fade-in">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">
+                    距離・詳細 (kmなど)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="例: 3.0"
+                    className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500"
+                    value={raceCardInput.ekidenDistance}
+                    onChange={(e) =>
+                      setRaceCardInput({
+                        ...raceCardInput,
+                        ekidenDistance: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* スタート時刻*/}
+            <div className="space-y-1 pt-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1">
+                <Timer size={12} className="text-indigo-400" /> スタート予定時刻
+              </label>
+              <input
+                type="time"
+                className="w-full p-4 bg-indigo-50/30 rounded-2xl font-black text-xl text-indigo-700 outline-none border border-indigo-100 focus:border-indigo-400 text-center shadow-sm"
+                value={raceCardInput.startTime}
+                onChange={(e) =>
+                  setRaceCardInput({
+                    ...raceCardInput,
+                    startTime: e.target.value,
+                  })
+                }
+              />
+              <p className="text-[9px] text-center text-slate-400 font-bold mt-1">
+                ※この時刻から逆算してW-upを計画しましょう
+              </p>
+            </div>
+
+            {/* レース前 */}
+            <div className="space-y-4">
+              <h4 className="font-black text-sm text-amber-600 flex items-center gap-2 border-b border-amber-100 pb-2">
+                <Target size={18} /> レース前
+              </h4>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  目標タイム
+                </label>
+                <input
+                  type="text"
+                  placeholder={`例: 15'20"00`}
+                  className="w-full p-3 bg-amber-50/50 rounded-xl font-black text-lg text-slate-700 outline-none border border-amber-100 focus:border-amber-400 text-center tracking-wider"
+                  value={raceCardInput.targetTime}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      targetTime: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2 pt-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  PEAKING
+                </label>
+                <div className="flex gap-2">
+                  {[
+                    {
+                      val: 1,
+                      en: "BAD",
+                      jp: "不調",
+                      textCol: "text-slate-500",
+                      activeBg: "bg-slate-600",
+                      activeBorder: "border-slate-600",
+                    },
+                    {
+                      val: 2,
+                      en: "POOR",
+                      jp: "いまいち",
+                      textCol: "text-orange-500",
+                      activeBg: "bg-orange-500",
+                      activeBorder: "border-orange-500",
+                    },
+                    {
+                      val: 3,
+                      en: "FAIR",
+                      jp: "普通",
+                      textCol: "text-emerald-500",
+                      activeBg: "bg-emerald-500",
+                      activeBorder: "border-emerald-500",
+                    },
+                    {
+                      val: 4,
+                      en: "GOOD",
+                      jp: "好調",
+                      textCol: "text-blue-500",
+                      activeBg: "bg-blue-500",
+                      activeBorder: "border-blue-500",
+                    },
+                    {
+                      val: 5,
+                      en: "PEAK",
+                      jp: "絶好調",
+                      textCol: "text-indigo-600",
+                      activeBg: "bg-indigo-600",
+                      activeBorder: "border-indigo-600",
+                    },
+                  ].map((item) => {
+                    const isSelected = raceCardInput.condition === item.val;
+                    return (
+                      <button
+                        key={item.val}
+                        onClick={() =>
+                          setRaceCardInput({
+                            ...raceCardInput,
+                            condition: item.val,
+                          })
+                        }
+                        className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl border-2 transition-all duration-200 ${isSelected ? `${item.activeBg} ${item.activeBorder} text-white shadow-md transform scale-105` : `bg-white border-slate-100 hover:border-slate-300`}`}
+                      >
+                        <span
+                          className={`text-[10px] font-black tracking-wider ${isSelected ? "text-white" : item.textCol}`}
+                        >
+                          {item.en}
+                        </span>
+                        <span
+                          className={`text-[8px] font-bold mt-0.5 ${isSelected ? "text-white/80" : "text-slate-400"}`}
+                        >
+                          {item.jp}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between items-end">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">
+                    W-up計画
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const template =
+                        "・60分前：ジョグ (15分)\n・40分前：体操・ドリル\n・25分前：流し (100m×3本)\n・15分前：招集・スパイク履き替え\n・ 5分前：最終刺激・集中";
+                      if (
+                        !raceCardInput.wupPlan ||
+                        window.confirm(
+                          "入力内容をテンプレートで上書きしますか？",
+                        )
+                      ) {
+                        setRaceCardInput({
+                          ...raceCardInput,
+                          wupPlan: template,
+                        });
+                      }
+                    }}
+                    className="text-[9px] bg-amber-100/80 text-amber-700 px-2 py-1.5 rounded-lg font-bold active:scale-95 transition-all flex items-center gap-1 shadow-sm"
+                  >
+                    <Edit size={10} /> テンプレート
+                  </button>
+                </div>
+                <textarea
+                  placeholder={`以下の例を使用したい場合は「テンプレート」をタップ。\n・60分前：ジョグ (15分)\n・40分前：体操・ドリル\n・25分前：流し (100m×3本)\n・15分前：招集・スパイク履き替え\n・ 5分前：最終刺激・集中`}
+                  className="w-full p-4 bg-amber-50/50 rounded-xl font-bold text-xs outline-none border border-amber-100 focus:border-amber-400 h-36 resize-none leading-relaxed tracking-wide"
+                  value={raceCardInput.wupPlan}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      wupPlan: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  レースプラン・意識すること
+                </label>
+                <textarea
+                  placeholder="例: 最初の入りは積極的に、3000mから粘る"
+                  className="w-full p-4 bg-amber-50/50 rounded-xl font-bold text-xs outline-none border border-amber-100 focus:border-amber-400 h-24 resize-none"
+                  value={raceCardInput.racePlan}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      racePlan: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* 当日入力 */}
+            <div className="space-y-4 pt-4">
+              <h4 className="font-black text-sm text-slate-600 flex items-center gap-2 border-b border-slate-100 pb-2">
+                <Cloud size={18} /> CONDITION
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400">
+                    天気
+                  </label>
+                  <select
+                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none"
+                    value={raceCardInput.weather}
+                    onChange={(e) =>
+                      setRaceCardInput({
+                        ...raceCardInput,
+                        weather: e.target.value,
+                      })
+                    }
+                  >
+                    {["晴れ", "曇り", "小雨", "本降り", "雪"].map((w) => (
+                      <option key={w} value={w}>
+                        {w}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400">
+                    風
+                  </label>
+                  <select
+                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none"
+                    value={raceCardInput.wind}
+                    onChange={(e) =>
+                      setRaceCardInput({
+                        ...raceCardInput,
+                        wind: e.target.value,
+                      })
+                    }
+                  >
+                    {["無風", "弱風", "強風"].map((w) => (
+                      <option key={w} value={w}>
+                        {w}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1 flex items-center bg-slate-50 rounded-xl px-3 border border-slate-100">
+                  <Thermometer size={14} className="text-rose-400" />
+                  <input
+                    type="number"
+                    placeholder="気温"
+                    className="w-full p-2 bg-transparent font-bold text-sm outline-none text-right"
+                    value={raceCardInput.temp}
+                    onChange={(e) =>
+                      setRaceCardInput({
+                        ...raceCardInput,
+                        temp: e.target.value,
+                      })
+                    }
+                  />
+                  <span className="text-xs font-bold text-slate-400 ml-1">
+                    ℃
+                  </span>
+                </div>
+                <div className="space-y-1 flex items-center bg-slate-50 rounded-xl px-3 border border-slate-100">
+                  <Droplets size={14} className="text-blue-400" />
+                  <input
+                    type="number"
+                    placeholder="湿度"
+                    className="w-full p-2 bg-transparent font-bold text-sm outline-none text-right"
+                    value={raceCardInput.humidity}
+                    onChange={(e) =>
+                      setRaceCardInput({
+                        ...raceCardInput,
+                        humidity: e.target.value,
+                      })
+                    }
+                  />
+                  <span className="text-xs font-bold text-slate-400 ml-1">
+                    %
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* レース後 */}
+            <div className="space-y-4 pt-4">
+              <h4 className="font-black text-sm text-indigo-600 flex items-center gap-2 border-b border-indigo-100 pb-2">
+                <Timer size={18} /> レース後
+              </h4>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase flex justify-between">
+                  <span>RESULT</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder={`例: 15'25"40`}
+                  className="w-full p-4 bg-indigo-50/50 rounded-xl font-black text-lg text-indigo-700 outline-none border border-indigo-100 focus:border-indigo-400 text-center tracking-wider"
+                  value={raceCardInput.resultTime}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      resultTime: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  LAPタイム
+                </label>
+                <textarea
+                  placeholder="1000m: 3'00&#10;2000m: 6'05..."
+                  className="w-full p-3 bg-indigo-50/50 rounded-xl font-mono text-xs outline-none border border-indigo-100 focus:border-indigo-400 h-20 resize-none"
+                  value={raceCardInput.lapTimes}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      lapTimes: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  良かった点・収穫
+                </label>
+                <textarea
+                  className="w-full p-4 bg-indigo-50/50 rounded-xl font-bold text-xs outline-none border border-indigo-100 focus:border-indigo-400 h-24 resize-none"
+                  value={raceCardInput.goodPoints}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      goodPoints: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  課題・反省点
+                </label>
+                <textarea
+                  className="w-full p-4 bg-indigo-50/50 rounded-xl font-bold text-xs outline-none border border-indigo-100 focus:border-indigo-400 h-24 resize-none"
+                  value={raceCardInput.issues}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      issues: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-emerald-600 uppercase flex items-center gap-1">
+                  <Users size={12} /> 仲間の良かった点
+                </label>
+                <textarea
+                  placeholder="〇〇先輩のラストスパートが凄かった！自分もあんな風に..."
+                  className="w-full p-4 bg-emerald-50/50 rounded-xl font-bold text-xs outline-none border border-emerald-100 focus:border-emerald-400 h-20 resize-none"
+                  value={raceCardInput.teammateGoodPoints}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      teammateGoodPoints: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  次に向けての目標
+                </label>
+                <textarea
+                  className="w-full p-4 bg-slate-50 rounded-xl font-bold text-xs outline-none border border-slate-200 focus:border-slate-400 h-20 resize-none"
+                  value={raceCardInput.nextGoal}
+                  onChange={(e) =>
+                    setRaceCardInput({
+                      ...raceCardInput,
+                      nextGoal: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* 保存ボタン */}
+            <div className="pt-4 space-y-3">
+              <button
+                onClick={handleSaveRaceCard}
+                disabled={isSubmitting}
+                className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${isSubmitting ? "bg-slate-300 text-white" : "bg-slate-900 text-white active:scale-95"}`}
+              >
+                <Save size={20} />{" "}
+                {editingRaceCardId ? "シートを更新する" : "シートを作成する"}
+              </button>
+              {editingRaceCardId && (
+                <button
+                  onClick={() => handleDeleteRaceCard(editingRaceCardId)}
+                  className="w-full py-4 text-rose-500 font-bold text-sm flex items-center justify-center gap-2 hover:bg-rose-50 rounded-2xl transition-colors"
+                >
+                  <Trash2 size={16} /> このシートを削除
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
-      {/* ▼▼▼ 下部ナビゲーションバー（ここから書き換え） ▼▼▼ */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 max-w-md mx-auto pointer-events-none">
         <div className="bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-8 pt-2 px-4 rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] flex justify-between items-end h-24 pointer-events-auto">
-          {/* 1. Home */}
           <button
             onClick={() => safeChangeView("menu")}
-            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${
-              view === "menu"
-                ? "text-blue-600 -translate-y-1"
-                : "text-slate-300 hover:text-slate-400"
-            }`}
+            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${view === "menu" ? "text-blue-600 -translate-y-1" : "text-slate-300 hover:text-slate-400"}`}
           >
             <Home size={22} strokeWidth={view === "menu" ? 3 : 2} />
             <span className="text-[8px] font-black uppercase tracking-widest">
               Home
             </span>
           </button>
-
-          {/* 2. Team */}
           <button
             onClick={() => safeChangeView("team_status")}
-            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${
-              view === "team_status"
-                ? "text-indigo-500 -translate-y-1"
-                : "text-slate-300 hover:text-slate-400"
-            }`}
+            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${view === "team_status" ? "text-indigo-500 -translate-y-1" : "text-slate-300 hover:text-slate-400"}`}
           >
             <Users size={22} strokeWidth={view === "team_status" ? 3 : 2} />
             <span className="text-[8px] font-black uppercase tracking-widest">
               Team
             </span>
           </button>
-
-          {/* 3. Entry (Center) */}
           <div className="relative mx-1">
             <button
               onClick={() => {
@@ -1912,31 +2551,18 @@ const AthleteView = (props) => {
               />
             </button>
           </div>
-
-          {/* 4. Diary (New!) */}
           <button
             onClick={() => safeChangeView("diary")}
-            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${
-              view === "diary"
-                ? "text-orange-500 -translate-y-1"
-                : "text-slate-300 hover:text-slate-400"
-            }`}
+            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${view === "diary" ? "text-orange-500 -translate-y-1" : "text-slate-300 hover:text-slate-400"}`}
           >
-            {/* アイコンは BookOpen を使用 */}
             <BookOpen size={22} strokeWidth={view === "diary" ? 3 : 2} />
             <span className="text-[8px] font-black uppercase tracking-widest">
               Diary
             </span>
           </button>
-
-          {/* 5. Review */}
           <button
             onClick={() => safeChangeView("review")}
-            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${
-              view === "review"
-                ? "text-emerald-500 -translate-y-1"
-                : "text-slate-300 hover:text-slate-400"
-            }`}
+            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${view === "review" ? "text-emerald-500 -translate-y-1" : "text-slate-300 hover:text-slate-400"}`}
           >
             <MessageSquare size={22} strokeWidth={view === "review" ? 3 : 2} />
             <span className="text-[8px] font-black uppercase tracking-widest">
@@ -1945,7 +2571,8 @@ const AthleteView = (props) => {
           </button>
         </div>
       </nav>
-      {/* ▼▼▼ 追加: 選手画面用の削除確認ダイアログ ▼▼▼ */}
+
+      {/* 削除確認ダイアログ */}
       {confirmDialog.isOpen && (
         <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
@@ -1971,7 +2598,84 @@ const AthleteView = (props) => {
           </div>
         </div>
       )}
-      {/* ▲▲▲ 追加ここまで ▲▲▲ */}
+      {/* 通知センター (Notification Modal) */}
+      {isNotifOpen && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setIsNotifOpen(false)}
+        >
+          <div
+            className="bg-white w-full max-w-md max-h-[80vh] rounded-[2.5rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* ヘッダー */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white rounded-t-[2.5rem] sticky top-0 z-10">
+              <h3 className="font-black text-lg flex items-center gap-2 text-slate-800">
+                <Bell className="text-rose-500" /> Notifications
+              </h3>
+              <button
+                onClick={() => setIsNotifOpen(false)}
+                className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full active:scale-95"
+              >
+                閉じる
+              </button>
+            </div>
+
+            {/* リスト部分 */}
+            <div className="overflow-y-auto p-4 space-y-3 pb-8">
+              {notifications.length === 0 ? (
+                <div className="text-center py-10 opacity-50">
+                  <Bell size={40} className="mx-auto mb-2 text-slate-300" />
+                  <p className="text-xs font-bold text-slate-500">
+                    新しいお知らせはありません
+                  </p>
+                </div>
+              ) : (
+                notifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    onClick={notif.onClick}
+                    className="p-4 bg-slate-50 rounded-2xl border border-slate-100 active:scale-95 transition-all cursor-pointer hover:border-blue-200 shadow-sm relative overflow-hidden group"
+                  >
+                    {/* 未読インジケーター (青い線) */}
+                    {notif.time > lastReadTime && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+                    )}
+
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span
+                        className={`text-[9px] font-black text-white px-2 py-0.5 rounded-md uppercase tracking-widest shadow-sm ${
+                          notif.type === "Feedback"
+                            ? "bg-indigo-500" // Feedbackの通知
+                            : notif.type === "Diary"
+                              ? "bg-orange-500" // NewIventの通知
+                              : "bg-emerald-500" // Diaryの通知
+                        }`}
+                      >
+                        {notif.type}
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-400">
+                        {new Date(notif.time).toLocaleDateString("ja-JP")}
+                      </span>
+                    </div>
+                    <p className="font-black text-slate-800 text-sm mb-1">
+                      {notif.title}
+                    </p>
+                    <p className="text-xs font-bold text-slate-600 leading-relaxed">
+                      {notif.message}
+                    </p>
+                    <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[9px] font-bold text-blue-500 flex items-center gap-1">
+                        確認する <ChevronRight size={10} />
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

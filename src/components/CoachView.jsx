@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Users,
   LayoutDashboard,
@@ -28,8 +28,20 @@ import {
   BarChart2,
   UserCheck,
   Target,
+  ClipboardCheck,
+  Timer,
   ArrowLeft,
+  Flag,
+  Cloud,
+  Thermometer,
+  Droplets,
+  Save,
+  BookOpen,
+  Dumbbell,
+  MapPin,
+  Plus,
 } from "lucide-react";
+
 import {
   BarChart,
   Bar,
@@ -94,6 +106,8 @@ const CoachView = (props) => {
     menuInput,
     setMenuInput,
     setSuccessMsg,
+    teamLogs,
+    appId,
     handleCoachEditRunner,
     handleStartPreview,
     allRunners,
@@ -139,7 +153,22 @@ const CoachView = (props) => {
     confirmDialog,
     handleExportMatrixCSV,
     setDemoMode,
+    tournaments,
+    raceCards,
+    newTournamentInput,
+    setNewTournamentInput,
+    handleSaveTournament,
+    handleDeleteTournament,
+    handleSaveRaceCardFeedback,
   } = props;
+
+  const [selectedTourId, setSelectedTourId] = useState(null); // 開いている大会一覧
+  const [readingCard, setReadingCard] = useState(null); // 読んでいるノート詳細
+  const [coachFeedbackInput, setCoachFeedbackInput] = useState(""); //監督からのフィードバック
+
+  // ▼▼▼ チーム日誌のリスト表示用 ▼▼▼
+  const [diaryMode, setDiaryMode] = useState("list"); // "list" か "edit"
+  const [listMonth, setListMonth] = useState(new Date());
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 print:bg-white print:pb-0 print:h-auto md:flex">
@@ -153,23 +182,32 @@ const CoachView = (props) => {
 
           {/* PC Navigation */}
           <nav className="hidden md:flex flex-col gap-2">
-            {["stats", "report", "check", "menu", "roster", "settings"].map(
-              (t) => (
-                <button
-                  key={t}
-                  onClick={() => setView(`coach-${t}`)}
-                  className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold uppercase tracking-widest transition-all ${view === `coach-${t}` ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800"}`}
-                >
-                  {t === "stats" && <LayoutDashboard size={18} />}
-                  {t === "report" && <FileText size={18} />}
-                  {t === "check" && <ClipboardList size={18} />}
-                  {t === "menu" && <Calendar size={18} />}
-                  {t === "roster" && <Users size={18} />}
-                  {t === "settings" && <Settings size={18} />}
-                  {t}
-                </button>
-              ),
-            )}
+            {[
+              "stats",
+              "report",
+              "check",
+              "menu",
+              "race",
+              "roster",
+              "settings",
+              "admin",
+            ].map((t) => (
+              <button
+                key={t}
+                onClick={() => setView(`coach-${t}`)}
+                className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold uppercase tracking-widest transition-all ${view === `coach-${t}` ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800"}`}
+              >
+                {t === "stats" && <LayoutDashboard size={18} />}
+                {t === "report" && <FileText size={18} />}
+                {t === "check" && <ClipboardList size={18} />}
+                {t === "menu" && <Calendar size={18} />}
+                {t === "race" && <Flag size={18} />}
+                {t === "roster" && <Users size={18} />}
+                {t === "settings" && <Settings size={18} />}
+                {t === "admin" && <Eye size={18} />}
+                {t}
+              </button>
+            ))}
           </nav>
         </div>
         <button
@@ -182,19 +220,34 @@ const CoachView = (props) => {
 
       {/* Main Content Area */}
       <main className="flex-1 p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none md:overflow-y-auto md:h-screen print:max-w-none print:p-0 print:w-full print:overflow-visible">
-        {/* Mobile Navigation Tabs */}
-        <div className="md:hidden flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-hidden print:hidden mb-6">
-          {["stats", "report", "check", "menu", "roster", "settings"].map(
-            (t) => (
+        {/* Mobile Navigation Tabs (アイコン化) */}
+        <div className="md:hidden flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-x-auto no-scrollbar print:hidden mb-6 gap-2">
+          {[
+            { id: "stats", icon: LayoutDashboard },
+            { id: "report", icon: FileText },
+            { id: "check", icon: ClipboardList },
+            { id: "menu", icon: Calendar },
+            { id: "race", icon: Flag },
+            { id: "roster", icon: Users },
+            { id: "settings", icon: Settings },
+            { id: "admin", icon: Eye },
+          ].map((item) => {
+            const Icon = item.icon;
+            const isActive = view === `coach-${item.id}`;
+            return (
               <button
-                key={t}
-                onClick={() => setView(`coach-${t}`)}
-                className={`flex-1 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${view === `coach-${t}` ? "bg-slate-950 text-white shadow-lg" : "text-slate-400"}`}
+                key={item.id}
+                onClick={() => setView(`coach-${item.id}`)}
+                className={`flex-none w-12 h-12 flex items-center justify-center rounded-2xl transition-all active:scale-95 ${
+                  isActive
+                    ? "bg-slate-950 text-white shadow-lg scale-105"
+                    : "text-slate-400 hover:bg-slate-50"
+                }`}
               >
-                {t.slice(0, 3)}
+                <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
               </button>
-            ),
-          )}
+            );
+          })}
         </div>
 
         {/* ... Period Selector ... */}
@@ -584,9 +637,10 @@ const CoachView = (props) => {
                       <div key={year} className={wrapperClass}>
                         <div className="report-card-base">
                           <div className="pb-4 mb-4 border-b-2 border-slate-100 print:border-slate-800">
-                            <div className="flex justify-between items-start">
+                            {/* スマホ時は縦並び(flex-col)、PC時は横並び(md:flex-row)に自動切り替え */}
+                            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
                               <div>
-                                <h2 className="font-black text-xl text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
+                                <h2 className="font-black text-lg md:text-xl text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
                                   <FileText
                                     className="text-blue-600 print:text-black"
                                     size={20}
@@ -598,8 +652,8 @@ const CoachView = (props) => {
                                   {targetPeriod.start} - {targetPeriod.end})
                                 </p>
                               </div>
-                              <div className="text-right">
-                                <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-black border border-slate-200 print:border-slate-400 print:bg-white print:text-black">
+                              <div className="text-left md:text-right">
+                                <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-black border border-slate-200 print:border-slate-400 print:bg-white print:text-black inline-block">
                                   <Users
                                     className="inline mr-1 -mt-0.5"
                                     size={12}
@@ -610,11 +664,11 @@ const CoachView = (props) => {
                             </div>
                           </div>
 
+                          {/* スマホ画面では横スクロール */}
                           <div
-                            style={{ overflow: "visible" }}
-                            className={`pb-4 print:overflow-visible ${isPrintPreview ? "" : "overflow-x-auto"}`}
+                            className={`pb-4 print:overflow-visible w-full ${isPrintPreview ? "" : "overflow-x-auto no-scrollbar"}`}
                           >
-                            <table className="w-full text-xs border-collapse">
+                            <table className="w-full text-xs border-collapse min-w-max">
                               <thead>
                                 <tr>
                                   <th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">
@@ -1035,50 +1089,484 @@ const CoachView = (props) => {
           </div>
         )}
 
-        {view === "coach-menu" && (
-          // ... (Menu view remains same) ...
-          <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6">
-            <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">
-              Board Update
-            </h3>
-            <div className="space-y-4 max-w-2xl mx-auto">
-              <input
-                type="date"
-                className="w-full p-5 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-black text-sm"
-                value={menuInput.date}
-                onChange={(e) =>
-                  setMenuInput({ ...menuInput, date: e.target.value })
-                }
-              />
-              <textarea
-                placeholder="指示を入力..."
-                className="w-full p-6 bg-slate-50 rounded-[2.5rem] h-64 outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-500 text-lg leading-relaxed shadow-inner resize-none"
-                value={menuInput.text}
-                onChange={(e) =>
-                  setMenuInput({ ...menuInput, text: e.target.value })
-                }
-              />
-              <button
-                onClick={async () => {
-                  await setDoc(
-                    doc(
-                      db,
-                      "artifacts",
-                      appId,
-                      "public",
-                      "data",
-                      "menus",
-                      menuInput.date,
-                    ),
-                    menuInput,
-                  );
-                  setSuccessMsg("掲示しました");
-                  setTimeout(() => setSuccessMsg(""), 2000);
-                }}
-                className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95 transition-all"
-              >
-                掲示板を更新
-              </button>
+        {view === "coach-menu" &&
+          (() => {
+            // 月間データの絞り込み
+            const year = listMonth.getFullYear();
+            const month = listMonth.getMonth() + 1;
+            const prefix = `${year}-${String(month).padStart(2, "0")}`;
+            const monthlyLogs = (teamLogs || [])
+              .filter((l) => l.date.startsWith(prefix))
+              .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+            return (
+              <div className="space-y-6 animate-in fade-in">
+                {diaryMode === "list" ? (
+                  /* ==========================================
+                   1. 月間リスト表示モード
+                ========================================== */
+                  <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 max-w-2xl mx-auto">
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 flex items-center gap-2">
+                        <BookOpen size={14} /> Team Diary Check & Edit
+                      </h3>
+                    </div>
+
+                    {/* 月めくりカレンダー */}
+                    <div className="flex justify-between items-center bg-slate-50 p-4 rounded-[2rem] border border-slate-100">
+                      <button
+                        onClick={() => {
+                          const d = new Date(listMonth);
+                          d.setMonth(d.getMonth() - 1);
+                          setListMonth(d);
+                        }}
+                        className="p-2 bg-white rounded-full shadow-sm hover:bg-blue-50 text-slate-500 transition-colors"
+                      >
+                        <ArrowLeft size={20} />
+                      </button>
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          Target Month
+                        </p>
+                        <h2 className="text-lg font-black text-slate-800">
+                          {year}年 {month}月
+                        </h2>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const d = new Date(listMonth);
+                          d.setMonth(d.getMonth() + 1);
+                          setListMonth(d);
+                        }}
+                        className="p-2 bg-white rounded-full shadow-sm hover:bg-blue-50 text-slate-500 transition-colors"
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                    </div>
+
+                    {/* 新規作成・今日のチェックボタン */}
+                    <button
+                      onClick={() => {
+                        setMenuInput({ ...menuInput, date: getTodayStr() });
+                        setDiaryMode("edit");
+                      }}
+                      className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus size={20} /> 今日の日誌をチェック・作成する
+                    </button>
+
+                    {/* 日誌リスト */}
+                    <div className="space-y-3 pt-4 border-t border-slate-100">
+                      {monthlyLogs.length > 0 ? (
+                        monthlyLogs.map((log) => (
+                          <div
+                            key={log.date}
+                            onClick={() => {
+                              setMenuInput({ ...menuInput, date: log.date });
+                              setDiaryMode("edit");
+                            }}
+                            className="bg-slate-50 p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center cursor-pointer active:scale-95 transition-all hover:border-blue-200 group"
+                          >
+                            <div>
+                              <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                {log.date.slice(5).replace("-", "/")} (
+                                {
+                                  ["日", "月", "火", "水", "木", "金", "土"][
+                                    new Date(log.date).getDay()
+                                  ]
+                                }
+                                )
+                              </p>
+                              <h3 className="font-bold text-slate-700 text-sm truncate mb-1">
+                                {log.menu
+                                  ? log.menu.split("\n")[0]
+                                  : "メニューなし"}
+                              </h3>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="text-[9px] bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-500 font-bold">
+                                  {log.weather}
+                                </span>
+                                {log.location && (
+                                  <span className="text-[9px] bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-500 font-bold flex items-center gap-0.5">
+                                    <MapPin size={8} />
+                                    {log.location === "その他" &&
+                                    log.locationDetail
+                                      ? log.locationDetail
+                                      : log.location === "競技場" &&
+                                          log.locationDetail
+                                        ? `${log.location} (${log.locationDetail})`
+                                        : log.location}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-slate-300 group-hover:text-blue-500 transition-colors">
+                              <ChevronRight size={18} />
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-10 text-slate-300 font-bold text-sm">
+                          この月の日誌はありません
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* ==========================================
+                   2. 編集・確認モード (Edit Mode)
+                ========================================== */
+                  <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 max-w-2xl mx-auto relative">
+                    <div className="flex justify-between items-center mb-2">
+                      <button
+                        onClick={() => setDiaryMode("list")}
+                        className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-blue-600 transition-colors"
+                      >
+                        <ArrowLeft size={16} /> 一覧に戻る
+                      </button>
+                      <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 flex items-center gap-2">
+                        <BookOpen size={14} /> Team Diary Check & Edit
+                      </h3>
+                    </div>
+
+                    {/* 日付選択 */}
+                    <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                        Date
+                      </span>
+                      <input
+                        type="date"
+                        className="flex-1 bg-transparent font-black text-slate-700 outline-none"
+                        value={menuInput.date}
+                        onChange={(e) =>
+                          setMenuInput({ ...menuInput, date: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    {(() => {
+                      const diary = teamLogs?.find(
+                        (l) => l.date === menuInput.date,
+                      );
+
+                      if (!diary) {
+                        return (
+                          <div className="text-center py-10 bg-slate-50 rounded-[2rem] border border-slate-100 border-dashed mt-4">
+                            <BookOpen
+                              size={32}
+                              className="mx-auto text-slate-300 mb-2"
+                            />
+                            <p className="text-xs font-bold text-slate-400">
+                              この日の日誌はまだ提出されていません
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-5 mt-2">
+                          {/* マネージャー入力のメタ情報 */}
+                          <div className="flex flex-wrap gap-2">
+                            <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200">
+                              {diary.weather}{" "}
+                              {diary.temp ? `${diary.temp}℃` : ""}
+                            </span>
+                            {diary.startTime && (
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200">
+                                {diary.startTime} - {diary.endTime}
+                              </span>
+                            )}
+                            {diary.location && (
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
+                                <MapPin size={10} />
+                                {diary.location === "その他" &&
+                                diary.locationDetail
+                                  ? diary.locationDetail
+                                  : diary.location === "競技場" &&
+                                      diary.locationDetail
+                                    ? `${diary.location} (${diary.locationDetail})`
+                                    : diary.location}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* メニュー内容 (監督が直接編集可能) */}
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 ml-1">
+                              <Edit size={12} /> Menu (メニュー)
+                            </p>
+                            <textarea
+                              id="edit-diary-menu"
+                              defaultValue={diary.menu || ""}
+                              className="w-full p-4 bg-white rounded-2xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 min-h-[120px] text-sm resize-none shadow-sm"
+                            />
+                          </div>
+
+                          {/* 補強 */}
+                          {diary.reinforcements &&
+                            diary.reinforcements.length > 0 && (
+                              <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                                <p className="text-[10px] font-black text-blue-400 mb-2 flex items-center gap-1 uppercase tracking-widest">
+                                  <Dumbbell size={10} /> Reinforcement
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {diary.reinforcements.map((item, i) => (
+                                    <span
+                                      key={i}
+                                      className="text-[10px] font-bold bg-white text-slate-600 px-2 py-1 rounded shadow-sm border border-slate-100"
+                                    >
+                                      {item}
+                                    </span>
+                                  ))}
+                                  {diary.reinforcements.includes("その他") &&
+                                    diary.reinforcementDetail && (
+                                      <span className="text-[10px] font-bold text-slate-400 self-center">
+                                        : {diary.reinforcementDetail}
+                                      </span>
+                                    )}
+                                </div>
+                              </div>
+                            )}
+
+                          {/* 結果・ノート (監督が直接編集可能) */}
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 ml-1">
+                              <Edit size={12} /> Results / Notes (報告・所感)
+                            </p>
+                            <textarea
+                              id="edit-diary-result"
+                              defaultValue={diary.result || ""}
+                              className="w-full p-4 bg-white rounded-2xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 min-h-[100px] text-sm resize-none shadow-sm"
+                            />
+                          </div>
+
+                          <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold px-1">
+                            <span>
+                              ※書き換えて保存すると選手画面に反映されます
+                            </span>
+                            <span>Written by {diary.updatedBy}</span>
+                          </div>
+
+                          <button
+                            onClick={async () => {
+                              const newMenu =
+                                document.getElementById(
+                                  "edit-diary-menu",
+                                ).value;
+                              const newResult =
+                                document.getElementById(
+                                  "edit-diary-result",
+                                ).value;
+
+                              await updateDoc(
+                                doc(
+                                  db,
+                                  "artifacts",
+                                  appId,
+                                  "public",
+                                  "data",
+                                  "team_logs",
+                                  menuInput.date,
+                                ),
+                                {
+                                  menu: newMenu,
+                                  result: newResult,
+                                  updatedAt: new Date().toISOString(),
+                                },
+                              );
+
+                              import("react-hot-toast").then((module) => {
+                                module.toast.success("日誌を更新しました！");
+                              });
+                            }}
+                            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Save size={16} /> 内容を上書き保存する
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+        {/* ▼▼▼ 大会管理画面 (Race Management) 完成版 ▼▼▼ */}
+        {view === "coach-race" && (
+          <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in max-w-2xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">
+                Race & Tournament
+              </h3>
+            </div>
+
+            <div className="bg-blue-50 p-6 rounded-3xl space-y-4 border border-blue-100">
+              <h4 className="font-black text-blue-600 text-sm flex items-center gap-2">
+                <Flag size={18} /> 新しい大会を登録する
+              </h4>
+              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                ここで大会を登録すると、選手たちの画面に「振り返りシート（Race
+                Card）」の入力ボタンが表示されるようになります。
+              </p>
+
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="大会名 (例: 秋季県大会)"
+                  className="w-full p-4 bg-white rounded-xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 text-sm shadow-sm"
+                  value={newTournamentInput.name} // ✨ 入力データを繋ぐ！
+                  onChange={(e) =>
+                    setNewTournamentInput({
+                      ...newTournamentInput,
+                      name: e.target.value,
+                    })
+                  }
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 ml-1">
+                      開始日
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full p-4 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-xs shadow-sm"
+                      value={newTournamentInput.startDate} // ✨ 入力データを繋ぐ！
+                      onChange={(e) =>
+                        setNewTournamentInput({
+                          ...newTournamentInput,
+                          startDate: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 ml-1">
+                      終了日
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full p-4 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-xs shadow-sm"
+                      value={newTournamentInput.endDate} // ✨ 入力データを繋ぐ！
+                      onChange={(e) =>
+                        setNewTournamentInput({
+                          ...newTournamentInput,
+                          endDate: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleSaveTournament} // ✨ 保存関数を繋ぐ！
+                  disabled={isSubmitting}
+                  className={`w-full py-4 rounded-xl font-black text-sm shadow-md transition-all mt-2 ${isSubmitting ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"}`}
+                >
+                  {isSubmitting ? "登録中..." : "大会を登録して選手に通知する"}
+                </button>
+              </div>
+            </div>
+
+            {/* 登録済みの大会リスト */}
+            <div className="space-y-3 pt-6 border-t border-slate-100">
+              <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                Registered Races
+              </h4>
+
+              {tournaments.length === 0 ? (
+                <p className="text-center text-xs text-slate-400 font-bold py-8 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                  大会はまだ登録されていません
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {tournaments.map((tour) => (
+                    <div
+                      key={tour.id}
+                      className="bg-white border border-slate-200 p-4 rounded-2xl flex justify-between items-center shadow-sm"
+                    >
+                      <div>
+                        <h5 className="font-bold text-slate-800">
+                          {tour.name}
+                        </h5>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">
+                          {tour.startDate.replace(/-/g, "/")} 〜{" "}
+                          {tour.endDate.replace(/-/g, "/")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {/* 選手たちが提出したシートの枚数（タップして一覧を開くボタンに変更） */}
+                        <button
+                          onClick={() => setSelectedTourId(tour.id)}
+                          className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 active:scale-95 transition-all hover:bg-indigo-100 cursor-pointer shadow-sm"
+                        >
+                          <ClipboardCheck size={12} />
+                          {
+                            raceCards.filter(
+                              (card) => card.tournamentId === tour.id,
+                            ).length
+                          }{" "}
+                          枚提出
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTournament(tour.id)} // ✨ 削除関数を繋ぐ！
+                          className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="大会を削除する"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 管理者ツール画面 (Admin Tools)  */}
+        {view === "coach-admin" && (
+          <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">
+                Admin Tools
+              </h3>
+            </div>
+
+            <div className="bg-purple-50/50 p-6 rounded-3xl border border-purple-100 space-y-4">
+              <h4 className="font-black text-sm text-purple-700 flex items-center gap-2 mb-2">
+                <Eye size={18} /> システム管理者機能
+              </h4>
+              <p className="text-[10px] text-slate-600 font-bold leading-relaxed mb-6">
+                この機能はシステム管理者用です。他のユーザー権限での動作確認や、設定のテストを行うことができます。
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => setDemoMode("manager")}
+                  className="p-5 bg-amber-50 text-amber-700 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-amber-100 border border-amber-200 shadow-sm active:scale-95 transition-all"
+                >
+                  <Users size={24} />
+                  マネージャープレビュー
+                </button>
+
+                <button
+                  onClick={() => {
+                    setDemoMode("admin");
+                    setView("menu");
+                    window.scrollTo(0, 0);
+                  }}
+                  className="p-5 bg-purple-100 text-purple-800 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-purple-200 border border-purple-300 shadow-sm active:scale-95 transition-all"
+                >
+                  <Eye size={24} />
+                  選手プレビュー
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-8 border-t border-slate-100 text-center">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                KSWC System Control
+              </p>
             </div>
           </div>
         )}
@@ -1659,6 +2147,11 @@ const CoachView = (props) => {
                           message: "",
                           onConfirm: null,
                         });
+                        import("react-hot-toast").then((module) => {
+                          module.toast.success(
+                            `${selectedRunner.lastName}選手をアーカイブしました`,
+                          );
+                        });
                         setView("coach-roster");
                       },
                     });
@@ -1683,7 +2176,7 @@ const CoachView = (props) => {
         {view === "coach-settings" && (
           // ... (Settings view remains same) ...
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
-            {/* ▼▼▼ 戻るボタンとタイトルを並べる ▼▼▼ */}
+            {/* 戻るボタンとタイトルを並べる */}
             <div className="flex items-center justify-between">
               <button
                 onClick={() => setView("menu")}
@@ -1942,7 +2435,7 @@ const CoachView = (props) => {
                 </div>
               </div>
 
-              {/* ▼▼▼ 追加: 選手データの統合 (Merge) ▼▼▼ */}
+              {/* 選手データの統合 (Merge)  */}
               <div className="bg-rose-50 p-6 rounded-3xl space-y-4 border border-rose-100 mt-8">
                 <h4 className="text-xs font-black uppercase text-rose-600 flex items-center gap-2">
                   <AlertTriangle size={16} /> Data Merge (選手データの統合)
@@ -2005,8 +2498,8 @@ const CoachView = (props) => {
                   </button>
                 </div>
               </div>
-              {/* ▲▲▲ 追加ここまで ▲▲▲ */}
 
+              {/* 設定保存 */}
               <button
                 onClick={() => {
                   setDoc(
@@ -2028,35 +2521,6 @@ const CoachView = (props) => {
               >
                 設定保存
               </button>
-            </div>
-
-            {/* デモ機能 */}
-            <div
-              id="demo-buttons-section"
-              className="pt-8 border-t border-slate-200 mt-8"
-            >
-              <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <Eye className="text-slate-400" />
-                デモ機能（動作確認用）
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setDemoMode("manager")}
-                  className="p-4 bg-amber-50 text-amber-700 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-amber-100 transition-colors"
-                >
-                  マネージャー画面
-                </button>
-                <button
-                  onClick={() => {
-                    setDemoMode("admin");
-                    setView("menu"); // ✨ 魔法の1行：最初から「HOME」を開くように指示！
-                    window.scrollTo(0, 0); // ついでに画面の一番上からスタートさせる
-                  }}
-                  className="p-4 bg-purple-50 text-purple-700 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-purple-100 transition-colors"
-                >
-                  選手画面（管理者）
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -2290,6 +2754,337 @@ const CoachView = (props) => {
           </div>
         )}
       </main>
+
+      {/* 提出されたRace Cardの閲覧画面  */}
+      {selectedTourId &&
+        (() => {
+          // 選択された大会と、その大会に提出されたカードを抽出
+          const currentTour = tournaments.find((t) => t.id === selectedTourId);
+          const submittedCards = raceCards.filter(
+            (c) => c.tournamentId === selectedTourId,
+          );
+
+          return (
+            <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col animate-in slide-in-from-bottom-4">
+              {/* ヘッダー */}
+              <div className="bg-slate-900 text-white p-4 flex items-center justify-between shadow-md pt-12 pb-6">
+                <button
+                  onClick={() => {
+                    setSelectedTourId(null);
+                    setReadingCard(null); // 閉じるときは詳細もリセット
+                  }}
+                  className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <div className="text-center">
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                    Submitted Cards
+                  </p>
+                  <h2 className="font-bold text-sm">{currentTour?.name}</h2>
+                </div>
+                <div className="w-10" />
+              </div>
+
+              {/* ノート詳細を読んでいる場合 */}
+              {readingCard ? (
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-24 relative">
+                  <button
+                    onClick={() => setReadingCard(null)}
+                    className="text-[10px] font-black text-slate-500 bg-white px-4 py-2 rounded-full shadow-sm flex items-center gap-1 border border-slate-200 active:scale-95 transition-all"
+                  >
+                    <ArrowLeft size={14} /> 提出一覧に戻る
+                  </button>
+
+                  {/* ノートの中身（フル項目表示デザイン） */}
+                  <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-6">
+                    <div className="border-b border-slate-100 pb-4">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Runner
+                      </p>
+                      <h3 className="text-2xl font-black text-slate-800">
+                        {readingCard.runnerName}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-[10px] font-black text-white bg-slate-800 px-2 py-1 rounded-lg">
+                          {readingCard.raceType}
+                        </span>
+                        <span className="text-xs font-bold text-slate-600">
+                          {readingCard.raceType === "駅伝"
+                            ? `${readingCard.distance} (${readingCard.ekidenDistance}km)`
+                            : readingCard.distance}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-5">
+                      {/* 🎯 レース前 (PRE-RACE) */}
+                      <div className="bg-amber-50/50 p-5 rounded-2xl border border-amber-100 space-y-4">
+                        <h4 className="font-black text-sm text-amber-600 flex items-center gap-2 border-b border-amber-200/50 pb-2">
+                          <Target size={16} /> PRE-RACE (レース前)
+                        </h4>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[10px] font-black text-amber-600">
+                              目標タイム
+                            </p>
+                            <p className="font-black text-lg text-slate-700 mt-1">
+                              {readingCard.targetTime || "未設定"}
+                            </p>
+                          </div>
+                          {readingCard.startTime && (
+                            <div>
+                              <p className="text-[10px] font-black text-amber-600">
+                                スタート予定
+                              </p>
+                              <p className="font-bold text-slate-700 mt-1 flex items-center gap-1">
+                                <Timer size={14} /> {readingCard.startTime}
+                              </p>
+                            </div>
+                          )}
+                          <div className="col-span-2">
+                            <p className="text-[10px] font-black text-amber-600">
+                              コンディション (調子)
+                            </p>
+                            <p className="font-bold text-slate-700 mt-1">
+                              {readingCard.condition === 1
+                                ? "BAD (不調)"
+                                : readingCard.condition === 2
+                                  ? "POOR (いまいち)"
+                                  : readingCard.condition === 3
+                                    ? "FAIR (普通)"
+                                    : readingCard.condition === 4
+                                      ? "GOOD (好調)"
+                                      : readingCard.condition === 5
+                                        ? "PEAK (絶好調)"
+                                        : "未選択"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] font-black text-amber-600">
+                            W-UP計画
+                          </p>
+                          <p className="font-bold text-slate-700 text-sm whitespace-pre-wrap mt-1 leading-relaxed bg-white p-3 rounded-xl border border-amber-100/50">
+                            {readingCard.wupPlan || "未記入"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-amber-600">
+                            レースプラン
+                          </p>
+                          <p className="font-bold text-slate-700 text-sm whitespace-pre-wrap mt-1 leading-relaxed bg-white p-3 rounded-xl border border-amber-100/50">
+                            {readingCard.racePlan || "未記入"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 🌤️ 気象条件 (CONDITION) */}
+                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                        <h4 className="font-black text-sm text-slate-500 flex items-center gap-2 border-b border-slate-200 pb-2">
+                          <Cloud size={16} /> CONDITION (気象条件)
+                        </h4>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 mb-1">
+                              天気
+                            </p>
+                            <p className="font-bold text-sm text-slate-700">
+                              {readingCard.weather || "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 mb-1">
+                              風
+                            </p>
+                            <p className="font-bold text-sm text-slate-700">
+                              {readingCard.wind || "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 flex justify-center items-center gap-0.5 mb-1">
+                              <Thermometer
+                                size={10}
+                                className="text-rose-400"
+                              />
+                              気温
+                            </p>
+                            <p className="font-bold text-sm text-slate-700">
+                              {readingCard.temp ? `${readingCard.temp}℃` : "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 flex justify-center items-center gap-0.5 mb-1">
+                              <Droplets size={10} className="text-blue-400" />
+                              湿度
+                            </p>
+                            <p className="font-bold text-sm text-slate-700">
+                              {readingCard.humidity
+                                ? `${readingCard.humidity}%`
+                                : "-"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 🏁 レース後 (POST-RACE) */}
+                      <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-4">
+                        <h4 className="font-black text-sm text-indigo-600 flex items-center gap-2 border-b border-indigo-200/50 pb-2">
+                          <Flag size={16} /> POST-RACE (レース後)
+                        </h4>
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-600">
+                            実際のタイム (Result)
+                          </p>
+                          <p className="font-black text-2xl text-indigo-600 mt-1">
+                            {readingCard.resultTime || "未入力"}
+                          </p>
+                        </div>
+                        {readingCard.lapTimes && (
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-600">
+                              ラップタイム
+                            </p>
+                            <p className="font-mono text-xs text-slate-700 whitespace-pre-wrap mt-1 leading-relaxed bg-white p-3 rounded-xl border border-indigo-100/50">
+                              {readingCard.lapTimes}
+                            </p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-600">
+                            良かった点・収穫
+                          </p>
+                          <p className="font-bold text-slate-700 text-sm whitespace-pre-wrap mt-1 leading-relaxed bg-white p-3 rounded-xl border border-indigo-100/50">
+                            {readingCard.goodPoints || "未入力"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-600">
+                            課題・反省点
+                          </p>
+                          <p className="font-bold text-slate-700 text-sm whitespace-pre-wrap mt-1 leading-relaxed bg-white p-3 rounded-xl border border-indigo-100/50">
+                            {readingCard.issues || "未入力"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 🤝 仲間と次への目標 */}
+                      <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 space-y-4">
+                        <div>
+                          <p className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
+                            <Users size={12} /> 仲間の良かった点・学んだこと
+                          </p>
+                          <p className="font-bold text-slate-700 text-sm whitespace-pre-wrap mt-1 leading-relaxed bg-white p-3 rounded-xl border border-emerald-100/50">
+                            {readingCard.teammateGoodPoints || "未入力"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
+                            <Target size={12} /> 次に向けての目標
+                          </p>
+                          <p className="font-bold text-slate-700 text-sm whitespace-pre-wrap mt-1 leading-relaxed bg-white p-3 rounded-xl border border-emerald-100/50">
+                            {readingCard.nextGoal || "未入力"}
+                          </p>
+                        </div>
+                      </div>
+                      {/* ▼▼▼ 新規追加: 監督からのフィードバック入力欄 ▼▼▼ */}
+                      <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-200 space-y-3 mt-4">
+                        <h4 className="font-black text-sm text-indigo-700 flex items-center gap-2 border-b border-indigo-200/50 pb-2">
+                          <MessageSquare size={16} /> Coach Feedback
+                          (フィードバック)
+                        </h4>
+                        <textarea
+                          value={coachFeedbackInput}
+                          onChange={(e) =>
+                            setCoachFeedbackInput(e.target.value)
+                          }
+                          placeholder="選手へのアドバイスや労いの言葉を入力..."
+                          className="w-full p-4 bg-white rounded-xl font-bold text-sm outline-none border border-indigo-200 focus:border-indigo-400 h-24 resize-none"
+                        />
+                        <button
+                          onClick={() => {
+                            handleSaveRaceCardFeedback(
+                              readingCard.id,
+                              coachFeedbackInput,
+                            );
+                            setReadingCard({
+                              ...readingCard,
+                              coachFeedback: coachFeedbackInput,
+                            });
+                          }}
+                          disabled={isSubmitting}
+                          className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:bg-slate-300"
+                        >
+                          <Save size={16} /> フィードバックを送信
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* 提出者一覧画面 */
+                <div className="flex-1 overflow-y-auto p-5 space-y-3 pb-24 bg-slate-50">
+                  {submittedCards.length === 0 ? (
+                    <div className="text-center py-10 opacity-50">
+                      <ClipboardCheck
+                        size={40}
+                        className="mx-auto mb-2 text-slate-400"
+                      />
+                      <p className="text-xs font-bold text-slate-500">
+                        まだ提出されていません
+                      </p>
+                    </div>
+                  ) : (
+                    submittedCards.map((card) => (
+                      <div
+                        key={card.id}
+                        onClick={() => {
+                          setReadingCard(card);
+                          setCoachFeedbackInput(card.coachFeedback || "");
+                        }}
+                        className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between active:scale-95 transition-all cursor-pointer group hover:border-indigo-200"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">
+                            {card.runnerName.charAt(0)}
+                          </div>
+                          <div>
+                            <h4 className="font-black text-slate-800">
+                              {card.runnerName}
+                            </h4>
+                            <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                              {card.raceType} /{" "}
+                              {card.raceType === "駅伝"
+                                ? `${card.distance}(${card.ekidenDistance}km)`
+                                : card.distance}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right flex items-center">
+                          {card.resultTime ? (
+                            <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                              Resultあり
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+                              レース前
+                            </span>
+                          )}
+                          <ChevronRight
+                            size={16}
+                            className="text-slate-300 ml-2 group-hover:text-indigo-500 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       {/* ... (Confirm dialog remains same) ... */}
       {confirmDialog.isOpen && (
