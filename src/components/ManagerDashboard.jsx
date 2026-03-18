@@ -539,70 +539,6 @@ const ManagerDashboard = ({
                   </div>
                 );
               })}
-              {/* ▼▼▼ AI作成ポップアップ（モーダル） ▼▼▼ */}
-              {showAIModal && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
-                  <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
-                    <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
-                      <h3 className="font-black flex items-center gap-2">
-                        <Sparkles size={18} /> AI 記録表読み取り
-                      </h3>
-                      <button
-                        onClick={() => {
-                          setShowAIModal(false);
-                          setAiImage(null);
-                        }}
-                        className="hover:bg-white/20 p-1 rounded-full transition-colors"
-                      >
-                        <X size={20} />
-                      </button>
-                    </div>
-
-                    <div className="p-6 space-y-4">
-                      <p className="text-xs font-bold text-slate-500">
-                        練習記録表（ホワイトボードやノート）の写真をアップロードしてください。AIが画像からメニュー、メンバー、タイムを自動で読み取りテキスト化します。
-                      </p>
-
-                      <div className="border-2 border-dashed border-indigo-200 rounded-xl p-6 text-center bg-slate-50 hover:bg-indigo-50 transition-colors">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => setAiImage(e.target.files[0])}
-                          className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer"
-                        />
-                      </div>
-
-                      <div className="flex gap-3 pt-2">
-                        <button
-                          onClick={() => {
-                            setShowAIModal(false);
-                            setAiImage(null);
-                          }}
-                          className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
-                        >
-                          キャンセル
-                        </button>
-                        <button
-                          onClick={generateDiaryWithAI}
-                          disabled={isGenerating || !aiImage}
-                          className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-black shadow-md hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-                        >
-                          {isGenerating ? (
-                            <>
-                              <Loader2 size={18} className="animate-spin" />{" "}
-                              読み取り中...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles size={18} /> 文字起こしを実行
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -1056,6 +992,71 @@ const ManagerDashboard = ({
           </div>
         )}
       </main>
+
+      {/* ▼▼▼ AI作成ポップアップ（モーダル） ▼▼▼ */}
+      {showAIModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
+              <h3 className="font-black flex items-center gap-2">
+                <Sparkles size={18} /> AI 記録表読み取り
+              </h3>
+              <button
+                onClick={() => {
+                  setShowAIModal(false);
+                  setAiImage(null);
+                }}
+                className="hover:bg-white/20 p-1 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-xs font-bold text-slate-500">
+                練習記録表（ホワイトボードやノート）の写真をアップロードしてください。AIが画像からメニュー、メンバー、タイムを自動で読み取りテキスト化します。
+              </p>
+
+              <div className="border-2 border-dashed border-indigo-200 rounded-xl p-6 text-center bg-slate-50 hover:bg-indigo-50 transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setAiImage(e.target.files[0])}
+                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowAIModal(false);
+                    setAiImage(null);
+                  }}
+                  className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={generateDiaryWithAI}
+                  disabled={isGenerating || !aiImage}
+                  className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-black shadow-md hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />{" "}
+                      読み取り中...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={18} /> 文字起こしを実行
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 詳細モーダル */}
       {isDetailOpen && selectedLog && (
