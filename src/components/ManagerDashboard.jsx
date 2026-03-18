@@ -289,7 +289,7 @@ const ManagerDashboard = ({
 
     setIsGenerating(true);
     try {
-      const API_KEY = "AIzaSyDFhuBw9IUtc5YuMb9hARHqtacDN4SLvAk";
+      const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
 
       // ✨ Googleドキュメントのプロンプトを完全再現
       const prompt = `添付された画像（陸上競技の練習記録表）から情報を読み取り、以下の【ルール】と【出力フォーマット】に厳密に従ってテキストデータとして出力してください。
