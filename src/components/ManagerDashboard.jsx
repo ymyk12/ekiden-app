@@ -1,5 +1,5 @@
 // src/components/ManagerDashboard.js
-import React from "react";
+import React, { useState } from "react";
 import { doc, setDoc, deleteDoc } from "firebase/firestore";
 import {
   LogOut,
@@ -20,6 +20,7 @@ import {
   Trash2,
   Wind,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 
 // Utilsから読み込む（役割ROLESと練習カテゴリーの定義）
@@ -62,8 +63,25 @@ const ManagerDashboard = ({
     result: "",
   });
 
+  // ▼▼▼ AIアシスタント用 ▼▼▼
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiImage, setAiImage] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
   const [selectedLog, setSelectedLog] = React.useState(null);
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
+
+  // ▼▼▼ 画像をGeminiに送れる形式（Base64）に変換する ▼▼▼
+  const fileToGenerativePart = async (file) => {
+    const base64EncodedDataPromise = new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(",")[1]);
+      reader.readAsDataURL(file);
+    });
+    return {
+      inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+    };
+  };
 
   const reinforcementOptions = [
     "補強A",
@@ -266,6 +284,90 @@ const ManagerDashboard = ({
     }
   };
 
+  const generateDiaryWithAI = async () => {
+    if (!aiImage) return toast.error("練習記録表の画像を選択してください");
+
+    setIsGenerating(true);
+    try {
+      const API_KEY = "AIzaSyDFhuBw9IUtc5YuMb9hARHqtacDN4SLvAk";
+
+      // ✨ Googleドキュメントのプロンプトを完全再現
+      const prompt = `添付された画像（陸上競技の練習記録表）から情報を読み取り、以下の【ルール】と【出力フォーマット】に厳密に従ってテキストデータとして出力してください。
+
+【読み取りのルール】
+1. **練習メニューの展開**:
+- 画像中段の「チーム」と「練習メニュー」の対応を読み取ってください。
+- 「〃」などの省略記号は、直上または該当する内容を補完し、完全な文字列として出力してください（例：「快調走」「(4'00"〜3'55")」「+ 400m + 200m W.S.×3」など）。
+
+2. **メンバーの抽出と振り分け（重要）**:
+- 画像右側の「メンバー」欄からメンバーの名前を抽出しますが、以下の例外ルールを必ず適用してください。
+- **グループ変更**: 名前の付近（上など）に左記とは違うグループ名（例：「中A」「中B」など）が示唆されている場合は、元のグループから除外し、推察されるグループのメンバーとして含めてください。
+- **別メニュー組**: 名前に「（ ）」がついている者（例：「（岡田）」など）は各チームから除外し、「別メニュー組」としてまとめてください。
+- **欠席者**: 名前の付近に「欠」とある者は各チームから除外し、「欠席者」としてまとめてください。
+
+3. **記録データの抽出**:
+- 画像下段の「記録」セクションから、各グループの「LAP」、「PACE」（または「LAP(1000)」）、および「TOTAL」の数値を抽出してください。
+- 「TOTAL」の列に記載がある場合は抽出し、記録の末尾に単純な丸括弧書きで \`(XX'XX"XX)\` のように追記してください（Totalという文字は不要）。
+- 「LAP(1000)」や「PACE」の列に記載がある場合は、角括弧書きで \`[1km: XX'XX"XX]\` や \`[pace: XX'XX"XX]\` のように明記して追記してください。
+- 記録表内にリカバリータイム（カッコ書きのタイムやジョグのタイムなど）がある場合は抽出し、記録の末尾に \`(r: XX"XX)\` のように追記してください。
+- 各メンバー名の下にある丸印や矢印などは**出力から除外**してください。
+
+【出力フォーマット】
+「練習メニュー」と「練習記録」をそれぞれワンクリックでコピーできるように、別々のテキストコードブロック（\`\`\`text と \`\`\` で囲む形式）に分けて出力してください。
+
+### 練習メニュー
+\`\`\`text
+快調走（またはその日のメインメニュー名）
+■男子A・B ([メンバー名]・[メンバー名]...)
+[距離] [メニュー名] ([設定ペース])...
+■男子中A ([メンバー名]・[メンバー名]...)
+[距離] [メニュー名] ([設定ペース])..
+（※以下、各チーム同様に記載）
+■別メニュー組：[メンバー名]・[メンバー名]...
+■欠席者：[メンバー名]・[メンバー名]...
+\`\`\`
+
+### 練習記録
+\`\`\`text
+■[記録のグループ名（例：男子A・B / 男子中A）]
+• [周回数または距離]：[LAPタイム] ([TOTALタイム]) [1km:[タイム] または pace:[タイム]]
+• [周回数または距離]：[LAPタイム] ([TOTALタイム]) [1km:[タイム] または pace:[タイム]]
+（※以下、各グループの周回・距離ごとに記載。PACEやTOTALがない場合は適宜省略。リカバリータイムがある場合は末尾に (r: [タイム]) と追記）
+\`\`\``;
+
+      // 画像をGemini用データに変換
+      const imagePart = await fileToGenerativePart(aiImage);
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }, imagePart] }], // ✨ プロンプトと画像の両方を送信
+          }),
+        },
+      );
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+
+      const generatedText = data.candidates[0].content.parts[0].text;
+
+      // 生成された文字起こしデータを「Results / Notes」の入力欄にセット！
+      setDiaryInput({ ...diaryInput, result: generatedText });
+      toast.success("✨ 画像からの文字起こしが完了しました！");
+
+      // モーダルを閉じて画像をリセット
+      setShowAIModal(false);
+      setAiImage(null);
+    } catch (error) {
+      toast.error("生成に失敗しました: " + error.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const deleteDiary = async () => {
     if (!window.confirm(`${checkDate} の日誌を削除しますか？`)) return;
 
@@ -437,6 +539,70 @@ const ManagerDashboard = ({
                   </div>
                 );
               })}
+              {/* ▼▼▼ AI作成ポップアップ（モーダル） ▼▼▼ */}
+              {showAIModal && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+                  <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+                    <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
+                      <h3 className="font-black flex items-center gap-2">
+                        <Sparkles size={18} /> AI 記録表読み取り
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setShowAIModal(false);
+                          setAiImage(null);
+                        }}
+                        className="hover:bg-white/20 p-1 rounded-full transition-colors"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-4">
+                      <p className="text-xs font-bold text-slate-500">
+                        練習記録表（ホワイトボードやノート）の写真をアップロードしてください。AIが画像からメニュー、メンバー、タイムを自動で読み取りテキスト化します。
+                      </p>
+
+                      <div className="border-2 border-dashed border-indigo-200 rounded-xl p-6 text-center bg-slate-50 hover:bg-indigo-50 transition-colors">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setAiImage(e.target.files[0])}
+                          className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          onClick={() => {
+                            setShowAIModal(false);
+                            setAiImage(null);
+                          }}
+                          className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          onClick={generateDiaryWithAI}
+                          disabled={isGenerating || !aiImage}
+                          className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-black shadow-md hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                        >
+                          {isGenerating ? (
+                            <>
+                              <Loader2 size={18} className="animate-spin" />{" "}
+                              読み取り中...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={18} /> 文字起こしを実行
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -838,16 +1004,14 @@ const ManagerDashboard = ({
                   )}
                 </div>
 
-                {/* 3. AIアシスタントボタン (独立させて目立たせる) */}
+                {/* 3. AIアシスタントボタン  */}
                 <div className="flex justify-end pt-2 pb-1">
-                  <a
-                    href="https://gemini.google.com/share/e682f490749f"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => setShowAIModal(true)}
                     className="text-xs bg-indigo-100 text-indigo-700 px-4 py-2.5 rounded-xl font-black flex items-center gap-1.5 active:scale-95 transition-all hover:bg-indigo-200 shadow-sm"
                   >
-                    <Sparkles size={16} /> AIアシスタントで日誌を作成
-                  </a>
+                    <Sparkles size={16} /> AIアシスタントで文章を自動作成
+                  </button>
                 </div>
 
                 {/* 4. Menu Plan */}

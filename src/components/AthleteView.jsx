@@ -1,7 +1,7 @@
 // ==========================================
 //   import
 // ==========================================
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Eye,
   Menu,
@@ -16,7 +16,6 @@ import {
   ArrowLeft,
   Check,
   Save,
-  Trophy,
   Users,
   MessageSquare,
   HeartPulse,
@@ -25,7 +24,6 @@ import {
   Home,
   Plus,
   Edit,
-  User,
   AlertCircle,
   Loader2,
   Flag,
@@ -33,24 +31,10 @@ import {
   Thermometer,
   Cloud,
   Droplets,
-  Navigation,
-  ClipboardCheck,
   Calendar,
   Bell,
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  LabelList,
-  PieChart,
-  Pie,
-} from "recharts";
+import { ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 import {
   ROLES,
   CATEGORY,
@@ -60,24 +44,11 @@ import {
 import { getGoalValue, getTodayStr, getDatesInRange } from "../utils/dateUtils";
 
 // グラフ用のカラーパレット
-const COLORS = [
-  "#2563eb",
-  "#f59e0b",
-  "#10b981",
-  "#ef4444",
-  "#8b5cf6",
-  "#ec4899",
-  "#06b6d4",
-  "#84cc16",
-  "#6366f1",
-  "#14b8a6",
-];
 
 const AthleteView = (props) => {
   // App.js から渡されたデータ（Props）をすべて展開します
   const {
     role,
-    profile,
     previewRunner,
     setPreviewRunner,
     currentUserId,
@@ -87,7 +58,6 @@ const AthleteView = (props) => {
     isMenuOpen,
     setIsMenuOpen,
     successMsg,
-    setSuccessMsg,
     confirmDialog,
     setConfirmDialog,
     availablePeriods,
@@ -100,9 +70,7 @@ const AthleteView = (props) => {
     currentFeedback,
     periodLogs,
     rankingData,
-    checkListData,
     teamLogs,
-    practiceMenus,
     allLogs,
     activeRunners,
     formData,
@@ -114,7 +82,6 @@ const AthleteView = (props) => {
     setExpandedDiaryId,
     goalInput,
     setGoalInput,
-    reviewComment,
     setReviewComment,
     handleLogout,
     handleSaveLog,
@@ -237,7 +204,18 @@ const AthleteView = (props) => {
     }
     // 新しい順に並び替え
     return list.sort((a, b) => (a.time < b.time ? 1 : -1));
-  }, [raceCards, currentFeedback, tournaments, targetPeriod, currentUserId]);
+  }, [
+    raceCards,
+    currentFeedback,
+    tournaments,
+    targetPeriod,
+    currentUserId,
+    teamLogs,
+    setEditingRaceCardId,
+    setExpandedDiaryId,
+    setRaceCardInput,
+    setView,
+  ]);
 
   // 未読件数の計算
   const unreadCount = notifications.filter((n) => n.time > lastReadTime).length;
@@ -2257,7 +2235,7 @@ const AthleteView = (props) => {
                     type="button"
                     onClick={() => {
                       const template =
-                        "・60分前：ジョグ (15分)\n・40分前：体操・ドリル\n・25分前：流し (100m×3本)\n・15分前：招集・スパイク履き替え\n・ 5分前：最終刺激・集中";
+                        "・60分前：ジョグ (15分)\n・40分前：体操・ドリル\n・25分前：流し (100m×3本)\n・15分前：招集・スパイク履き替え\n・ 5分前：50mD";
                       if (
                         !raceCardInput.wupPlan ||
                         window.confirm(
@@ -2276,7 +2254,7 @@ const AthleteView = (props) => {
                   </button>
                 </div>
                 <textarea
-                  placeholder={`以下の例を使用したい場合は「テンプレート」をタップ。\n・60分前：ジョグ (15分)\n・40分前：体操・ドリル\n・25分前：流し (100m×3本)\n・15分前：招集・スパイク履き替え\n・ 5分前：最終刺激・集中`}
+                  placeholder={`以下の例を使用したい場合は「テンプレート」をタップ。\n・60分前：ジョグ (15分)\n・40分前：体操・ドリル\n・25分前：流し (100m×3本)\n・15分前：招集・スパイク履き替え\n・ 5分前：50mD`}
                   className="w-full p-4 bg-amber-50/50 rounded-xl font-bold text-xs outline-none border border-amber-100 focus:border-amber-400 h-36 resize-none leading-relaxed tracking-wide"
                   value={raceCardInput.wupPlan}
                   onChange={(e) =>
