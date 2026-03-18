@@ -104,7 +104,7 @@ const ManagerDashboard = ({
       setDiaryInput({
         weather: existingLog.weather || "晴れ",
         temp: existingLog.temp || "",
-        wind: existingLog.wind || 3,
+        wind: existingLog.wind || 1,
         startTime: existingLog.startTime || "",
         endTime: existingLog.endTime || "",
         location: existingLog.location || "1.53kmコース",
@@ -118,8 +118,8 @@ const ManagerDashboard = ({
       setDiaryInput({
         weather: "晴れ",
         temp: "",
-        wind: 3,
-        startTime: "16:30",
+        wind: 1,
+        startTime: "15:50",
         endTime: "18:30",
         location: "1.53kmコース",
         locationDetail: "",
@@ -332,7 +332,7 @@ const ManagerDashboard = ({
 ■[記録のグループ名（例：男子A・B / 男子中A）]
 • [周回数または距離]：[LAPタイム] ([TOTALタイム]) [1km:[タイム] または pace:[タイム]]
 • [周回数または距離]：[LAPタイム] ([TOTALタイム]) [1km:[タイム] または pace:[タイム]]
-（※以下、各グループの周回・距離ごとに記載。PACEやTOTALがない場合は適宜省略。リカバリータイムがある場合は末尾に (r: [タイム]) と追記）
+（※以下、各グループの周回・距離ごとに記載。PACEやTOTALがない場合は適宜省略。リカバリータイムがある場合は末尾に (r: [タイム]) と追記）。set表記がある場合はset1,set2というように表記したうえ、setごとに記録をまとめる。
 \`\`\``;
 
       // 画像をGemini用データに変換
@@ -354,9 +354,45 @@ const ManagerDashboard = ({
 
       const generatedText = data.candidates[0].content.parts[0].text;
 
-      // 生成された文字起こしデータを「Results / Notes」の入力欄にセット！
-      setDiaryInput({ ...diaryInput, result: generatedText });
-      toast.success("✨ 画像からの文字起こしが完了しました！");
+      // ▼▼▼ AIの返答から「メニュー」と「記録」を分割して抽出する ▼▼▼
+      let extractedMenu = "";
+      let extractedResult = "";
+
+      try {
+        // 返ってきたテキストを "### 練習記録" という文字で真っ二つに分割します
+        const parts = generatedText.split("### 練習記録");
+
+        if (parts.length === 2) {
+          // AIがつけてくれた余分なマーク（```text や ```）を綺麗にお掃除します
+          extractedMenu = parts[0]
+            .replace(/### 練習メニュー/g, "")
+            .replace(/```text/g, "")
+            .replace(/```/g, "")
+            .trim();
+          extractedResult = parts[1]
+            .replace(/```text/g, "")
+            .replace(/```/g, "")
+            .trim();
+        } else {
+          // 万が一フォーマット通りに出力されなかった場合の保険
+          extractedResult = generatedText
+            .replace(/```text/g, "")
+            .replace(/```/g, "")
+            .trim();
+        }
+      } catch (e) {
+        extractedResult = generatedText;
+      }
+
+      // 抽出したテキストを、それぞれの入力欄に自動セット！
+      setDiaryInput({
+        ...diaryInput,
+        menu: extractedMenu || diaryInput.menu, // メニューが抽出できなければ元のまま
+        result: extractedResult,
+      });
+      // ▲▲▲ 変更ここまで ▲▲▲
+
+      toast.success("✨ メニューと記録の自動振り分けが完了しました！");
 
       // モーダルを閉じて画像をリセット
       setShowAIModal(false);
@@ -390,8 +426,8 @@ const ManagerDashboard = ({
       setDiaryInput({
         weather: "晴れ",
         temp: "",
-        wind: 3,
-        startTime: "16:30",
+        wind: 1,
+        startTime: "15:50",
         endTime: "18:30",
         location: "1.53kmコース",
         locationDetail: "",
@@ -883,6 +919,7 @@ const ManagerDashboard = ({
                     <option value="1.53kmコース">1.53kmコース</option>
                     <option value="1.1kmコース">1.1kmコース</option>
                     <option value="河川敷">河川敷</option>
+                    <option value="クロカン・芝">クロカン・芝</option>
                     <option value="防災公園">防災公園</option>
                     <option value="競技場">競技場 (詳細記入)</option>
                     <option value="その他">その他 (詳細記入)</option>
