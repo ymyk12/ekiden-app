@@ -53,7 +53,7 @@ import AthleteView from "./components/AthleteView";
 import ManagerDashboard from "./components/ManagerDashboard";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "5.1.5";
+const APP_LAST_UPDATED = "5.1.6";
 
 // --- Print Styles (修正版: 改ページ完全対応) ---
 // --- Print Styles (修正版: 学年別テーブル先頭） ---

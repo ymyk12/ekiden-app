@@ -53,6 +53,7 @@ const ManagerDashboard = ({
     weather: "",
     temp: "",
     wind: 1,
+    humidity: "",
     startTime: "15:50",
     endTime: "18:30",
     location: "",
@@ -105,6 +106,7 @@ const ManagerDashboard = ({
         weather: existingLog.weather || "晴れ",
         temp: existingLog.temp || "",
         wind: existingLog.wind || 1,
+        humidity: existingLog.humidity || "",
         startTime: existingLog.startTime || "",
         endTime: existingLog.endTime || "",
         location: existingLog.location || "1.53kmコース",
@@ -799,7 +801,8 @@ const ManagerDashboard = ({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-3">
+                  {/* 1. 天気 */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">
                       Weather
@@ -814,12 +817,14 @@ const ManagerDashboard = ({
                         })
                       }
                     >
-                      <option value="晴れ">☀ 晴れ</option>
-                      <option value="曇り">☁ 曇り</option>
+                      <option value="晴れ">☀ 晴</option>
+                      <option value="曇り">☁ 曇</option>
                       <option value="雨">☂ 雨</option>
                       <option value="雪">⛄ 雪</option>
                     </select>
                   </div>
+
+                  {/* 2. 気温 */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">
                       Temp (℃)
@@ -831,6 +836,25 @@ const ManagerDashboard = ({
                       value={diaryInput.temp}
                       onChange={(e) =>
                         setDiaryInput({ ...diaryInput, temp: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  {/* 3. 湿度（新規追加！） */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">
+                      Humid (%)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="60"
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-500"
+                      value={diaryInput.humidity}
+                      onChange={(e) =>
+                        setDiaryInput({
+                          ...diaryInput,
+                          humidity: e.target.value,
+                        })
                       }
                     />
                   </div>
