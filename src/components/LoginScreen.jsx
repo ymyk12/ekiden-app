@@ -1,6 +1,5 @@
 import React from "react";
 import { KeyRound, AlertCircle, Loader2 } from "lucide-react";
-import { ROLES } from "../utils/constants";
 
 // App.jsから「小包(Props)」として、必要なデータや関数を受け取ります
 const LoginScreen = ({

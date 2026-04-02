@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Users,
   LayoutDashboard,
@@ -57,9 +57,14 @@ import {
   Legend,
 } from "recharts";
 import { doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
-import { db, appId } from "../firebaseConfig";
+import { db } from "../firebaseConfig";
 import { ROLES } from "../utils/constants";
-import { getGoalValue, getTodayStr, getDatesInRange } from "../utils/dateUtils";
+import { getGoalValue, getTodayStr } from "../utils/dateUtils";
+
+// 練習日誌
+import DiaryListItem from "./DiaryListItem";
+// グラフ設定
+import CoachReportView from "./CoachReportView";
 
 // グラフ用のカラーパレット
 const COLORS = [
@@ -88,13 +93,12 @@ const CoachView = (props) => {
     activeRunners,
     coachStats,
     reportMatrix,
+    monthlyTrendData,
     isPainAlertModalOpen,
     setIsPainAlertModalOpen,
     rankingData,
     exportCSV,
     handlePrint,
-    isPrintPreview,
-    setIsPrintPreview,
     printStyles,
     reportChartData,
     activeQuarters,
@@ -146,7 +150,6 @@ const CoachView = (props) => {
     handleCoachSaveGoals,
     selectedRunner,
     getRunnerFeedback,
-    coachFeedbackComment,
     setCoachFeedbackComment,
     handleSaveCoachFeedback,
     openCoachEditModal,
@@ -332,45 +335,60 @@ const CoachView = (props) => {
                   <span className="text-sm font-black text-slate-400">%</span>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-emerald-500">
+              {/* 🌟 チーム平均疲労度 (Avg RPE) のカード */}
+              <div
+                className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 ${
+                  coachStats.avgRpe >= 8
+                    ? "border-rose-500"
+                    : coachStats.avgRpe >= 6
+                      ? "border-orange-500"
+                      : "border-emerald-500"
+                }`}
+              >
                 <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                  Total Distance
+                  Today's Avg RPE
                 </p>
-                <p className="text-2xl md:text-3xl font-black text-emerald-600">
-                  {(reportMatrix &&
-                    reportMatrix.totals &&
-                    reportMatrix.totals.grandTotal) ||
-                    0}
-                  <span className="text-xs ml-1 text-slate-400">km</span>
-                </p>
+                <div className="flex items-baseline gap-1">
+                  <p
+                    className={`text-3xl md:text-4xl font-black ${
+                      coachStats.avgRpe >= 8
+                        ? "text-rose-600"
+                        : coachStats.avgRpe >= 6
+                          ? "text-orange-600"
+                          : "text-emerald-600"
+                    }`}
+                  >
+                    {coachStats.avgRpe > 0 ? coachStats.avgRpe.toFixed(1) : "-"}
+                  </p>
+                  <span className="text-xs font-black text-slate-400">
+                    / 10
+                  </span>
+                </div>
               </div>
               <div
-                // ★onClickを追加
                 onClick={() => {
-                  if (coachStats.painAlertCount > 0) {
+                  if (coachStats.alertList?.length > 0) {
                     setIsPainAlertModalOpen(true);
                   }
                 }}
-                // ★カーソル(cursor-pointer)とホバー効果(active:scale-95)を追加
                 className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 transition-transform ${
-                  coachStats.painAlertCount > 0
+                  coachStats.alertList?.length > 0
                     ? "border-rose-500 bg-rose-50 cursor-pointer active:scale-95 hover:shadow-md"
                     : "border-emerald-500"
                 }`}
               >
-                {/* タイトルに「一覧」というヒントを追加 */}
                 <div className="flex justify-between items-center mb-1">
-                  <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest">
-                    Pain Alert
+                  <p className="text-[10px] md:text-xs font-black text-rose-500 uppercase tracking-widest">
+                    Condition Alert
                   </p>
-                  {coachStats.painAlertCount > 0 && (
+                  {coachStats.alertList?.length > 0 && (
                     <ChevronRight size={14} className="text-rose-400" />
                   )}
                 </div>
                 <p
-                  className={`text-3xl md:text-4xl font-black ${coachStats.painAlertCount > 0 ? "text-rose-600" : "text-emerald-600"}`}
+                  className={`text-3xl md:text-4xl font-black ${coachStats.alertList?.length > 0 ? "text-rose-600" : "text-emerald-600"}`}
                 >
-                  {coachStats.painAlertCount}
+                  {coachStats.alertList?.length || 0}
                   <span className="text-xs ml-1 text-slate-400">名</span>
                 </p>
               </div>
@@ -554,443 +572,17 @@ const CoachView = (props) => {
         )}
 
         {view === "coach-report" && (
-          <>
-            {/* ▼▼▼ 修正: 操作ボタンをレポートの外（上部）にまとめて配置 ▼▼▼ */}
-            <div className="flex flex-wrap justify-end items-center mb-6 gap-3 px-2 no-print">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleExportMatrixCSV}
-                  className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl hover:bg-emerald-700 transition-colors shadow-md flex items-center gap-2 font-bold text-xs"
-                >
-                  <FileSpreadsheet size={16} /> CSV出力
-                </button>
-                <button
-                  onClick={handlePrint}
-                  className="bg-slate-900 text-white px-4 py-2.5 rounded-xl hover:bg-slate-700 transition-colors shadow-md flex items-center gap-2 font-bold text-xs"
-                >
-                  <Printer size={16} /> 印刷 / PDF
-                </button>
-              </div>
-              <div className="w-px h-8 bg-slate-200 mx-1"></div>
-              <button
-                onClick={() => setIsPrintPreview(!isPrintPreview)}
-                className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 ${
-                  isPrintPreview
-                    ? "bg-slate-800 text-white"
-                    : "bg-white text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                {isPrintPreview ? <X size={16} /> : <Eye size={16} />}
-                {isPrintPreview ? "プレビューを閉じる" : "印刷レイアウト確認"}
-              </button>
-            </div>
-            {/* ▲▲▲ 修正ここまで ▲▲▲ */}
-
-            <div className={isPrintPreview ? "preview-mode-wrapper" : ""}>
-              {isPrintPreview && (
-                <div className="flex justify-end mb-4 max-w-5xl mx-auto no-print">
-                  <button
-                    onClick={() => setIsPrintPreview(false)}
-                    className="bg-white text-slate-800 px-6 py-3 rounded-full font-bold shadow-xl hover:bg-slate-100 transition-colors"
-                  >
-                    閉じる
-                  </button>
-                </div>
-              )}
-              <style>{printStyles}</style>
-
-              {/* ▼▼▼ レポート本編 ▼▼▼ */}
-              <div
-                id="printable-report"
-                className={`${
-                  isPrintPreview ? "max-w-5xl mx-auto scale-100 origin-top" : ""
-                }`}
-              >
-                {/* 1. 学年ごとのテーブルエリア */}
-                {(() => {
-                  const entranceYears = [
-                    ...new Set(
-                      activeRunners.map((r) =>
-                        (r.memberCode || r.id).substring(0, 2),
-                      ),
-                    ),
-                  ].sort();
-
-                  return entranceYears.map((year, index) => {
-                    // ▼▼▼ 修正: ここに「マネージャー除外」を追加 ▼▼▼
-                    const groupRunners = activeRunners
-                      .filter((r) => (r.memberCode || r.id).startsWith(year))
-                      .filter((r) => r.role !== ROLES.MANAGER) // ★この行を追加！
-                      .sort((a, b) =>
-                        (a.memberCode || a.id).localeCompare(
-                          b.memberCode || b.id,
-                        ),
-                      );
-
-                    if (groupRunners.length === 0) return null;
-
-                    // 最初の要素は改ページしない、それ以降は改ページ
-                    const wrapperClass =
-                      index === 0 ? "mb-8" : "page-break mb-8";
-
-                    return (
-                      <div key={year} className={wrapperClass}>
-                        <div className="report-card-base">
-                          <div className="pb-4 mb-4 border-b-2 border-slate-100 print:border-slate-800">
-                            {/* スマホ時は縦並び(flex-col)、PC時は横並び(md:flex-row)に自動切り替え */}
-                            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
-                              <div>
-                                <h2 className="font-black text-lg md:text-xl text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
-                                  <FileText
-                                    className="text-blue-600 print:text-black"
-                                    size={20}
-                                  />
-                                  KSWC EKIDEN REPORT
-                                </h2>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest print:text-slate-600 mt-1">
-                                  Target Period: {targetPeriod.name} (
-                                  {targetPeriod.start} - {targetPeriod.end})
-                                </p>
-                              </div>
-                              <div className="text-left md:text-right">
-                                <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-black border border-slate-200 print:border-slate-400 print:bg-white print:text-black inline-block">
-                                  <Users
-                                    className="inline mr-1 -mt-0.5"
-                                    size={12}
-                                  />
-                                  {year}年度生 (Grade {year})
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* スマホ画面では横スクロール */}
-                          <div
-                            className={`pb-4 print:overflow-visible w-full ${isPrintPreview ? "" : "overflow-x-auto no-scrollbar"}`}
-                          >
-                            <table className="w-full text-xs border-collapse min-w-max">
-                              <thead>
-                                <tr>
-                                  <th className="p-3 border-b-2 border-slate-100 font-black text-left text-slate-400 min-w-[100px] sticky left-0 bg-white">
-                                    DATE
-                                  </th>
-                                  {groupRunners.map((r) => (
-                                    <th
-                                      key={r.id}
-                                      className="p-3 border-b-2 border-slate-100 font-bold text-slate-800 min-w-[80px] whitespace-nowrap text-center bg-slate-50/50"
-                                    >
-                                      {r.lastName} {r.firstName.charAt(0)}.
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {reportMatrix.matrix.map((row) => (
-                                  <tr
-                                    key={row.date}
-                                    className="hover:bg-slate-50 transition-colors"
-                                  >
-                                    <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">
-                                      {row.date.slice(5).replace("-", "/")}
-                                    </td>
-                                    {groupRunners.map((r) => {
-                                      const val = row[r.id];
-                                      let cellClass =
-                                        "p-2 border-b border-slate-100 text-center font-bold text-sm ";
-                                      if (val === "未")
-                                        cellClass +=
-                                          "text-rose-400 bg-rose-50/30";
-                                      else if (val === "休")
-                                        cellClass +=
-                                          "text-emerald-500 bg-emerald-50/30";
-                                      else if (val === "0")
-                                        cellClass += "text-slate-300";
-                                      else cellClass += "text-blue-600";
-                                      return (
-                                        <td key={r.id} className={cellClass}>
-                                          {val}
-                                        </td>
-                                      );
-                                    })}
-                                  </tr>
-                                ))}
-
-                                {/* Q1-Q4 Total */}
-                                {targetPeriod.type === "custom" &&
-                                  reportMatrix.qTotals.map((row, i) => (
-                                    <tr
-                                      key={`qtotal-${i}`}
-                                      className="bg-slate-50 font-bold text-slate-600"
-                                    >
-                                      <td
-                                        className="p-3 border-b border-slate-200 sticky left-0 bg-slate-50 whitespace-nowrap"
-                                        style={{ minWidth: "80px" }}
-                                      >
-                                        Q{i + 1} Total
-                                      </td>
-                                      {groupRunners.map((r) => {
-                                        const goalKey = `goalQ${i + 1}`;
-                                        const goal = getGoalValue(
-                                          r,
-                                          targetPeriod.id,
-                                          targetPeriod.type,
-                                          goalKey,
-                                        );
-                                        return (
-                                          <td
-                                            key={r.id}
-                                            className="p-3 text-center border-b border-slate-200"
-                                          >
-                                            <span style={{ fontSize: "1em" }}>
-                                              {row[r.id] || 0}
-                                            </span>
-                                            <span
-                                              style={{
-                                                fontSize: "0.8em",
-                                                color: "#94a3b8",
-                                              }}
-                                            >
-                                              {" "}
-                                              / {goal}
-                                            </span>
-                                          </td>
-                                        );
-                                      })}
-                                    </tr>
-                                  ))}
-
-                                {/* Total Row */}
-                                {/* Total Row (学年ごと) */}
-                                <tr className="bg-slate-100 font-black text-slate-900 print:bg-slate-50">
-                                  <td className="p-3 sticky left-0 bg-slate-100 print:bg-slate-50 border-t-2 border-slate-300 text-[10px]">
-                                    TOTAL
-                                  </td>
-                                  {groupRunners.map((r) => (
-                                    <td
-                                      key={r.id}
-                                      className="p-3 text-center border-t-2 border-slate-300"
-                                    >
-                                      {/* ▼ 実績値を大きく強調 (1.1em -> 1.5em) ▼ */}
-                                      <div className="flex flex-col items-center">
-                                        <span
-                                          className="text-blue-800 text-base font-black leading-none mb-1"
-                                          style={{ fontSize: "2.0em" }}
-                                        >
-                                          {reportMatrix.totals[r.id] || 0}
-                                        </span>
-                                        {/* ▼ 目標値は小さく控えめに ▼ */}
-                                        <span
-                                          className="text-slate-400 font-bold"
-                                          style={{ fontSize: "0.7em" }}
-                                        >
-                                          /{" "}
-                                          {getGoalValue(
-                                            r,
-                                            targetPeriod.id,
-                                            targetPeriod.type,
-                                            "goalPeriod",
-                                          )}
-                                        </span>
-                                      </div>
-                                    </td>
-                                  ))}
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
-
-                {/* 2. グラフエリア (改ページして全員分表示) */}
-                <div className="page-break">
-                  <div className="report-card-base">
-                    <div className="pb-4 mb-4 border-b border-slate-100 print:border-slate-800">
-                      <h2 className="font-black text-xl text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
-                        <BarChart2
-                          className="text-blue-600 print:text-black"
-                          size={20}
-                        />
-                        TEAM ANALYTICS (ALL MEMBERS)
-                      </h2>
-                    </div>
-
-                    {/* ① 折れ線グラフ */}
-                    <div className="mt-4">
-                      <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">
-                        Cumulative Distance Trends
-                      </h3>
-
-                      {/* ▼▼▼ 修正1: style属性を削除し、クラス名で高さを指定（これで印刷時に広がります） ▼▼▼ */}
-                      <div className="w-full h-[550px] print-chart-line">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={cumulativeData}
-                            margin={{ top: 5, right: 70, left: 0, bottom: 5 }}
-                          >
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={false}
-                              stroke="#f1f5f9"
-                            />
-                            <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-
-                            {/* ▼▼▼ 修正: interval={0} を追加して間引きを防止 ▼▼▼ */}
-                            <YAxis
-                              tick={{ fontSize: 10 }}
-                              width={30}
-                              type="number"
-                              domain={[0, "auto"]}
-                              interval={
-                                0
-                              } /* ★重要: これで全ての目盛り(0,50,100...)が表示されます */
-                              ticks={(() => {
-                                let maxVal = 0;
-                                cumulativeData.forEach((day) => {
-                                  activeRunners.forEach((r) => {
-                                    if (day[r.id] > maxVal) maxVal = day[r.id];
-                                  });
-                                });
-                                // 最大値まで50刻みの配列を作成
-                                const ticks = [];
-                                // 少し余裕を持たせるため +50 していますが、ぴったりが良ければ maxVal まででOK
-                                const limit = Math.ceil(maxVal / 50) * 50;
-                                for (let i = 0; i <= limit; i += 50) {
-                                  ticks.push(i);
-                                }
-                                return ticks;
-                              })()}
-                            />
-                            {/* ▲▲▲ 修正ここまで ▲▲▲ */}
-
-                            <Tooltip />
-                            <Legend />
-
-                            {/* 線と名前の描画（ここは前回のまま維持） */}
-                            {[...activeRunners]
-                              .sort((a, b) =>
-                                (a.memberCode || a.id).localeCompare(
-                                  b.memberCode || b.id,
-                                ),
-                              )
-                              .map((r, i) => {
-                                const renderLabel = (props) => {
-                                  const { x, y, stroke, index } = props;
-                                  if (index === cumulativeData.length - 1) {
-                                    return (
-                                      <text
-                                        x={x + 5}
-                                        y={y}
-                                        dy={3}
-                                        fill={stroke}
-                                        fontSize={10}
-                                        fontWeight="bold"
-                                        textAnchor="start"
-                                      >
-                                        {r.lastName}
-                                      </text>
-                                    );
-                                  }
-                                  return null;
-                                };
-
-                                return (
-                                  <Line
-                                    key={r.id}
-                                    type="monotone"
-                                    dataKey={r.id}
-                                    name={`${r.lastName} ${r.firstName}`}
-                                    stroke={COLORS[i % COLORS.length]}
-                                    strokeWidth={2}
-                                    dot={false}
-                                    activeDot={{ r: 6 }}
-                                    label={renderLabel}
-                                  />
-                                );
-                              })}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                  {/* ② 棒グラフ (Total) */}
-                  <div className="report-card-base">
-                    <h3 className="font-black text-sm uppercase tracking-widest mb-6 text-center text-slate-700">
-                      Total Distance Ranking
-                    </h3>
-                    {/* ▼▼▼ 修正: className="print-chart-bar" を追加 ▼▼▼ */}
-                    <div
-                      style={{ width: "100%", height: "550px" }}
-                      className="print-chart-bar"
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={reportChartData}
-                          layout="horizontal"
-                          margin={{
-                            top: 20,
-                            right: 30,
-                            left: 20,
-                            bottom: 60,
-                          }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            vertical={false}
-                            stroke="#e2e8f0"
-                          />
-                          <XAxis
-                            dataKey="name"
-                            tick={{
-                              fontSize: 10,
-                              fill: "#64748b",
-                              fontWeight: "bold",
-                            }}
-                            angle={-45}
-                            textAnchor="end"
-                            interval={0}
-                          />
-                          <YAxis
-                            tick={{ fontSize: 10, fill: "#64748b" }}
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <Tooltip
-                            cursor={{ fill: "#f1f5f9" }}
-                            contentStyle={{
-                              borderRadius: "12px",
-                              border: "none",
-                              boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                            }}
-                          />
-                          <Bar
-                            dataKey="total"
-                            name="Total"
-                            fill="#3b82f6"
-                            radius={[4, 4, 0, 0]}
-                            barSize={activeRunners.length > 15 ? 15 : 30}
-                          >
-                            <LabelList
-                              dataKey="total"
-                              position="top"
-                              formatter={(val) => (val > 0 ? val : "")}
-                              style={{
-                                fontSize: "10px",
-                                fill: "#64748b",
-                                fontWeight: "bold",
-                              }}
-                            />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+          <CoachReportView
+            handleExportMatrixCSV={handleExportMatrixCSV}
+            handlePrint={handlePrint}
+            printStyles={printStyles}
+            activeRunners={activeRunners}
+            targetPeriod={targetPeriod}
+            reportMatrix={reportMatrix}
+            monthlyTrendData={monthlyTrendData}
+            cumulativeData={cumulativeData}
+            reportChartData={reportChartData}
+          />
         )}
 
         {view === "coach-check" && (
@@ -1159,51 +751,16 @@ const CoachView = (props) => {
                     <div className="space-y-3 pt-4 border-t border-slate-100">
                       {monthlyLogs.length > 0 ? (
                         monthlyLogs.map((log) => (
-                          <div
+                          <DiaryListItem
                             key={log.date}
+                            log={log}
+                            isExpanded={false}
+                            showChevron={true}
                             onClick={() => {
                               setMenuInput({ ...menuInput, date: log.date });
                               setDiaryMode("edit");
                             }}
-                            className="bg-slate-50 p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center cursor-pointer active:scale-95 transition-all hover:border-blue-200 group"
-                          >
-                            <div>
-                              <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                {log.date.slice(5).replace("-", "/")} (
-                                {
-                                  ["日", "月", "火", "水", "木", "金", "土"][
-                                    new Date(log.date).getDay()
-                                  ]
-                                }
-                                )
-                              </p>
-                              <h3 className="font-bold text-slate-700 text-sm truncate mb-1">
-                                {log.menu
-                                  ? log.menu.split("\n")[0]
-                                  : "メニューなし"}
-                              </h3>
-                              <div className="flex flex-wrap gap-2">
-                                <span className="text-[9px] bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-500 font-bold">
-                                  {log.weather}
-                                </span>
-                                {log.location && (
-                                  <span className="text-[9px] bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-500 font-bold flex items-center gap-0.5">
-                                    <MapPin size={8} />
-                                    {log.location === "その他" &&
-                                    log.locationDetail
-                                      ? log.locationDetail
-                                      : log.location === "競技場" &&
-                                          log.locationDetail
-                                        ? `${log.location} (${log.locationDetail})`
-                                        : log.location}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-slate-300 group-hover:text-blue-500 transition-colors">
-                              <ChevronRight size={18} />
-                            </div>
-                          </div>
+                          />
                         ))
                       ) : (
                         <div className="text-center py-10 text-slate-300 font-bold text-sm">
@@ -2657,6 +2214,7 @@ const CoachView = (props) => {
         )}
 
         {/* ▼▼▼ 追加: Pain Alert List Modal ▼▼▼ */}
+        {/* ▼▼▼ Condition Alert List Modal ▼▼▼ */}
         {isPainAlertModalOpen && (
           <div
             className="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
@@ -2668,7 +2226,7 @@ const CoachView = (props) => {
             >
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h3 className="font-black text-lg text-rose-600 flex items-center gap-2">
-                  <AlertTriangle size={20} /> Pain Alert List
+                  <AlertTriangle size={20} /> Condition Alert List
                 </h3>
                 <button
                   onClick={() => setIsPainAlertModalOpen(false)}
@@ -2679,76 +2237,70 @@ const CoachView = (props) => {
               </div>
 
               <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
-                {activeRunners
-                  .map((runner) => {
-                    // 各選手の最新ログを取得して判定
-                    const runnerLogs = allLogs
-                      .filter((l) => l.runnerId === runner.id)
-                      .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                    if (runnerLogs.length === 0) return null;
-                    const latestLog = runnerLogs[0];
-
-                    // 痛みが3以上の場合のみ表示対象とする
-                    if (latestLog.pain < 3) return null;
-
-                    return { runner, log: latestLog };
-                  })
-                  .filter(Boolean) // nullを除去
-                  // 痛みが強い順に並べ替え
-                  .sort((a, b) => b.log.pain - a.log.pain)
-                  .map(({ runner, log }) => (
-                    <div
-                      key={runner.id}
-                      className="bg-rose-50 p-4 rounded-2xl border border-rose-100 flex flex-col gap-2"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-black text-rose-500 shadow-sm text-sm">
-                            {runner.lastName.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-slate-800 text-sm">
-                              {runner.lastName} {runner.firstName}
-                            </p>
-                            <p className="text-[10px] font-bold text-slate-400">
-                              {log.date.slice(5).replace("-", "/")}
-                            </p>
-                          </div>
+                {coachStats.alertList?.map(({ runner, latestLog, alerts }) => (
+                  <div
+                    key={runner.id}
+                    className="bg-rose-50 p-4 rounded-2xl border border-rose-100 flex flex-col gap-2"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-black text-rose-500 shadow-sm text-sm">
+                          {runner.lastName.charAt(0)}
                         </div>
-                        <span
-                          className={`px-3 py-1 rounded-lg text-xs font-black flex items-center gap-1 ${
-                            log.pain >= 4
-                              ? "bg-rose-600 text-white animate-pulse"
-                              : "bg-white text-rose-500 border border-rose-200"
-                          }`}
-                        >
-                          <HeartPulse size={14} /> Pain {log.pain}
-                        </span>
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">
+                            {runner.lastName} {runner.firstName}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400">
+                            {latestLog
+                              ? latestLog.date.slice(5).replace("-", "/")
+                              : "記録なし"}
+                          </p>
+                        </div>
                       </div>
 
-                      {/* メニュー詳細（痛みの原因や状況）を表示 */}
+                      {/* アラートバッジを縦に並べて表示 */}
+                      <div className="flex flex-col gap-1 items-end">
+                        {alerts.map((a, idx) => (
+                          <span
+                            key={idx}
+                            className={`px-2 py-1 rounded-lg text-[9px] font-black flex items-center gap-1 shadow-sm ${a.color}`}
+                          >
+                            {a.type === "pain" && <HeartPulse size={12} />}
+                            {a.type === "fatigue" && <Activity size={12} />}
+                            {a.type === "missing" && (
+                              <AlertTriangle size={12} />
+                            )}
+                            {a.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* メニュー詳細（痛みの原因や状況）を表示 */}
+                    {latestLog && (
                       <div className="bg-white/60 p-2 rounded-xl mt-1">
-                        <p className="text-xs text-slate-600 font-bold">
-                          {log.category}
+                        <p className="text-[11px] text-slate-600 font-bold">
+                          {latestLog.category}
                         </p>
                         <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                          {log.menuDetail || "（コメントなし）"}
+                          {latestLog.menuDetail || "（コメントなし）"}
                         </p>
                       </div>
+                    )}
 
-                      {/* 監督用の「詳細へ」ボタン */}
-                      <button
-                        onClick={() => {
-                          setIsPainAlertModalOpen(false);
-                          handleCoachEditRunner(runner); // その選手の詳細画面へ移動
-                        }}
-                        className="text-[10px] font-bold text-rose-400 text-right hover:text-rose-600 flex items-center justify-end gap-1 mt-1"
-                      >
-                        詳細・連絡する <ChevronRight size={12} />
-                      </button>
-                    </div>
-                  ))}
+                    {/* 監督用の「詳細へ」ボタン */}
+                    <button
+                      onClick={() => {
+                        setIsPainAlertModalOpen(false);
+                        handleCoachEditRunner(runner); // その選手の詳細画面へ移動
+                      }}
+                      className="text-[10px] font-bold text-rose-400 text-right hover:text-rose-600 flex items-center justify-end gap-1 mt-1"
+                    >
+                      詳細・連絡する <ChevronRight size={12} />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

@@ -29,6 +29,11 @@ import { ROLES } from "../utils/constants";
 // ▼ 新しく作った道具箱から、日付取得の関数をインポート
 import { getTodayStr } from "../utils/dateUtils";
 
+// 練習日誌
+import DiaryListItem from "./DiaryListItem";
+
+import { getFunctions, httpsCallable } from "firebase/functions";
+
 import { toast } from "react-hot-toast";
 
 // --- Manager Dashboard Component (日誌一覧・入力切り替え機能付き) ---
@@ -71,18 +76,6 @@ const ManagerDashboard = ({
 
   const [selectedLog, setSelectedLog] = React.useState(null);
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
-
-  // ▼▼▼ 画像をGeminiに送れる形式（Base64）に変換する ▼▼▼
-  const fileToGenerativePart = async (file) => {
-    const base64EncodedDataPromise = new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result.split(",")[1]);
-      reader.readAsDataURL(file);
-    });
-    return {
-      inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
-    };
-  };
 
   const reinforcementOptions = [
     "補強A",
@@ -166,21 +159,34 @@ const ManagerDashboard = ({
     });
   };
 
+  // 先に、全員分の「月間走行距離の合計」をまとめた辞書を作る
+  const monthlyTotals = React.useMemo(() => {
+    const targetMonthPrefix = checkDate.slice(0, 7);
+    const totals = {};
+
+    allLogs.forEach((l) => {
+      if (l.date.startsWith(targetMonthPrefix)) {
+        totals[l.runnerId] =
+          (totals[l.runnerId] || 0) + (Number(l.distance) || 0);
+      }
+    });
+    return totals;
+  }, [allLogs, checkDate]);
+
+  // ✨ ここに submissionStatusList を復活させます！（辞書を使って高速化版）
   const submissionStatusList = React.useMemo(() => {
     const targetDateStr = checkDate;
-    const targetMonthPrefix = targetDateStr.slice(0, 7);
+
     return allRunners
       .filter((runner) => runner.role !== ROLES.MANAGER)
       .map((runner) => {
+        // その日の記録を探す
         const targetLog = allLogs.find(
           (log) => log.runnerId === runner.id && log.date === targetDateStr,
         );
-        const monthTotal = allLogs
-          .filter(
-            (l) =>
-              l.runnerId === runner.id && l.date.startsWith(targetMonthPrefix),
-          )
-          .reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+
+        // ★ 重い計算(filter)をやめて、上で作った辞書(monthlyTotals)から直接取り出す！
+        const monthTotal = monthlyTotals[runner.id] || 0;
 
         let status = "unsubmitted";
         let label = "未";
@@ -204,26 +210,19 @@ const ManagerDashboard = ({
           monthTotal: Math.round(monthTotal * 10) / 10,
         };
       });
-  }, [allRunners, allLogs, checkDate]);
+  }, [allRunners, allLogs, checkDate, monthlyTotals]);
 
+  // ランキングを作る時は、辞書から数字を取り出すだけ！
   const rankingData = React.useMemo(() => {
-    const targetMonthPrefix = checkDate.slice(0, 7);
     return allRunners
       .filter((runner) => runner.role !== ROLES.MANAGER)
-      .map((r) => {
-        const total = allLogs
-          .filter(
-            (l) => l.runnerId === r.id && l.date.startsWith(targetMonthPrefix),
-          )
-          .reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
-        return {
-          name: `${r.lastName} ${r.firstName}`,
-          id: r.id,
-          total: Math.round(total * 10) / 10,
-        };
-      })
+      .map((r) => ({
+        name: `${r.lastName} ${r.firstName}`,
+        id: r.id,
+        total: Math.round((monthlyTotals[r.id] || 0) * 10) / 10,
+      }))
       .sort((a, b) => b.total - a.total);
-  }, [allRunners, allLogs, checkDate]);
+  }, [allRunners, monthlyTotals]);
 
   const teamActivityLogs = React.useMemo(() => {
     const today = new Date();
@@ -291,9 +290,7 @@ const ManagerDashboard = ({
 
     setIsGenerating(true);
     try {
-      const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
-
-      // ✨ Googleドキュメントのプロンプトを完全再現
+      // プロンプトは元のままです
       const prompt = `添付された画像（陸上競技の練習記録表）から情報を読み取り、以下の【ルール】と【出力フォーマット】に厳密に従ってテキストデータとして出力してください。
 
 【読み取りのルール】
@@ -337,35 +334,37 @@ const ManagerDashboard = ({
 （※以下、各グループの周回・距離ごとに記載。PACEやTOTALがない場合は適宜省略。リカバリータイムがある場合は末尾に (r: [タイム]) と追記）。set表記がある場合はset1,set2というように表記したうえ、setごとに記録をまとめる。
 \`\`\``;
 
-      // 画像をGemini用データに変換
-      const imagePart = await fileToGenerativePart(aiImage);
+      // 1. 画像をサーバーに送れる形（Base64文字列）に変換する
+      const base64EncodedDataPromise = new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(",")[1]);
+        reader.readAsDataURL(aiImage);
+      });
+      const base64Data = await base64EncodedDataPromise;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, imagePart] }], // ✨ プロンプトと画像の両方を送信
-          }),
-        },
-      );
+      // 2. 作成した秘書（Cloud Functions）を呼び出す準備
+      const functions = getFunctions();
+      const analyzeDiaryImage = httpsCallable(functions, "analyzeDiaryImage");
 
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
+      // 3. APIキーは送らず、データだけを秘書に渡す！
+      const result = await analyzeDiaryImage({
+        prompt: prompt,
+        base64Image: base64Data,
+        mimeType: aiImage.type,
+      });
 
+      // 4. 秘書がGeminiから持ち帰ってきた結果を受け取る
+      const data = result.data;
       const generatedText = data.candidates[0].content.parts[0].text;
 
-      // ▼▼▼ AIの返答から「メニュー」と「記録」を分割して抽出する ▼▼▼
+      // ▼▼▼ ここから下の「テキスト分割」の処理は元のコードと同じです ▼▼▼
       let extractedMenu = "";
       let extractedResult = "";
 
       try {
-        // 返ってきたテキストを "### 練習記録" という文字で真っ二つに分割します
         const parts = generatedText.split("### 練習記録");
 
         if (parts.length === 2) {
-          // AIがつけてくれた余分なマーク（```text や ```）を綺麗にお掃除します
           extractedMenu = parts[0]
             .replace(/### 練習メニュー/g, "")
             .replace(/```text/g, "")
@@ -376,7 +375,6 @@ const ManagerDashboard = ({
             .replace(/```/g, "")
             .trim();
         } else {
-          // 万が一フォーマット通りに出力されなかった場合の保険
           extractedResult = generatedText
             .replace(/```text/g, "")
             .replace(/```/g, "")
@@ -386,21 +384,18 @@ const ManagerDashboard = ({
         extractedResult = generatedText;
       }
 
-      // 抽出したテキストを、それぞれの入力欄に自動セット！
       setDiaryInput({
         ...diaryInput,
-        menu: extractedMenu || diaryInput.menu, // メニューが抽出できなければ元のまま
+        menu: extractedMenu || diaryInput.menu,
         result: extractedResult,
       });
-      // ▲▲▲ 変更ここまで ▲▲▲
 
       toast.success("✨ メニューと記録の自動振り分けが完了しました！");
-
-      // モーダルを閉じて画像をリセット
       setShowAIModal(false);
       setAiImage(null);
     } catch (error) {
       toast.error("生成に失敗しました: " + error.message);
+      console.error(error); // エラーの詳細をコンソールに出力しておくとデバッグに便利です
     } finally {
       setIsGenerating(false);
     }
@@ -709,50 +704,16 @@ const ManagerDashboard = ({
                 <div className="space-y-3">
                   {monthlyLogs.length > 0 ? (
                     monthlyLogs.map((log) => (
-                      <div
+                      <DiaryListItem
                         key={log.date}
+                        log={log}
+                        isExpanded={false}
+                        showChevron={true}
                         onClick={() => {
                           setCheckDate(log.date);
                           setDiaryMode("edit");
                         }}
-                        className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center cursor-pointer active:scale-95 transition-all"
-                      >
-                        <div>
-                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">
-                            {log.date.slice(5).replace("-", "/")} (
-                            {
-                              ["日", "月", "火", "水", "木", "金", "土"][
-                                new Date(log.date).getDay()
-                              ]
-                            }
-                            )
-                          </p>
-                          <h3 className="font-bold text-slate-700 text-sm truncate mb-1">
-                            {log.menu
-                              ? log.menu.split("\n")[0]
-                              : "メニューなし"}
-                          </h3>
-                          <div className="flex gap-2">
-                            <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold">
-                              {log.weather}
-                            </span>
-                            {log.location && (
-                              <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold flex items-center gap-0.5">
-                                <MapPin size={8} />{" "}
-                                {log.location === "その他" && log.locationDetail
-                                  ? log.locationDetail
-                                  : log.location === "競技場" &&
-                                      log.locationDetail
-                                    ? `${log.location} (${log.locationDetail})`
-                                    : log.location}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-slate-300">
-                          <ChevronRight size={18} />
-                        </div>
-                      </div>
+                      />
                     ))
                   ) : (
                     <div className="text-center py-10 text-slate-300 font-bold text-sm">

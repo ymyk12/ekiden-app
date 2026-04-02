@@ -2,6 +2,7 @@
 //   import
 // ==========================================
 import { useState, useMemo, useEffect } from "react";
+
 import {
   Eye,
   Menu,
@@ -34,16 +35,20 @@ import {
   Calendar,
   Bell,
 } from "lucide-react";
+
 import { ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
+
 import {
   ROLES,
   CATEGORY,
   RACE_TYPES,
   RACE_DISTANCES,
 } from "../utils/constants";
+
 import { getGoalValue, getTodayStr, getDatesInRange } from "../utils/dateUtils";
 
-// グラフ用のカラーパレット
+// 練習日誌
+import DiaryListItem from "./DiaryListItem";
 
 const AthleteView = (props) => {
   // App.js から渡されたデータ（Props）をすべて展開します
@@ -119,10 +124,15 @@ const AthleteView = (props) => {
       "2000-01-01T00:00:00.000Z"
     );
   });
+
+  // AthleteView.jsx の通知読み込み部分
   const [notifiedIds, setNotifiedIds] = useState(() => {
-    return JSON.parse(
-      localStorage.getItem(`notified_ids_${currentUserId}`) || "[]",
-    );
+    try {
+      const item = localStorage.getItem(`notified_ids_${currentUserId}`);
+      return item && item !== "undefined" ? JSON.parse(item) : [];
+    } catch (e) {
+      return []; // 記憶が壊れていたら無視して空っぽにする！
+    }
   });
 
   // アプリ内のデータから「お知らせ」を自動でリストアップ
@@ -166,42 +176,25 @@ const AthleteView = (props) => {
     }
 
     // 3. 新しい大会が追加された（便宜上、トーナメント一覧の最後を最新とみなす）
+    // 🌟 修正：全ての大会を通知リストに追加（未読判定は後続のロジックで行われます）
     if (tournaments && tournaments.length > 0) {
-      const latestTour = tournaments[tournaments.length - 1];
-      list.push({
-        id: `tour_${latestTour.id}`,
-        type: "New Event",
-        title: "新しい大会が設定されました",
-        message: `「${latestTour.name}」が予定に追加されました。出場種目を登録しましょう！`,
-        time:
-          latestTour.createdAt || new Date(latestTour.startDate).toISOString(),
-        onClick: () => {
-          setIsNotifOpen(false);
-          setView("race");
-        },
+      tournaments.forEach((tour) => {
+        list.push({
+          id: `tour_${tour.id}`,
+          type: "New Event",
+          title: "新しい大会が設定されました",
+          message: `「${tour.name}」が予定に追加されました。出場種目を登録しましょう！`,
+          time: tour.createdAt || new Date(tour.startDate).toISOString(),
+          onClick: () => {
+            setIsNotifOpen(false);
+            setView("race");
+          },
+        });
       });
     }
-    // 4. チーム日誌の追加・更新
-    if (teamLogs && teamLogs.length > 0) {
-      teamLogs.forEach((diary) => {
-        // 更新日時（または作成日時）がある場合のみ通知対象にする
-        const timeStr = diary.updatedAt || diary.createdAt;
-        if (timeStr) {
-          list.push({
-            id: `diary_${diary.date}_${timeStr}`,
-            type: "Diary", // 通知バッジの種類
-            title: "チーム日誌が更新されました",
-            message: `${diary.date.slice(5).replace("-", "/")} の日誌（メニューや報告）が追加・更新されました！`,
-            time: timeStr,
-            onClick: () => {
-              setIsNotifOpen(false); // 通知モーダルを閉じる
-              setExpandedDiaryId(diary.date); // タップされた日誌のアコーディオンを自動で開く！
-              setView("diary"); // 日誌画面へ移動
-            },
-          });
-        }
-      });
-    }
+
+    // 🌟 チーム日誌のブロックは削除しました！
+
     // 新しい順に並び替え
     return list.sort((a, b) => (a.time < b.time ? 1 : -1));
   }, [
@@ -219,6 +212,26 @@ const AthleteView = (props) => {
 
   // 未読件数の計算
   const unreadCount = notifications.filter((n) => n.time > lastReadTime).length;
+
+  // 🌟 追加：カテゴリごとの未読判定（バッジ表示用）
+  const unreadNotifs = notifications.filter((n) => n.time > lastReadTime);
+  const hasUnreadRace = unreadNotifs.some(
+    (n) => n.id.startsWith("fb_race_") || n.id.startsWith("tour_"),
+  ); // 大会・レース関連
+  const hasUnreadReview = unreadNotifs.some((n) =>
+    n.id.startsWith("fb_period_"),
+  ); // 振り返り関連
+
+  // 🌟 修正：日誌の赤バッジ判定を独立させる（一覧やプッシュ通知には出さないため）
+  const latestDiaryTime =
+    teamLogs && teamLogs.length > 0
+      ? Math.max(
+          ...teamLogs.map((l) =>
+            new Date(l.updatedAt || l.createdAt || "2000-01-01").getTime(),
+          ),
+        )
+      : 0;
+  const hasUnreadDiary = latestDiaryTime > new Date(lastReadTime).getTime();
 
   // ベルを開いた時の処理（既読にする）
   const handleOpenNotif = () => {
@@ -327,6 +340,13 @@ const AthleteView = (props) => {
               className="w-full py-4 bg-indigo-50 text-indigo-700 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
             >
               <Flag size={20} /> 大会ノート (Race Card)
+              {/* 🌟 大会関連の未読があれば赤丸を表示 */}
+              {hasUnreadRace && (
+                <span className="absolute top-4 right-4 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                </span>
+              )}
             </button>
             {/* 目標設定 */}
             <button
@@ -364,6 +384,13 @@ const AthleteView = (props) => {
             className="bg-white/20 p-2.5 rounded-2xl active:scale-90 transition-all text-white"
           >
             <Menu size={20} />
+            {/* 🌟 大会関連の未読があれば赤丸を表示 */}
+            {hasUnreadRace && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-blue-600"></span>
+              </span>
+            )}
           </button>
           <div className="text-center">
             <p className="text-blue-100 text-[10px] font-black tracking-widest uppercase mb-1">
@@ -1199,136 +1226,82 @@ const AthleteView = (props) => {
                 return filteredLogs.map((log) => {
                   const isExpanded = expandedDiaryId === log.date;
                   return (
-                    <div
+                    <DiaryListItem
                       key={log.date}
+                      log={log}
+                      isExpanded={isExpanded}
                       onClick={() =>
                         setExpandedDiaryId(isExpanded ? null : log.date)
                       }
-                      className={`rounded-2xl border transition-all cursor-pointer overflow-hidden ${isExpanded ? "bg-slate-50 border-blue-200 shadow-md" : "bg-white border-slate-100 hover:border-blue-100"}`}
                     >
-                      <div className="p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
-                              {log.date.slice(5).replace("-", "/")}
-                              <span className="text-slate-300">
-                                (
-                                {
-                                  ["日", "月", "火", "水", "木", "金", "土"][
-                                    new Date(log.date).getDay()
-                                  ]
-                                }
-                                )
-                              </span>
+                      {/* ▼▼ ここから下は isExpanded の中身として渡されます ▼▼ */}
+                      <div className="px-4 pb-4 space-y-4 border-t border-slate-200/50 pt-4 animate-in slide-in-from-top-2">
+                        <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
+                          <div className="bg-white p-2 rounded-lg border border-slate-100">
+                            <span className="text-indigo-400 block text-[9px] uppercase">
+                              Time
+                            </span>
+                            {log.startTime
+                              ? `${log.startTime} - ${log.endTime}`
+                              : "-"}
+                          </div>
+                          <div className="bg-white p-2 rounded-lg border border-slate-100">
+                            <span className="text-indigo-400 block text-[9px] uppercase">
+                              Cond
+                            </span>
+                            {log.temp ? `${log.temp}℃` : "-"} / Wind:{" "}
+                            {log.wind || "-"}
+                          </div>
+                        </div>
+                        {log.reinforcements &&
+                          log.reinforcements.length > 0 && (
+                            <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                              <p className="text-[9px] font-black text-blue-400 uppercase mb-2 flex items-center gap-1">
+                                <Dumbbell size={10} /> Reinforcement
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {log.reinforcements.map((item, i) => (
+                                  <span
+                                    key={i}
+                                    className="text-[10px] font-bold bg-white text-slate-600 px-2 py-1 rounded border border-blue-100"
+                                  >
+                                    {item}
+                                  </span>
+                                ))}
+                                {log.reinforcementDetail && (
+                                  <span className="text-[10px] font-bold text-slate-400 self-center">
+                                    ({log.reinforcementDetail})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        {log.result && (
+                          <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+                            <p className="text-[9px] font-black text-indigo-400 uppercase mb-1 flex items-center gap-1">
+                              <Activity size={10} /> Result / Notes
+                            </p>
+                            <p className="text-xs font-bold leading-relaxed text-slate-700 whitespace-pre-wrap">
+                              {log.result}
                             </p>
                           </div>
-                          <div className="flex gap-1">
-                            <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded">
-                              {log.weather}
-                            </span>
-                            {log.location && (
-                              <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                <MapPin size={8} />{" "}
-                                {log.location === "その他" && log.locationDetail
-                                  ? log.locationDetail
-                                  : log.location === "競技場" &&
-                                      log.locationDetail
-                                    ? `${log.location} (${log.locationDetail})`
-                                    : log.location}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <p
-                            className={`font-bold text-slate-700 text-sm leading-relaxed ${isExpanded ? "whitespace-pre-wrap" : "truncate"}`}
-                          >
-                            {/* 開いている時は全文、閉じている時は改行で区切って1行目だけ表示 */}
-                            {isExpanded
-                              ? log.menu
-                              : log.menu
-                                ? log.menu.split("\n")[0]
-                                : "メニューなし"}
-                          </p>
-                        </div>
-                        {!isExpanded && (
-                          <div className="flex justify-center mt-2">
-                            <ChevronRight
-                              size={16}
-                              className="text-slate-300 rotate-90"
-                            />
+                        )}
+                        {/* ▼▼▼ 監督からの追記 (一覧画面用デザイン) ▼▼▼ */}
+                        {log.coachNote && (
+                          <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 mt-3">
+                            <p className="text-[9px] font-black text-amber-600 uppercase mb-1 flex items-center gap-1 tracking-widest">
+                              <MessageSquare size={10} /> Coach's Note
+                            </p>
+                            <p className="text-xs font-bold leading-relaxed text-slate-800 whitespace-pre-wrap">
+                              {log.coachNote}
+                            </p>
                           </div>
                         )}
+                        <p className="text-[9px] text-right text-slate-300">
+                          Updated by: {log.updatedBy}
+                        </p>
                       </div>
-                      {isExpanded && (
-                        <div className="px-4 pb-4 space-y-4 border-t border-slate-200/50 pt-4 animate-in slide-in-from-top-2">
-                          <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
-                            <div className="bg-white p-2 rounded-lg border border-slate-100">
-                              <span className="text-indigo-400 block text-[9px] uppercase">
-                                Time
-                              </span>
-                              {log.startTime
-                                ? `${log.startTime} - ${log.endTime}`
-                                : "-"}
-                            </div>
-                            <div className="bg-white p-2 rounded-lg border border-slate-100">
-                              <span className="text-indigo-400 block text-[9px] uppercase">
-                                Cond
-                              </span>
-                              {log.temp ? `${log.temp}℃` : "-"} / Wind:{" "}
-                              {log.wind || "-"}
-                            </div>
-                          </div>
-                          {log.reinforcements &&
-                            log.reinforcements.length > 0 && (
-                              <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
-                                <p className="text-[9px] font-black text-blue-400 uppercase mb-2 flex items-center gap-1">
-                                  <Dumbbell size={10} /> Reinforcement
-                                </p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {log.reinforcements.map((item, i) => (
-                                    <span
-                                      key={i}
-                                      className="text-[10px] font-bold bg-white text-slate-600 px-2 py-1 rounded border border-blue-100"
-                                    >
-                                      {item}
-                                    </span>
-                                  ))}
-                                  {log.reinforcementDetail && (
-                                    <span className="text-[10px] font-bold text-slate-400 self-center">
-                                      ({log.reinforcementDetail})
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          {log.result && (
-                            <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
-                              <p className="text-[9px] font-black text-indigo-400 uppercase mb-1 flex items-center gap-1">
-                                <Activity size={10} /> Result / Notes
-                              </p>
-                              <p className="text-xs font-bold leading-relaxed text-slate-700 whitespace-pre-wrap">
-                                {log.result}
-                              </p>
-                            </div>
-                          )}
-                          {/* ▼▼▼ 監督からの追記 (一覧画面用デザイン) ▼▼▼ */}
-                          {log.coachNote && (
-                            <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 mt-3">
-                              <p className="text-[9px] font-black text-amber-600 uppercase mb-1 flex items-center gap-1 tracking-widest">
-                                <MessageSquare size={10} /> Coach's Note
-                              </p>
-                              <p className="text-xs font-bold leading-relaxed text-slate-800 whitespace-pre-wrap">
-                                {log.coachNote}
-                              </p>
-                            </div>
-                          )}
-                          <p className="text-[9px] text-right text-slate-300">
-                            Updated by: {log.updatedBy}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                    </DiaryListItem>
                   );
                 });
               })()}
@@ -2533,16 +2506,38 @@ const AthleteView = (props) => {
             onClick={() => safeChangeView("diary")}
             className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${view === "diary" ? "text-orange-500 -translate-y-1" : "text-slate-300 hover:text-slate-400"}`}
           >
-            <BookOpen size={22} strokeWidth={view === "diary" ? 3 : 2} />
+            <div className="relative">
+              <BookOpen size={22} strokeWidth={view === "diary" ? 3 : 2} />
+              {/* 🌟 日誌の未読があれば赤丸を表示 */}
+              {hasUnreadDiary && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 border border-white"></span>
+                </span>
+              )}
+            </div>
             <span className="text-[8px] font-black uppercase tracking-widest">
               Diary
             </span>
           </button>
+
           <button
             onClick={() => safeChangeView("review")}
             className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 ${view === "review" ? "text-emerald-500 -translate-y-1" : "text-slate-300 hover:text-slate-400"}`}
           >
-            <MessageSquare size={22} strokeWidth={view === "review" ? 3 : 2} />
+            <div className="relative">
+              <MessageSquare
+                size={22}
+                strokeWidth={view === "review" ? 3 : 2}
+              />
+              {/* 🌟 振り返りの未読があれば赤丸を表示 */}
+              {hasUnreadReview && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 border border-white"></span>
+                </span>
+              )}
+            </div>
             <span className="text-[8px] font-black uppercase tracking-widest">
               Review
             </span>

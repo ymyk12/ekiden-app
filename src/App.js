@@ -53,11 +53,12 @@ import AthleteView from "./components/AthleteView";
 import ManagerDashboard from "./components/ManagerDashboard";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "5.1.6";
+const APP_LAST_UPDATED = "5.2.0";
 
 // --- Print Styles (修正版: 改ページ完全対応) ---
 // --- Print Styles (修正版: 学年別テーブル先頭） ---
 // --- Print Styles (修正版: 印刷不具合の完全対策) ---
+
 const printStyles = `
   /* 通常画面のカードスタイル */
   .report-card-base { 
@@ -938,7 +939,62 @@ const App = () => {
       });
     });
     return data;
-  }, [reportDates, activeRunners, allLogs]);
+  }, [reportDates, activeRunners, allLogs]); //
+
+  // 🌟 追加: 月次レポート専用の「過去12ヶ月のトレンドグラフ用データ」を計算
+  const monthlyTrendData = useMemo(() => {
+    if (!targetPeriod || targetPeriod.type !== "month") return [];
+
+    // ターゲットの月から過去12ヶ月の「YYYY-MM」配列を作る
+    const match = (targetPeriod.id || "").match(/month_(\d{4})_(\d{1,2})/);
+    let y = new Date().getFullYear(),
+      m = new Date().getMonth() + 1;
+    if (match) {
+      y = parseInt(match[1], 10);
+      m = parseInt(match[2], 10);
+    }
+
+    const past12Months = [];
+    for (let i = 11; i >= 0; i--) {
+      let d = new Date(y, m - 1 - i, 1);
+      past12Months.push(
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      );
+    }
+
+    const athletes = activeRunners.filter((r) => r.role !== ROLES.MANAGER);
+    const monthlyMap = {};
+
+    past12Months.forEach((yyyymm) => {
+      monthlyMap[yyyymm] = { date: yyyymm };
+      athletes.forEach((r) => (monthlyMap[yyyymm][r.id] = null)); // 初期値はnull
+    });
+
+    // ✨ allLogs（全データ）から、過去12ヶ月分に該当するものを集計
+    allLogs.forEach((log) => {
+      const yyyymm = log.date.substring(0, 7);
+      if (monthlyMap[yyyymm]) {
+        athletes.forEach((r) => {
+          if (log.runnerId === r.id) {
+            const val = parseFloat(log.distance);
+            if (!isNaN(val) && val > 0) {
+              monthlyMap[yyyymm][r.id] = (monthlyMap[yyyymm][r.id] || 0) + val;
+            }
+          }
+        });
+      }
+    });
+
+    return past12Months.map((yyyymm) => {
+      const row = monthlyMap[yyyymm];
+      const newRow = { date: row.date };
+      athletes.forEach((r) => {
+        newRow[r.id] =
+          row[r.id] === null ? null : Math.round(row[r.id] * 10) / 10;
+      });
+      return newRow;
+    });
+  }, [allLogs, targetPeriod, activeRunners]);
 
   const checkListData = useMemo(() => {
     return activeRunners
@@ -990,13 +1046,83 @@ const App = () => {
       athletes.length > 0
         ? Math.round((reportedCount / athletes.length) * 100)
         : 0;
-    const painAlertCount = athletes.filter((r) => {
-      const runnerLogs = allLogs.filter((l) => l.runnerId === r.id);
-      if (runnerLogs.length === 0) return false;
-      runnerLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
-      return runnerLogs[0].pain >= 3;
-    }).length;
-    return { reportRate, painAlertCount, reportedCount };
+
+    // 🌟 新機能: 本日のチーム平均RPE（疲労度）を計算
+    const todaysLogs = allLogs.filter(
+      (l) => l.date === todayStr && athletes.some((r) => r.id === l.runnerId),
+    );
+    // 「完全休養」の日はRPEの計算から除外して、実際に動いた選手の平均を取る
+    const validRpeLogs = todaysLogs.filter(
+      (l) => typeof l.rpe === "number" && l.category !== "完全休養",
+    );
+    const avgRpe =
+      validRpeLogs.length > 0
+        ? Math.round(
+            (validRpeLogs.reduce((sum, l) => sum + l.rpe, 0) /
+              validRpeLogs.length) *
+              10,
+          ) / 10
+        : 0;
+
+    // 🌟 新機能：高度なコンディションアラートリストの作成
+    const alertList = athletes
+      .map((runner) => {
+        // ... (中略: アラートの判定処理はそのまま残す) ...
+        const runnerLogs = allLogs.filter((l) => l.runnerId === runner.id);
+        runnerLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        const alerts = [];
+
+        // ① Painアラート: 最新の記録で痛みが3以上
+        if (runnerLogs.length > 0 && runnerLogs[0].pain >= 3) {
+          alerts.push({
+            type: "pain",
+            label: `Pain ${runnerLogs[0].pain}`,
+            color: "bg-rose-600 text-white animate-pulse",
+          });
+        }
+
+        // ② 疲労蓄積アラート: 直近3回のRPEがすべて8以上
+        if (
+          runnerLogs.length >= 3 &&
+          runnerLogs[0].rpe >= 8 &&
+          runnerLogs[1].rpe >= 8 &&
+          runnerLogs[2].rpe >= 8
+        ) {
+          alerts.push({
+            type: "fatigue",
+            label: "3日連続 高負荷(RPE8+)",
+            color: "bg-orange-500 text-white",
+          });
+        }
+
+        // ③ 未提出アラート: 最後に提出してから3日以上経過
+        const lastLogDate =
+          runnerLogs.length > 0
+            ? new Date(runnerLogs[0].date)
+            : new Date("2000-01-01");
+        const today = new Date(todayStr);
+        const diffDays = Math.floor(
+          (today - lastLogDate) / (1000 * 60 * 60 * 24),
+        );
+
+        if (diffDays >= 3) {
+          alerts.push({
+            type: "missing",
+            label: `${diffDays}日間 未提出`,
+            color: "bg-slate-500 text-white",
+          });
+        }
+
+        if (alerts.length > 0) {
+          return { runner, latestLog: runnerLogs[0], alerts };
+        }
+        return null;
+      })
+      .filter(Boolean); // nullを除去してアラート対象者のみを残す
+
+    // 🌟 ここに avgRpe を追加！
+    return { reportRate, reportedCount, alertList, avgRpe };
   }, [activeRunners, allLogs]);
 
   useEffect(() => {
@@ -1897,12 +2023,6 @@ const App = () => {
     toast.success("CSVをダウンロードしました"); // ✨ toastを追加
   };
 
-  const handlePrint = () => {
-    setTimeout(() => {
-      window.print();
-    }, 100);
-  };
-
   const handleExportMatrixCSV = () => {
     const runnerIds = activeRunners.map((r) => r.id);
     const headerRow = [
@@ -2189,11 +2309,11 @@ const App = () => {
     activeRunners,
     coachStats,
     reportMatrix,
+    monthlyTrendData,
     isPainAlertModalOpen,
     setIsPainAlertModalOpen,
     rankingData,
     exportCSV,
-    handlePrint,
     isPrintPreview,
     setIsPrintPreview,
     printStyles,

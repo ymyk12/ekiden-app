@@ -14,7 +14,6 @@ export const calculateAutoQuarters = (startStr, endStr) => {
     ];
   }
 
-  const totalTime = e - s;
   const totalDays = Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1;
 
   if (totalDays <= 0)
