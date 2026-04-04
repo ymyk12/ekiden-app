@@ -2,7 +2,7 @@
 //   import
 // ==========================================
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { signInAnonymously, onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection,
@@ -37,23 +37,17 @@ import {
 import { auth, db, appId } from "./firebaseConfig";
 import { useTeamData } from "./hooks/useTeamData";
 
-// 初期画面
-import WelcomeScreen from "./components/WelcomeScreen";
-// login画面
-import LoginScreen from "./components/LoginScreen";
-// 登録画面
-import RegisterScreen from "./components/RegisterScreen";
-// コーチ認証
-import CoachAuthScreen from "./components/CoachAuthScreen";
-// コーチ画面
-import CoachView from "./components/CoachView";
-// 選手画面
-import AthleteView from "./components/AthleteView";
-// マネージャー画面
-import ManagerDashboard from "./components/ManagerDashboard";
+// 🌟 修正：ただのimportではなく、lazy() を使って「必要になったら読み込む」設定にする！
+const WelcomeScreen = lazy(() => import("./components/WelcomeScreen"));
+const LoginScreen = lazy(() => import("./components/LoginScreen"));
+const RegisterScreen = lazy(() => import("./components/RegisterScreen"));
+const CoachAuthScreen = lazy(() => import("./components/CoachAuthScreen"));
+const CoachView = lazy(() => import("./components/CoachView"));
+const AthleteView = lazy(() => import("./components/AthleteView"));
+const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "5.3.0";
+const APP_LAST_UPDATED = "5.4.0";
 
 // --- Print Styles (修正版: 改ページ完全対応) ---
 // --- Print Styles (修正版: 学年別テーブル先頭） ---
@@ -393,7 +387,7 @@ const App = () => {
     dataLoading,
     tournaments,
     raceCards,
-  } = useTeamData(user);
+  } = useTeamData(user, role);
 
   useEffect(() => {
     if (!selectedPeriod) {
@@ -2571,12 +2565,17 @@ const App = () => {
   // 3. 全体をまとめて画面に出力
   // ==========================================
   return (
-    <>
-      {/* 画面の最前面に通知エリアをセット */}
+    // 🌟 修正：部品をダウンロードしている一瞬の間、ぐるぐる(Loading)を表示させる待合室！
+    <Suspense
+      fallback={
+        <div className="h-screen flex items-center justify-center bg-slate-50">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
+        </div>
+      }
+    >
       <Toaster position="top-center" reverseOrder={false} />
-      {/* 判定した画面の中身をここで呼び出す */}
       {renderContent()}
-    </>
+    </Suspense>
   );
 };
 

@@ -1,6 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+
+// Firestoreのパス指定で使っているappIdもここでエクスポート
+export const appId = "kswc-ekidenteam-distancerecords";
 
 // .envファイルから設定値を読み込む
 const firebaseConfig = {
@@ -17,5 +20,11 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Firestoreのパス指定で使っているappIdもここでエクスポート
-export const appId = "kswc-ekidenteam-distancerecords";
+// 🌟🌟🌟 キャッシュ機能（オフライン永続化）をONにする 🌟🌟🌟
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code === "failed-precondition") {
+    console.warn("複数タブで開かれているためキャッシュが有効になりません");
+  } else if (err.code === "unimplemented") {
+    console.warn("現在のブラウザはキャッシュ機能をサポートしていません");
+  }
+});

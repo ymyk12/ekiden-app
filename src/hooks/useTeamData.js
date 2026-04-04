@@ -5,11 +5,14 @@ import {
   onSnapshot,
   getDoc,
   setDoc,
+  query, // 🌟 追加
+  where, // 🌟 追加
 } from "firebase/firestore";
-import { db, appId } from "../firebaseConfig"; // 先ほど作ったファイルから読み込み
+import { db, appId } from "../firebaseConfig";
+import { ROLES } from "../utils/constants"; // 🌟 追加: 役割の定義を読み込む
 
-// user情報を受け取って、Firebaseからデータを取ってくるフック
-export const useTeamData = (user) => {
+// 🌟 引数に role を追加
+export const useTeamData = (user, role) => {
   const [allRunners, setAllRunners] = useState([]);
   const [allLogs, setAllLogs] = useState([]);
   const [tournaments, setTournaments] = useState([]);
@@ -79,12 +82,35 @@ export const useTeamData = (user) => {
       },
     );
 
-    const unsubLogs = onSnapshot(
-      collection(db, "artifacts", appId, "public", "data", "logs"),
-      (snap) => {
-        setAllLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      },
+    // 🌟🌟🌟 【Lv.2】 過去データの制限（クエリの分岐） 🌟🌟🌟
+    let logsQuery = collection(
+      db,
+      "artifacts",
+      appId,
+      "public",
+      "data",
+      "logs",
     );
+
+    // 監督(COACH)またはシステム管理者(ADMIN)に「確定」していない時は、強制的に過去3ヶ月分に制限する！
+    // (※アプリ起動直後の誰か分からない状態の時も、まずは軽いデータだけ取得させる)
+    if (role !== ROLES.COACH && role !== ROLES.ADMIN) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 3); // 3ヶ月前の日付を計算
+
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const cutoffDateStr = `${yyyy}-${mm}-${dd}`; // YYYY-MM-DD形式
+
+      logsQuery = query(logsQuery, where("date", ">=", cutoffDateStr));
+    }
+
+    // 制限をかけた（または監督用の全件）クエリでデータを監視する
+    const unsubLogs = onSnapshot(logsQuery, (snap) => {
+      setAllLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    // 🌟🌟🌟 制限エリアここまで 🌟🌟🌟
 
     const unsubTournaments = onSnapshot(
       collection(db, "artifacts", appId, "public", "data", "tournaments"),
@@ -143,7 +169,7 @@ export const useTeamData = (user) => {
       },
     );
 
-    // クリーンアップ関数（コンポーネントが消える時に監視を解除する）
+    // クリーンアップ関数（コンポーネントが消えたり、roleが変わったりした時に古い監視を解除する）
     return () => {
       unsubRunners();
       unsubLogs();
@@ -155,7 +181,7 @@ export const useTeamData = (user) => {
       unsubRaceCards();
       clearTimeout(timeout);
     };
-  }, [user]);
+  }, [user, role]); // 🌟 依存配列に role を追加し、役割が変わった時にリスナーを張り直す！
 
   // 取ってきたデータをApp.jsに渡す
   return {
@@ -165,7 +191,7 @@ export const useTeamData = (user) => {
     allFeedbacks,
     teamLogs,
     appSettings,
-    setAppSettings, // App.js側で設定を上書きするため
+    setAppSettings,
     dataLoading,
     tournaments,
     raceCards,

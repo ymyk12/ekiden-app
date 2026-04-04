@@ -1,5 +1,12 @@
 import React from "react";
-import { Lock, KeyRound, AlertCircle, Check, Loader2 } from "lucide-react";
+import {
+  Lock,
+  KeyRound,
+  AlertCircle,
+  Check,
+  Loader2,
+  ArrowLeft,
+} from "lucide-react";
 
 const RegisterScreen = ({
   formData,
@@ -19,6 +26,12 @@ const RegisterScreen = ({
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
       <div className="w-full max-w-sm bg-white p-10 rounded-[3rem] shadow-2xl space-y-6">
+        <button
+          onClick={() => setRole(null)} // roleをnullにするとWelcomeScreenに戻ります
+          className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-blue-600 transition-colors mb-6 active:scale-95"
+        >
+          <ArrowLeft size={16} /> トップ画面に戻る
+        </button>
         <h2 className="text-2xl font-black text-slate-900 text-center uppercase italic">
           New Member
         </h2>
