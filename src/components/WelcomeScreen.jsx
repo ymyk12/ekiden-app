@@ -12,6 +12,8 @@ const WelcomeScreen = ({ setRole, appVersion }) => {
           <img
             src="team-logo.png"
             alt="Team Logo"
+            fetchpriority="high"
+            loading="eager"
             className="w-full h-full object-contain drop-shadow-md"
             onError={(e) => {
               e.target.onerror = null;

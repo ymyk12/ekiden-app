@@ -37,17 +37,19 @@ import {
 import { auth, db, appId } from "./firebaseConfig";
 import { useTeamData } from "./hooks/useTeamData";
 
-// 🌟 修正：ただのimportではなく、lazy() を使って「必要になったら読み込む」設定にする！
-const WelcomeScreen = lazy(() => import("./components/WelcomeScreen"));
-const LoginScreen = lazy(() => import("./components/LoginScreen"));
-const RegisterScreen = lazy(() => import("./components/RegisterScreen"));
+// 🌟 1. 最初の画面たちは、遅延させずに「普通に（即座に）」読み込む！
+import WelcomeScreen from "./components/WelcomeScreen";
+import LoginScreen from "./components/LoginScreen";
+import RegisterScreen from "./components/RegisterScreen";
+
+// 🌟 2. ログインした後にしか使わない「重い画面」だけを遅延させる！
 const CoachAuthScreen = lazy(() => import("./components/CoachAuthScreen"));
 const CoachView = lazy(() => import("./components/CoachView"));
 const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "5.4.0";
+const APP_LAST_UPDATED = "5.4.1";
 
 // --- Print Styles (修正版: 改ページ完全対応) ---
 // --- Print Styles (修正版: 学年別テーブル先頭） ---
