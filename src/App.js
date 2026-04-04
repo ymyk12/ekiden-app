@@ -53,7 +53,7 @@ import AthleteView from "./components/AthleteView";
 import ManagerDashboard from "./components/ManagerDashboard";
 
 // --- App Version ---
-const APP_LAST_UPDATED = "5.2.0";
+const APP_LAST_UPDATED = "5.3.0";
 
 // --- Print Styles (修正版: 改ページ完全対応) ---
 // --- Print Styles (修正版: 学年別テーブル先頭） ---
@@ -2532,6 +2532,8 @@ const App = () => {
           allRunners={activeRunners}
           allLogs={allLogs}
           teamLogs={teamLogs}
+          tournaments={tournaments}
+          raceCards={raceCards}
           practiceMenus={practiceMenus}
           handleLogout={handleLogout}
           appId={appId}

@@ -1,4 +1,6 @@
-import { useState } from "react";
+// CoachViewはPC画面を前提とし、スマホ画面をサブ的な画面として整える
+
+import { useState, useEffect, useMemo } from "react";
 import {
   Users,
   LayoutDashboard,
@@ -40,6 +42,8 @@ import {
   Dumbbell,
   MapPin,
   Plus,
+  Bell,
+  BellRing,
 } from "lucide-react";
 
 import {
@@ -65,6 +69,8 @@ import { getGoalValue, getTodayStr } from "../utils/dateUtils";
 import DiaryListItem from "./DiaryListItem";
 // グラフ設定
 import CoachReportView from "./CoachReportView";
+// 🌟 ここに1行追加！
+import { usePrint } from "../hooks/usePrint";
 
 // グラフ用のカラーパレット
 const COLORS = [
@@ -98,7 +104,6 @@ const CoachView = (props) => {
     setIsPainAlertModalOpen,
     rankingData,
     exportCSV,
-    handlePrint,
     printStyles,
     reportChartData,
     activeQuarters,
@@ -163,11 +168,162 @@ const CoachView = (props) => {
     handleSaveTournament,
     handleDeleteTournament,
     handleSaveRaceCardFeedback,
+    allFeedbacks,
   } = props;
+
+  // フックから直接 handlePrint を取り出す！
+  const { handlePrint } = usePrint();
+
+  // 🌟🌟▼▼ 監督用の通知管理システム ▼▼🌟🌟
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [lastReadTime, setLastReadTime] = useState(() => {
+    return (
+      localStorage.getItem(`notif_read_coach_${appId}`) ||
+      "2000-01-01T00:00:00.000Z"
+    );
+  });
+  const [notifiedIds, setNotifiedIds] = useState(() => {
+    try {
+      const item = localStorage.getItem(`notified_ids_coach_${appId}`);
+      return item && item !== "undefined" ? JSON.parse(item) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const notifications = useMemo(() => {
+    const list = [];
+    // 1. 大会ノートの提出・更新
+    if (raceCards && raceCards.length > 0) {
+      raceCards.forEach((c) => {
+        const timeStr = c.updatedAt || c.createdAt;
+        if (timeStr) {
+          const tour = tournaments.find((t) => t.id === c.tournamentId);
+          list.push({
+            id: `racecard_${c.id}_${timeStr}`,
+            type: "Race Card",
+            title: "大会ノートが提出/更新されました",
+            message: `${c.runnerName}選手が「${tour?.name || "大会"}」のノートを提出/更新しました。`,
+            time: timeStr,
+            onClick: () => {
+              setIsNotifOpen(false);
+              setSelectedTourId(c.tournamentId);
+              setView("coach-race");
+            },
+          });
+        }
+      });
+    }
+
+    // 2. 振り返りの提出・更新
+    if (allFeedbacks && allFeedbacks.length > 0) {
+      allFeedbacks.forEach((f) => {
+        if (f.runnerComment && f.updatedAt) {
+          list.push({
+            id: `review_${f.id}_${f.updatedAt}`,
+            type: "Review",
+            title: "振り返りが提出/更新されました",
+            message: `${f.runnerName}選手が「${f.periodName || "指定期間"}」の振り返りを提出/更新しました。`,
+            time: f.updatedAt,
+            onClick: () => {
+              setIsNotifOpen(false);
+              const runner = activeRunners.find((r) => r.id === f.runnerId);
+              if (runner) handleCoachEditRunner(runner); // 該当選手の詳細画面へジャンプ
+            },
+          });
+        }
+      });
+    }
+    return list.sort((a, b) => (a.time < b.time ? 1 : -1));
+  }, [raceCards, allFeedbacks, tournaments, activeRunners, setView]);
+
+  const unreadCount = notifications.filter((n) => n.time > lastReadTime).length;
+
+  // 🌟🌟▼▼ 監督用のLAPタイム入力システム ▼▼🌟🌟
+  const [editingLapCard, setEditingLapCard] = useState(null);
+  const [lapInput, setLapInput] = useState("");
+
+  const handleSaveLapTime = async () => {
+    if (!editingLapCard) return;
+    try {
+      if (props.isDemoMode) {
+        import("react-hot-toast").then((m) =>
+          m.toast.success("【デモ】LAPを更新しました"),
+        );
+        setEditingLapCard(null);
+        return;
+      }
+      await updateDoc(
+        doc(
+          db,
+          "artifacts",
+          appId,
+          "public",
+          "data",
+          "raceCards",
+          editingLapCard.id,
+        ),
+        {
+          lapTimes: lapInput,
+          updatedAt: new Date().toISOString(),
+          updatedBy: "監督",
+        },
+      );
+      import("react-hot-toast").then((m) =>
+        m.toast.success(
+          `${editingLapCard.runnerName}選手のLAPを更新しました！`,
+        ),
+      );
+      setEditingLapCard(null);
+    } catch (e) {
+      import("react-hot-toast").then((m) =>
+        m.toast.error("保存失敗: " + e.message),
+      );
+    }
+  };
+  // 🌟🌟▲▲ LAP入力システムここまで ▲▲🌟🌟
+
+  const handleOpenNotif = () => {
+    setIsNotifOpen(true);
+    const nowStr = new Date().toISOString();
+    setLastReadTime(nowStr);
+    localStorage.setItem(`notif_read_coach_${appId}`, nowStr);
+  };
+
+  // プッシュ通知の許可と発射
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      const newNotifs = notifications.filter(
+        (n) => !notifiedIds.includes(n.id) && n.time > lastReadTime,
+      );
+      if (newNotifs.length > 0) {
+        newNotifs.forEach((n) => {
+          new Notification("監督ダッシュボード", {
+            body: n.title + "\n" + n.message,
+            icon: "/favicon.ico",
+          });
+        });
+        const updatedIds = [...notifiedIds, ...newNotifs.map((n) => n.id)];
+        setNotifiedIds(updatedIds);
+        localStorage.setItem(
+          `notified_ids_coach_${appId}`,
+          JSON.stringify(updatedIds),
+        );
+      }
+    }
+  }, [notifications, notifiedIds, appId, lastReadTime]);
+  // 🌟🌟▲▲ 監督用の通知管理システムここまで ▲▲🌟🌟
 
   const [selectedTourId, setSelectedTourId] = useState(null); // 開いている大会一覧
   const [readingCard, setReadingCard] = useState(null); // 読んでいるノート詳細
   const [coachFeedbackInput, setCoachFeedbackInput] = useState(""); //監督からのフィードバック
+  const [showTeamReportId, setShowTeamReportId] = useState(null); // 大会チームレポート用
 
   // ▼▼▼ チーム日誌のリスト表示用 ▼▼▼
   const [diaryMode, setDiaryMode] = useState("list"); // "list" か "edit"
@@ -213,12 +369,41 @@ const CoachView = (props) => {
             ))}
           </nav>
         </div>
-        <button
-          onClick={handleLogout}
-          className="opacity-60 hover:opacity-100 flex items-center gap-2 font-bold text-sm"
-        >
-          <LogOut size={18} /> Logout
-        </button>
+        <div className="space-y-4 mt-8 md:mt-auto">
+          {/* 🌟 ベルマーク */}
+          <button
+            onClick={handleOpenNotif}
+            className={`flex items-center gap-2 font-bold text-sm transition-all relative ${
+              unreadCount > 0
+                ? "text-rose-400 hover:text-rose-300"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            {unreadCount > 0 ? (
+              <>
+                <div className="relative">
+                  <BellRing size={18} className="animate-pulse" />
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                  </span>
+                </div>
+                Notifications ({unreadCount})
+              </>
+            ) : (
+              <>
+                <Bell size={18} /> Notifications
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="opacity-60 hover:opacity-100 flex items-center gap-2 font-bold text-sm text-slate-400"
+          >
+            <LogOut size={18} /> Logout
+          </button>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -1041,13 +1226,21 @@ const CoachView = (props) => {
                       key={tour.id}
                       className="bg-white border border-slate-200 p-4 rounded-2xl flex justify-between items-center shadow-sm"
                     >
-                      <div>
-                        <h5 className="font-bold text-slate-800">
-                          {tour.name}
+                      {/* 🌟 大会名をボタン化 */}
+                      <div
+                        className="flex-1 cursor-pointer group pr-4"
+                        onClick={() => setShowTeamReportId(tour.id)}
+                      >
+                        <h5 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors flex items-center gap-2">
+                          {tour.name}{" "}
+                          <BarChart2
+                            size={16}
+                            className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                          />
                         </h5>
                         <p className="text-[10px] font-bold text-slate-400 mt-1">
                           {tour.startDate.replace(/-/g, "/")} 〜{" "}
-                          {tour.endDate.replace(/-/g, "/")}
+                          {tour.endDate?.replace(/-/g, "/") || ""}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -2305,7 +2498,241 @@ const CoachView = (props) => {
             </div>
           </div>
         )}
+        {/* ▼▼▼ 通知センター (Notification Modal) ▼▼▼ */}
+        {isNotifOpen && (
+          <div
+            className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in"
+            onClick={() => setIsNotifOpen(false)}
+          >
+            <div
+              className="bg-white w-full max-w-md max-h-[80vh] rounded-[2.5rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white rounded-t-[2.5rem] sticky top-0 z-10">
+                <h3 className="font-black text-lg flex items-center gap-2 text-slate-800">
+                  <Bell className="text-rose-500" /> Notifications
+                </h3>
+                <button
+                  onClick={() => setIsNotifOpen(false)}
+                  className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full active:scale-95"
+                >
+                  閉じる
+                </button>
+              </div>
+              <div className="overflow-y-auto p-4 space-y-3 pb-8">
+                {notifications.length === 0 ? (
+                  <div className="text-center py-10 opacity-50">
+                    <Bell size={40} className="mx-auto mb-2 text-slate-300" />
+                    <p className="text-xs font-bold text-slate-500">
+                      新しい提出・お知らせはありません
+                    </p>
+                  </div>
+                ) : (
+                  notifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      onClick={notif.onClick}
+                      className="p-4 bg-slate-50 rounded-2xl border border-slate-100 active:scale-95 transition-all cursor-pointer hover:border-blue-200 shadow-sm relative overflow-hidden group"
+                    >
+                      {notif.time > lastReadTime && (
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+                      )}
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span
+                          className={`text-[9px] font-black text-white px-2 py-0.5 rounded-md uppercase tracking-widest shadow-sm ${
+                            notif.type === "Race Card"
+                              ? "bg-indigo-500"
+                              : "bg-emerald-500"
+                          }`}
+                        >
+                          {notif.type}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400">
+                          {new Date(notif.time).toLocaleDateString("ja-JP")}
+                        </span>
+                      </div>
+                      <p className="font-black text-slate-800 text-sm mb-1">
+                        {notif.title}
+                      </p>
+                      <p className="text-xs font-bold text-slate-600 leading-relaxed">
+                        {notif.message}
+                      </p>
+                      <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-[9px] font-bold text-blue-500 flex items-center gap-1">
+                          確認・コメントする <ChevronRight size={10} />
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ▲▲▲ 通知センター ここまで ▲▲▲ */}
       </main>
+
+      {/* 🌟 今大会チームレポート表示 (Team Race Report Overlay) */}
+      {/* 🌟 今大会チームレポート表示 (Team Race Report Overlay) */}
+      {showTeamReportId &&
+        (() => {
+          const tour = tournaments.find((t) => t.id === showTeamReportId);
+          const cards = raceCards.filter(
+            (c) => c.tournamentId === showTeamReportId,
+          );
+          const repCard = cards.find((c) => c.weather || c.temp || c.humidity);
+
+          // 🌟 距離をメートル換算して短い順に並び替える賢い関数
+          const parseMeters = (d) => {
+            if (!d) return 0;
+            const s = String(d).toLowerCase();
+            if (s.includes("ハーフ")) return 21097.5;
+            if (s.includes("フル")) return 42195;
+            // 数字部分だけを抜き出す
+            const val = parseFloat(s.replace(/[^0-9.]/g, ""));
+            if (isNaN(val)) return 0;
+            if (s.includes("km")) return val * 1000;
+            // 単位がない場合、100未満ならkm、それ以上ならmと推測する (例: 5 -> 5000)
+            if (val < 100) return val * 1000;
+            return val;
+          };
+
+          // 距離の短い順（昇順）に並び替え
+          const sortedCards = [...cards].sort(
+            (a, b) => parseMeters(a.distance) - parseMeters(b.distance),
+          );
+
+          return (
+            // 🌟 修正1：印刷時(print:)は画面固定(fixed)を解除し、下まで全部展開させる魔法のクラスを追加！
+            <div className="fixed inset-0 z-[120] bg-slate-50 flex flex-col animate-in fade-in print:absolute print:inset-auto print:top-0 print:left-0 print:w-full print:h-auto print:bg-white print:overflow-visible">
+              {/* ヘッダー */}
+              <div className="bg-slate-900 text-white p-4 flex items-center justify-between shadow-md pt-12 pb-6 print:hidden">
+                <button
+                  onClick={() => setShowTeamReportId(null)}
+                  className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <div className="text-center">
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                    Team Race Report
+                  </p>
+                  <h2 className="font-bold text-sm">今大会チームレポート</h2>
+                </div>
+
+                {/* 🌟 修正2：Propsでもらっている「handlePrint」フックを使ってファイル名を渡す！ */}
+                <button
+                  onClick={() => {
+                    const d = new Date();
+                    const yyyymmdd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+                    handlePrint(`${yyyymmdd}_${tour?.name || "大会"}_result`);
+                  }}
+                  className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
+                  title="レポートを印刷（PDF保存）"
+                >
+                  <Printer size={20} />
+                </button>
+              </div>
+
+              {/* 🌟 修正3：スクロールエリアも印刷時はブロック要素(block)に変えて、隠れている部分を表示させる */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-20 max-w-7xl mx-auto w-full print:p-0 print:overflow-visible print:block print:h-auto">
+                {/* 大会概要と気象条件 */}
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 print:shadow-none print:border-none print:p-2">
+                  <h1 className="text-2xl font-black text-slate-800 mb-2">
+                    {tour?.name}
+                  </h1>
+                  <p className="text-sm font-bold text-slate-400 mb-4">
+                    {tour?.startDate.replace(/-/g, "/")} 〜{" "}
+                    {tour?.endDate?.replace(/-/g, "/") || ""}
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl print:bg-white print:border print:border-slate-200">
+                    <div className="text-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase">
+                        Weather
+                      </p>
+                      <p className="font-bold text-slate-700">
+                        {repCard?.weather || "-"}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-black text-slate-400 flex items-center justify-center gap-1">
+                        <Thermometer size={10} className="text-rose-400" /> Temp
+                      </p>
+                      <p className="font-bold text-slate-700">
+                        {repCard?.temp ? `${repCard.temp}℃` : "-"}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-black text-slate-400 flex items-center justify-center gap-1">
+                        <Droplets size={10} className="text-blue-400" /> Humid
+                      </p>
+                      <p className="font-bold text-slate-700">
+                        {repCard?.humidity ? `${repCard.humidity}%` : "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 選手記録一覧 */}
+                <div>
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-2 mb-4 flex items-center gap-2">
+                    <Users size={16} /> 選手記録一覧 (距離順)
+                  </h3>
+
+                  {sortedCards.length === 0 ? (
+                    <p className="text-center py-10 text-slate-300 font-bold bg-white rounded-3xl border border-slate-100">
+                      まだ記録がありません
+                    </p>
+                  ) : (
+                    // 🌟 PC画面対応: スマホは1列、タブレットは2列、PCは3列になるグリッドデザイン
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 print:grid-cols-2">
+                      {sortedCards.map((card) => (
+                        <div
+                          key={card.id}
+                          className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col print:shadow-none print:break-inside-avoid"
+                        >
+                          <div className="flex justify-between items-start border-b border-slate-50 pb-3 mb-3">
+                            <div>
+                              <p className="font-black text-xl text-slate-800">
+                                {card.runnerName}
+                              </p>
+                              <p className="text-[10px] font-bold text-indigo-500 mt-1 bg-indigo-50 inline-block px-2 py-0.5 rounded-md">
+                                {card.raceType} /{" "}
+                                {card.raceType === "駅伝"
+                                  ? `${card.distance}(${card.ekidenDistance}km)`
+                                  : card.distance}
+                              </p>
+                            </div>
+                            <div className="text-right bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                              <p className="text-[10px] font-black text-slate-400 mb-0.5">
+                                RESULT
+                              </p>
+                              <p className="text-xl font-black text-indigo-600 tracking-tighter whitespace-nowrap">
+                                {card.resultTime || "未入力"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {card.lapTimes && (
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-1">
+                              <p className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-2">
+                                <Timer size={10} /> LAP TIMES
+                              </p>
+                              <p className="text-sm font-mono text-slate-700 whitespace-pre-wrap leading-relaxed">
+                                {card.lapTimes}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {/* 提出されたRace Cardの閲覧画面  */}
       {selectedTourId &&
@@ -2504,6 +2931,17 @@ const CoachView = (props) => {
                             </p>
                           </div>
                         )}
+                        {/* 🌟 監督用のLAPタイム入力ボタン */}
+                        <button
+                          onClick={() => {
+                            setEditingLapCard(readingCard); // cardはmap等で回しているRaceCardデータ
+                            setLapInput(readingCard.lapTimes || "");
+                          }}
+                          className="mt-3 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-xs font-black shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1 w-full hover:bg-indigo-200"
+                        >
+                          <Timer size={14} /> LAPタイムを入力・編集する
+                        </button>
+
                         <div>
                           <p className="text-[10px] font-black text-indigo-600">
                             良かった点・収穫
@@ -2637,6 +3075,55 @@ const CoachView = (props) => {
             </div>
           );
         })()}
+
+      {/* 🌟 監督用 LAPタイム入力用モーダル */}
+      {editingLapCard && (
+        <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div
+            className="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase">
+                  Input LAP Times
+                </p>
+                <h3 className="text-xl font-black text-slate-800">
+                  {editingLapCard.runnerName}
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingLapCard(null)}
+                className="bg-slate-100 p-2 rounded-full text-slate-400 hover:bg-slate-200"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 flex items-center gap-1 uppercase">
+                <Timer size={12} /> LAP TIME (1km毎など)
+              </label>
+              <textarea
+                className="w-full p-4 bg-indigo-50/50 rounded-2xl font-mono text-sm h-40 outline-none border border-indigo-100 focus:border-indigo-400 resize-none"
+                placeholder="1000m: 3'05&#10;2000m: 6'12..."
+                value={lapInput}
+                onChange={(e) => setLapInput(e.target.value)}
+              />
+            </div>
+
+            <button
+              onClick={handleSaveLapTime}
+              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <Save size={18} /> タイムを保存して共有
+            </button>
+            <p className="text-[9px] text-center text-slate-400 font-bold">
+              ※保存すると選手の「大会ノート」が自動更新されます
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ... (Confirm dialog remains same) ... */}
       {confirmDialog.isOpen && (
