@@ -1,99 +1,43 @@
 // src/components/ManagerDashboard.js
 import React, { useState } from "react";
-import { doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore"; // 🌟 updateDocを追加
+import { doc, updateDoc } from "firebase/firestore"; // 🌟 updateDocを追加
 import {
   LogOut,
   ChevronRight,
-  Activity,
-  Trophy,
   BookOpen,
-  MapPin,
-  Dumbbell,
   ClipboardList,
   BarChart2,
   ArrowLeft,
-  HeartPulse,
-  Check,
   X,
   Save,
-  Plus,
-  Trash2,
-  Wind,
-  Sparkles,
-  Loader2,
-  Flag, // 🌟 追加
-  Timer, // 🌟 追加
-  Edit, // 🌟 追加
+  Flag,
+  Timer,
 } from "lucide-react";
 
 import { ROLES } from "../utils/constants";
 import { getTodayStr } from "../utils/dateUtils";
-import DiaryListItem from "./DiaryListItem";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "react-hot-toast";
 
 const ManagerDashboard = ({
   profile,
   allRunners,
   allLogs,
-  teamLogs,
   tournaments = [], // 🌟 データが届くまでの「仮の空箱」を用意！
   raceCards = [], // 🌟 データが届くまでの「仮の空箱」を用意！
   db,
   appId,
-  setSuccessMsg,
   handleLogout,
   isDemoMode,
 }) => {
   const [currentView, setCurrentView] = React.useState("check");
   const [checkDate, setCheckDate] = React.useState(getTodayStr());
 
-  const [diaryMode, setDiaryMode] = React.useState("list");
-  const [listMonth, setListMonth] = React.useState(new Date());
-
   // 大会関連のステート
   const [selectedTourId, setSelectedTourId] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
-
-  const [diaryInput, setDiaryInput] = React.useState({
-    weather: "",
-    temp: "",
-    wind: 1,
-    humidity: "",
-    startTime: "15:50",
-    endTime: "18:30",
-    location: "",
-    locationDetail: "",
-    reinforcements: [],
-    reinforcementDetail: "",
-    menu: "",
-    result: "",
-  });
-
-  const [showAIModal, setShowAIModal] = useState(false);
-  const [aiImage, setAiImage] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const [selectedLog, setSelectedLog] = React.useState(null);
+  const [selectedLog] = React.useState(null);
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
-
-  // --- 既存のメモ化ロジックは維持 ---
-  const reinforcementOptions = [
-    "補強A",
-    "補強B",
-    "補強C",
-    "補強D",
-    "補強E",
-    "DM腹背",
-    "DM投げ",
-    "スタビライゼーション",
-    "その他",
-  ];
-  const existingLog = React.useMemo(
-    () => teamLogs.find((l) => l.date === checkDate),
-    [teamLogs, checkDate],
-  );
 
   // 🌟 LAPタイムの保存機能 (マネージャーが選手のノートを更新する)
   const saveLapTime = async () => {
@@ -130,19 +74,6 @@ const ManagerDashboard = ({
     d.setDate(d.getDate() + days);
     setCheckDate(d.toLocaleDateString("sv-SE"));
   };
-  const shiftMonth = (months) => {
-    const d = new Date(listMonth);
-    d.setMonth(d.getMonth() + months);
-    setListMonth(d);
-  };
-  const monthlyLogs = React.useMemo(() => {
-    const year = listMonth.getFullYear();
-    const month = listMonth.getMonth() + 1;
-    const prefix = `${year}-${String(month).padStart(2, "0")}`;
-    return teamLogs
-      .filter((l) => l.date.startsWith(prefix))
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [teamLogs, listMonth]);
 
   const monthlyTotals = React.useMemo(() => {
     const targetMonthPrefix = checkDate.slice(0, 7);
@@ -188,17 +119,6 @@ const ManagerDashboard = ({
         };
       });
   }, [allRunners, allLogs, checkDate, monthlyTotals]);
-
-  const rankingData = React.useMemo(() => {
-    return allRunners
-      .filter((runner) => runner.role !== ROLES.MANAGER)
-      .map((r) => ({
-        name: `${r.lastName} ${r.firstName}`,
-        id: r.id,
-        total: Math.round((monthlyTotals[r.id] || 0) * 10) / 10,
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [allRunners, monthlyTotals]);
 
   // --- 描画ロジック ---
   return (

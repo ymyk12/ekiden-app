@@ -12,7 +12,6 @@ import {
   ChevronRight,
   Trophy,
   Download,
-  FileSpreadsheet,
   Printer,
   X,
   Eye,
@@ -56,14 +55,11 @@ import {
   ResponsiveContainer,
   Cell,
   LabelList,
-  LineChart,
-  Line,
-  Legend,
 } from "recharts";
 import { doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { ROLES } from "../utils/constants";
-import { getGoalValue, getTodayStr } from "../utils/dateUtils";
+import { getTodayStr } from "../utils/dateUtils";
 
 // 練習日誌
 import DiaryListItem from "./DiaryListItem";
@@ -71,20 +67,6 @@ import DiaryListItem from "./DiaryListItem";
 import CoachReportView from "./CoachReportView";
 // 🌟 ここに1行追加！
 import { usePrint } from "../hooks/usePrint";
-
-// グラフ用のカラーパレット
-const COLORS = [
-  "#2563eb",
-  "#f59e0b",
-  "#10b981",
-  "#ef4444",
-  "#8b5cf6",
-  "#ec4899",
-  "#06b6d4",
-  "#84cc16",
-  "#6366f1",
-  "#14b8a6",
-];
 
 const CoachView = (props) => {
   // App.js から渡されたデータを展開
@@ -235,7 +217,14 @@ const CoachView = (props) => {
       });
     }
     return list.sort((a, b) => (a.time < b.time ? 1 : -1));
-  }, [raceCards, allFeedbacks, tournaments, activeRunners, setView]);
+  }, [
+    raceCards,
+    allFeedbacks,
+    tournaments,
+    activeRunners,
+    setView,
+    handleCoachEditRunner,
+  ]);
 
   const unreadCount = notifications.filter((n) => n.time > lastReadTime).length;
 
