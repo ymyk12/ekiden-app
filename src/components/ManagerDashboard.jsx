@@ -1,6 +1,5 @@
-// src/components/ManagerDashboard.js
 import React, { useState } from "react";
-import { doc, updateDoc } from "firebase/firestore"; // 🌟 updateDocを追加
+import { doc, updateDoc } from "firebase/firestore";
 import {
   LogOut,
   ChevronRight,
@@ -22,22 +21,23 @@ const ManagerDashboard = ({
   profile,
   allRunners,
   allLogs,
-  tournaments = [], // 🌟 データが届くまでの「仮の空箱」を用意！
-  raceCards = [], // 🌟 データが届くまでの「仮の空箱」を用意！
+  tournaments = [],
+  raceCards = [],
   db,
   appId,
   handleLogout,
   isDemoMode,
 }) => {
-  const [currentView, setCurrentView] = React.useState("check");
-  const [checkDate, setCheckDate] = React.useState(getTodayStr());
+  const [currentView, setCurrentView] = useState("check");
+  const [checkDate, setCheckDate] = useState(getTodayStr());
 
-  // 大会関連のステート
+  // 大会・ログ関連のステート
   const [selectedTourId, setSelectedTourId] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
-  const [selectedLog] = React.useState(null);
-  const [isDetailOpen, setIsDetailOpen] = React.useState(false);
+  // 🌟 復活：日誌の詳細を開くために必要です！
+  const [selectedLog, setSelectedLog] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // 🌟 LAPタイムの保存機能 (マネージャーが選手のノートを更新する)
   const saveLapTime = async () => {
@@ -68,7 +68,6 @@ const ManagerDashboard = ({
     }
   };
 
-  // --- 既存の関数 (shiftDate, saveDiaryなど) は維持 ---
   const shiftDate = (days) => {
     const d = new Date(checkDate);
     d.setDate(d.getDate() + days);
@@ -120,7 +119,6 @@ const ManagerDashboard = ({
       });
   }, [allRunners, allLogs, checkDate, monthlyTotals]);
 
-  // --- 描画ロジック ---
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
       <header className="bg-indigo-600 text-white pt-12 pb-8 px-6 rounded-b-[2.5rem] shadow-lg mb-6 relative overflow-hidden">
@@ -171,12 +169,10 @@ const ManagerDashboard = ({
           ))}
         </div>
 
-        {/* --- 1. 提出チェック (既存) --- */}
+        {/* --- 1. 提出チェック --- */}
         {currentView === "check" && (
           <div className="bg-white p-5 rounded-[2rem] shadow-sm animate-in fade-in">
-            {/* 既存のcheck画面コードをそのまま */}
             <div className="mb-6 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-              {/* 日付選択UIなど...省略せずに現在のファイルを維持 */}
               <div className="flex justify-between items-center mb-2 px-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Select Date
@@ -240,21 +236,97 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {/* --- 2. 状況 & 3. 日誌 (既存) --- */}
-        {/* ここは元のファイルをそのまま維持 */}
+        {/* 🌟 2. 状況 (復元) --- */}
         {currentView === "status" && (
-          <div className="space-y-6 animate-in fade-in">
-            ランキングなどの表示...
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm animate-in fade-in">
+            <h3 className="font-black text-sm text-slate-700 mb-4 flex items-center gap-2">
+              <BarChart2 size={18} className="text-indigo-500" />{" "}
+              月間走行距離ランキング
+            </h3>
+            <div className="space-y-3">
+              {[...submissionStatusList]
+                .sort((a, b) => b.monthTotal - a.monthTotal)
+                .map((r, index) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`w-6 text-center font-black text-sm ${index < 3 ? "text-indigo-600" : "text-slate-400"}`}
+                      >
+                        {index + 1}
+                      </span>
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-xs font-black text-slate-600 shadow-sm border border-slate-100">
+                        {r.lastName.charAt(0)}
+                      </div>
+                      <span className="font-bold text-sm text-slate-700">
+                        {r.lastName} {r.firstName}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-black text-indigo-600 text-lg">
+                        {r.monthTotal}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 ml-1">
+                        km
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
         )}
+
+        {/* 🌟 3. 日誌 (復元) --- */}
         {currentView === "diary" && (
-          <div className="space-y-6 animate-in fade-in">日誌の表示...</div>
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm animate-in fade-in">
+            <h3 className="font-black text-sm text-slate-700 mb-4 flex items-center gap-2">
+              <BookOpen size={18} className="text-indigo-500" /> チーム日誌
+              (最近の記録)
+            </h3>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1 no-scrollbar">
+              {allLogs.slice(0, 50).map((log) => (
+                <div
+                  key={log.id}
+                  onClick={() => {
+                    setSelectedLog(log);
+                    setIsDetailOpen(true);
+                  }}
+                  className="p-4 bg-slate-50 rounded-2xl border border-slate-100 active:scale-95 transition-all cursor-pointer hover:border-indigo-200 shadow-sm"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-black text-sm text-slate-800">
+                        {log.runnerName}
+                      </p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                        {log.date.slice(5).replace("-", "/")} · {log.category}
+                      </p>
+                    </div>
+                    <p className="font-black text-indigo-600">
+                      {log.distance}km
+                    </p>
+                  </div>
+                  {log.menuDetail && (
+                    <p className="text-xs font-bold text-slate-600 line-clamp-2 mt-2 bg-white p-2.5 rounded-xl border border-slate-100">
+                      {log.menuDetail}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {allLogs.length === 0 && (
+                <p className="text-center text-xs text-slate-400 py-10 border border-dashed border-slate-200 rounded-2xl">
+                  まだ記録がありません
+                </p>
+              )}
+            </div>
+          </div>
         )}
 
-        {/* 🌟 4. 大会記録管理 (新規追加) */}
+        {/* --- 4. 大会記録管理 --- */}
         {currentView === "race" && (
           <div className="space-y-6 animate-in fade-in">
-            {/* ① 大会一覧 (マネージャーにも表示) */}
             <div className="bg-white p-6 rounded-[2rem] shadow-sm">
               <h3 className="font-black text-sm text-slate-700 mb-4 flex items-center gap-2">
                 <Flag size={18} className="text-indigo-500" /> Race Management
@@ -295,7 +367,6 @@ const ManagerDashboard = ({
                     <ArrowLeft size={14} /> 大会一覧に戻る
                   </button>
 
-                  {/* ② 選手が種目を登録したらリストアップされる */}
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     エントリー選手一覧
                   </h4>
@@ -321,7 +392,6 @@ const ManagerDashboard = ({
                                 {card.raceType} / {card.distance}
                               </p>
                             </div>
-                            {/* ③ & ④ & ⑤ LAPタイム入力ボタン */}
                             <button
                               onClick={() => {
                                 setEditingCard(card);
@@ -342,7 +412,7 @@ const ManagerDashboard = ({
         )}
       </main>
 
-      {/* 🌟 LAPタイム入力用モーダル */}
+      {/* LAPタイム入力用モーダル */}
       {editingCard && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
           <div
@@ -391,7 +461,7 @@ const ManagerDashboard = ({
         </div>
       )}
 
-      {/* 詳細モーダル */}
+      {/* 詳細モーダル (復活) */}
       {isDetailOpen && selectedLog && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
