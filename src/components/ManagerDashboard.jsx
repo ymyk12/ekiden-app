@@ -31,6 +31,8 @@ import { getTodayStr } from "../utils/dateUtils";
 
 // 練習日誌
 import DiaryListItem from "./DiaryListItem";
+// 大会LAPタイム入力
+import LapTimeModal from "./LapTimeModal";
 
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "react-hot-toast";
@@ -1259,54 +1261,14 @@ const ManagerDashboard = ({
         </div>
       )}
 
-      {/* 🌟 LAPタイム入力用モーダル */}
-      {editingCard && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div
-            className="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase">
-                  Input LAP Times
-                </p>
-                <h3 className="text-xl font-black text-slate-800">
-                  {editingCard.runnerName}
-                </h3>
-              </div>
-              <button
-                onClick={() => setEditingCard(null)}
-                className="bg-slate-100 p-2 rounded-full text-slate-400"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 flex items-center gap-1 uppercase">
-                <Timer size={12} /> LAP TIME (1km毎など)
-              </label>
-              <textarea
-                className="w-full p-4 bg-indigo-50/50 rounded-2xl font-mono text-sm h-40 outline-none border border-indigo-100 focus:border-indigo-400 resize-none"
-                placeholder="1000m: 3'05&#10;2000m: 6'12..."
-                value={lapInput}
-                onChange={(e) => setLapInput(e.target.value)}
-              />
-            </div>
-
-            <button
-              onClick={saveLapTime}
-              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              <Save size={18} /> タイムを保存して共有
-            </button>
-            <p className="text-[9px] text-center text-slate-400 font-bold">
-              ※保存すると選手の「大会ノート」が自動更新されます
-            </p>
-          </div>
-        </div>
-      )}
+      {/* // 大会LAPタイム入力 */}
+      <LapTimeModal
+        editingCard={editingCard}
+        onClose={() => setEditingCard(null)}
+        lapInput={lapInput}
+        setLapInput={setLapInput}
+        onSave={saveLapTime}
+      />
 
       {/* 詳細モーダル */}
       {isDetailOpen && selectedLog && (

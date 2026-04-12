@@ -12,7 +12,6 @@ import {
   ChevronRight,
   Trophy,
   Download,
-  Printer,
   X,
   Eye,
   Check,
@@ -65,8 +64,12 @@ import { getTodayStr } from "../utils/dateUtils";
 import DiaryListItem from "./DiaryListItem";
 // グラフ設定
 import CoachReportView from "./CoachReportView";
-// 🌟 ここに1行追加！
+// 走行距離印刷設定
 import { usePrint } from "../hooks/usePrint";
+// 大会LAPタイム入力
+import LapTimeModal from "./LapTimeModal";
+// 大会ノート印刷設定
+import TeamRaceReport from "./TeamRaceReport";
 
 const CoachView = (props) => {
   // App.js から渡されたデータを展開
@@ -231,7 +234,6 @@ const CoachView = (props) => {
   // 🌟🌟▼▼ 監督用のLAPタイム入力システム ▼▼🌟🌟
   const [editingLapCard, setEditingLapCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
-
   const handleSaveLapTime = async () => {
     if (!editingLapCard) return;
     try {
@@ -2561,167 +2563,16 @@ const CoachView = (props) => {
         {/* ▲▲▲ 通知センター ここまで ▲▲▲ */}
       </main>
 
-      {/* 🌟 今大会チームレポート表示 (Team Race Report Overlay) */}
-      {/* 🌟 今大会チームレポート表示 (Team Race Report Overlay) */}
-      {showTeamReportId &&
-        (() => {
-          const tour = tournaments.find((t) => t.id === showTeamReportId);
-          const cards = raceCards.filter(
+      {/* 🌟 チームレポート（全画面・印刷用） */}
+      {showTeamReportId && (
+        <TeamRaceReport
+          reportTour={tournaments.find((t) => t.id === showTeamReportId)}
+          reportCards={raceCards.filter(
             (c) => c.tournamentId === showTeamReportId,
-          );
-          const repCard = cards.find((c) => c.weather || c.temp || c.humidity);
-
-          // 🌟 距離をメートル換算して短い順に並び替える賢い関数
-          const parseMeters = (d) => {
-            if (!d) return 0;
-            const s = String(d).toLowerCase();
-            if (s.includes("ハーフ")) return 21097.5;
-            if (s.includes("フル")) return 42195;
-            // 数字部分だけを抜き出す
-            const val = parseFloat(s.replace(/[^0-9.]/g, ""));
-            if (isNaN(val)) return 0;
-            if (s.includes("km")) return val * 1000;
-            // 単位がない場合、100未満ならkm、それ以上ならmと推測する (例: 5 -> 5000)
-            if (val < 100) return val * 1000;
-            return val;
-          };
-
-          // 距離の短い順（昇順）に並び替え
-          const sortedCards = [...cards].sort(
-            (a, b) => parseMeters(a.distance) - parseMeters(b.distance),
-          );
-
-          return (
-            // 🌟 修正1：印刷時(print:)は画面固定(fixed)を解除し、下まで全部展開させる魔法のクラスを追加！
-            <div className="fixed inset-0 z-[120] bg-slate-50 flex flex-col animate-in fade-in print:absolute print:inset-auto print:top-0 print:left-0 print:w-full print:h-auto print:bg-white print:overflow-visible">
-              {/* ヘッダー */}
-              <div className="bg-slate-900 text-white p-4 flex items-center justify-between shadow-md pt-12 pb-6 print:hidden">
-                <button
-                  onClick={() => setShowTeamReportId(null)}
-                  className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
-                >
-                  <ArrowLeft size={20} />
-                </button>
-                <div className="text-center">
-                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-                    Team Race Report
-                  </p>
-                  <h2 className="font-bold text-sm">今大会チームレポート</h2>
-                </div>
-
-                {/* 🌟 修正2：Propsでもらっている「handlePrint」フックを使ってファイル名を渡す！ */}
-                <button
-                  onClick={() => {
-                    const d = new Date();
-                    const yyyymmdd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-                    handlePrint(`${yyyymmdd}_${tour?.name || "大会"}_result`);
-                  }}
-                  className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
-                  title="レポートを印刷（PDF保存）"
-                >
-                  <Printer size={20} />
-                </button>
-              </div>
-
-              {/* 🌟 修正3：スクロールエリアも印刷時はブロック要素(block)に変えて、隠れている部分を表示させる */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-20 max-w-7xl mx-auto w-full print:p-0 print:overflow-visible print:block print:h-auto">
-                {/* 大会概要と気象条件 */}
-                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 print:shadow-none print:border-none print:p-2">
-                  <h1 className="text-2xl font-black text-slate-800 mb-2">
-                    {tour?.name}
-                  </h1>
-                  <p className="text-sm font-bold text-slate-400 mb-4">
-                    {tour?.startDate.replace(/-/g, "/")} 〜{" "}
-                    {tour?.endDate?.replace(/-/g, "/") || ""}
-                  </p>
-
-                  <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl print:bg-white print:border print:border-slate-200">
-                    <div className="text-center">
-                      <p className="text-[10px] font-black text-slate-400 uppercase">
-                        Weather
-                      </p>
-                      <p className="font-bold text-slate-700">
-                        {repCard?.weather || "-"}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[10px] font-black text-slate-400 flex items-center justify-center gap-1">
-                        <Thermometer size={10} className="text-rose-400" /> Temp
-                      </p>
-                      <p className="font-bold text-slate-700">
-                        {repCard?.temp ? `${repCard.temp}℃` : "-"}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[10px] font-black text-slate-400 flex items-center justify-center gap-1">
-                        <Droplets size={10} className="text-blue-400" /> Humid
-                      </p>
-                      <p className="font-bold text-slate-700">
-                        {repCard?.humidity ? `${repCard.humidity}%` : "-"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 選手記録一覧 */}
-                <div>
-                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-2 mb-4 flex items-center gap-2">
-                    <Users size={16} /> 選手記録一覧 (距離順)
-                  </h3>
-
-                  {sortedCards.length === 0 ? (
-                    <p className="text-center py-10 text-slate-300 font-bold bg-white rounded-3xl border border-slate-100">
-                      まだ記録がありません
-                    </p>
-                  ) : (
-                    // 🌟 PC画面対応: スマホは1列、タブレットは2列、PCは3列になるグリッドデザイン
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 print:grid-cols-2">
-                      {sortedCards.map((card) => (
-                        <div
-                          key={card.id}
-                          className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col print:shadow-none print:break-inside-avoid"
-                        >
-                          <div className="flex justify-between items-start border-b border-slate-50 pb-3 mb-3">
-                            <div>
-                              <p className="font-black text-xl text-slate-800">
-                                {card.runnerName}
-                              </p>
-                              <p className="text-[10px] font-bold text-indigo-500 mt-1 bg-indigo-50 inline-block px-2 py-0.5 rounded-md">
-                                {card.raceType} /{" "}
-                                {card.raceType === "駅伝"
-                                  ? `${card.distance}(${card.ekidenDistance}km)`
-                                  : card.distance}
-                              </p>
-                            </div>
-                            <div className="text-right bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
-                              <p className="text-[10px] font-black text-slate-400 mb-0.5">
-                                RESULT
-                              </p>
-                              <p className="text-xl font-black text-indigo-600 tracking-tighter whitespace-nowrap">
-                                {card.resultTime || "未入力"}
-                              </p>
-                            </div>
-                          </div>
-
-                          {card.lapTimes && (
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-1">
-                              <p className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-2">
-                                <Timer size={10} /> LAP TIMES
-                              </p>
-                              <p className="text-sm font-mono text-slate-700 whitespace-pre-wrap leading-relaxed">
-                                {card.lapTimes}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+          )}
+          onClose={() => setShowTeamReportId(null)}
+        />
+      )}
 
       {/* 提出されたRace Cardの閲覧画面  */}
       {selectedTourId &&
@@ -3065,54 +2916,16 @@ const CoachView = (props) => {
           );
         })()}
 
-      {/* 🌟 監督用 LAPタイム入力用モーダル */}
-      {editingLapCard && (
-        <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div
-            className="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase">
-                  Input LAP Times
-                </p>
-                <h3 className="text-xl font-black text-slate-800">
-                  {editingLapCard.runnerName}
-                </h3>
-              </div>
-              <button
-                onClick={() => setEditingLapCard(null)}
-                className="bg-slate-100 p-2 rounded-full text-slate-400 hover:bg-slate-200"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 flex items-center gap-1 uppercase">
-                <Timer size={12} /> LAP TIME (1km毎など)
-              </label>
-              <textarea
-                className="w-full p-4 bg-indigo-50/50 rounded-2xl font-mono text-sm h-40 outline-none border border-indigo-100 focus:border-indigo-400 resize-none"
-                placeholder="1000m: 3'05&#10;2000m: 6'12..."
-                value={lapInput}
-                onChange={(e) => setLapInput(e.target.value)}
-              />
-            </div>
-
-            <button
-              onClick={handleSaveLapTime}
-              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              <Save size={18} /> タイムを保存して共有
-            </button>
-            <p className="text-[9px] text-center text-slate-400 font-bold">
-              ※保存すると選手の「大会ノート」が自動更新されます
-            </p>
-          </div>
-        </div>
-      )}
+      {/* 大会LAPタイム入力：監督画面用 */}
+      <LapTimeModal
+        editingCard={
+          editingLapCard
+        } /* 👈 もし CoachView での名前が editingCard なら editingCard にしてください */
+        onClose={() => setEditingLapCard(null)}
+        lapInput={lapInput}
+        setLapInput={setLapInput}
+        onSave={handleSaveLapTime}
+      />
 
       {/* ... (Confirm dialog remains same) ... */}
       {confirmDialog.isOpen && (
