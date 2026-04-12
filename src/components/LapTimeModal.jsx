@@ -113,7 +113,7 @@ const LapTimeModal = ({
     return isNaN(sec) ? null : sec;
   };
 
-  // ⏱️ 「秒」を美しいタイム文字列に戻す
+  // ⏱️ 「秒」を美しいタイム文字列に戻す (陸上仕様 1'00"00 対応)
   const formatSeconds = (sec) => {
     if (sec == null || isNaN(sec)) return "";
     const m = Math.floor(sec / 60);
@@ -124,7 +124,8 @@ const LapTimeModal = ({
     if (sStr.includes(".")) {
       const parts = sStr.split(".");
       if (parts[1].length === 1) parts[1] += "0";
-      sStr = parts[0].padStart(2, "0") + "." + parts[1];
+      // 🌟 ここを変更！ ピリオド(.) の代わりに ダブルクォーテーション(") で繋ぐ
+      sStr = parts[0].padStart(2, "0") + '"' + parts[1];
     } else {
       sStr = sStr.padStart(2, "0");
     }
@@ -270,6 +271,7 @@ const LapTimeModal = ({
                     {seg.label}
                   </label>
                   <input
+                    inputMode="decimal"
                     type="text"
                     placeholder="LAP"
                     className="flex-1 p-2.5 bg-white rounded-lg font-bold text-sm outline-none border border-slate-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
