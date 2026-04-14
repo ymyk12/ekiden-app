@@ -1,0 +1,73 @@
+[debug] [2026-04-12T20:34:57.756Z] ----------------------------------------------------------------------
+[debug] [2026-04-12T20:34:57.761Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\user\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init functions
+[debug] [2026-04-12T20:34:57.761Z] CLI Version:   15.11.0
+[debug] [2026-04-12T20:34:57.762Z] Platform:      win32
+[debug] [2026-04-12T20:34:57.762Z] Node Version:  v24.12.0
+[debug] [2026-04-12T20:34:57.762Z] Time:          Mon Apr 13 2026 05:34:57 GMT+0900 (日本標準時)
+[debug] [2026-04-12T20:34:57.762Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-12T20:34:57.766Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\Users\user\ekiden-app
+
+Before we get started, keep in mind:
+
+  * You are initializing within an existing Firebase project directory
+
+[debug] [2026-04-12T20:35:02.184Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-04-12T20:35:02.184Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-04-12T20:35:19.036Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-12T20:35:19.036Z] > authorizing via signed-in user (y.myk12.2011@gmail.com)
+[debug] [2026-04-12T20:35:19.038Z] Checked if tokens are valid: false, expires at: 1774547386177
+[debug] [2026-04-12T20:35:19.038Z] Checked if tokens are valid: false, expires at: 1774547386177
+[debug] [2026-04-12T20:35:19.039Z] > refreshing access token with scopes: []
+[debug] [2026-04-12T20:35:19.041Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-04-12T20:35:19.041Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-12T20:35:19.179Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-04-12T20:35:19.180Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-12T20:35:19.201Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/kswc-tf-distancerecords [none]
+[debug] [2026-04-12T20:35:19.660Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/kswc-tf-distancerecords 200
+[debug] [2026-04-12T20:35:19.660Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/kswc-tf-distancerecords {"projectId":"kswc-tf-distancerecords","projectNumber":"633417183098","displayName":"KSWC-TF-DistanceRecords","name":"projects/kswc-tf-distancerecords","resources":{"hostingSite":"kswc-tf-distancerecords"},"state":"ACTIVE","etag":"1_5178f183-7dfc-4394-8259-d8054422cbee"}
+[info] i  Using project kswc-tf-distancerecords (KSWC-TF-DistanceRecords) . 
+[info] 
+=== Functions Setup
+[debug] [2026-04-12T20:35:19.669Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-12T20:35:19.670Z] > authorizing via signed-in user (y.myk12.2011@gmail.com)
+[debug] [2026-04-12T20:35:19.670Z] [iam] checking project kswc-tf-distancerecords for permissions ["firebase.projects.get"]
+[debug] [2026-04-12T20:35:19.670Z] Checked if tokens are valid: true, expires at: 1776029718180
+[debug] [2026-04-12T20:35:19.670Z] Checked if tokens are valid: true, expires at: 1776029718180
+[debug] [2026-04-12T20:35:19.670Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/kswc-tf-distancerecords:testIamPermissions [none]
+[debug] [2026-04-12T20:35:19.671Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/kswc-tf-distancerecords:testIamPermissions  x-goog-user-project=kswc-tf-distancerecords
+[debug] [2026-04-12T20:35:19.671Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/kswc-tf-distancerecords:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-04-12T20:35:19.867Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/kswc-tf-distancerecords:testIamPermissions 200
+[debug] [2026-04-12T20:35:19.868Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/kswc-tf-distancerecords:testIamPermissions {"permissions":["firebase.projects.get"]}
+[info] 
+Detected existing codebase(s): default
+
+[debug] [2026-04-12T20:35:53.568Z] ExitPromptError: User force closed the prompt with SIGINT
+    at Interface.sigint (C:\Users\user\AppData\Roaming\npm\node_modules\firebase-tools\node_modules\@inquirer\core\dist\commonjs\lib\create-prompt.js:101:37)
+    at Interface.emit (node:events:508:28)
+    at [_ttyWrite] [as _ttyWrite] (node:internal/readline/interface:1327:18)
+    at ReadStream.onkeypress (node:internal/readline/interface:284:20)
+    at ReadStream.emit (node:events:520:35)
+    at emitKeys (node:internal/readline/utils:371:14)
+    at emitKeys.next (<anonymous>)
+    at ReadStream.onData (node:internal/readline/emitKeypressEvents:64:36)
+    at ReadStream.emit (node:events:508:28)
+    at addChunk (node:internal/streams/readable:559:12)
+[error] 
+[error] Error: An unexpected error has occurred.

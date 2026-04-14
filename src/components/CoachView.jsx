@@ -2918,9 +2918,8 @@ const CoachView = (props) => {
 
       {/* 大会LAPタイム入力：監督画面用 */}
       <LapTimeModal
-        editingCard={
-          editingLapCard
-        } /* 👈 もし CoachView での名前が editingCard なら editingCard にしてください */
+        key={editingCard?.id || "empty"}
+        editingCard={editingLapCard}
         onClose={() => setEditingLapCard(null)}
         lapInput={lapInput}
         setLapInput={setLapInput}

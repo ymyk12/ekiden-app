@@ -158,12 +158,25 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
                           : card.distance}
                       </p>
                     </div>
+                    {/* 🌟 チームレポートのRESULT表示部分 */}
                     <div className="text-right bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
                       <p className="text-[10px] font-black text-slate-400 mb-0.5">
                         RESULT
                       </p>
-                      <p className="text-xl font-black text-indigo-600 tracking-tighter whitespace-nowrap">
-                        {card.resultTime || "未入力"}
+                      <p
+                        className={`text-xl font-black tracking-tighter whitespace-nowrap ${
+                          card.status === "dns"
+                            ? "text-rose-400"
+                            : card.status === "dnf"
+                              ? "text-amber-500"
+                              : "text-indigo-600"
+                        }`}
+                      >
+                        {card.status === "dns"
+                          ? `DNS (${card.dnsReason || "棄権"})`
+                          : card.status === "dnf"
+                            ? `DNF (${card.dnfPoint || "途中棄権"})`
+                            : card.resultTime || "未入力"}
                       </p>
                     </div>
                   </div>

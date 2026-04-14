@@ -28,22 +28,13 @@ import {
   AlertCircle,
   Loader2,
   Flag,
-  Timer,
-  Thermometer,
-  Cloud,
-  Droplets,
   Calendar,
   Bell,
 } from "lucide-react";
 
 import { ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 
-import {
-  ROLES,
-  CATEGORY,
-  RACE_TYPES,
-  RACE_DISTANCES,
-} from "../utils/constants";
+import { ROLES, CATEGORY } from "../utils/constants";
 
 import { getGoalValue, getTodayStr, getDatesInRange } from "../utils/dateUtils";
 
@@ -205,9 +196,7 @@ const AthleteView = (props) => {
     tournaments,
     targetPeriod,
     currentUserId,
-    teamLogs,
     setEditingRaceCardId,
-    setExpandedDiaryId,
     setRaceCardInput,
     setView,
   ]);

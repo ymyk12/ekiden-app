@@ -1263,6 +1263,7 @@ const ManagerDashboard = ({
 
       {/* // 大会LAPタイム入力 */}
       <LapTimeModal
+        key={editingCard?.id || "empty"}
         editingCard={editingCard}
         onClose={() => setEditingCard(null)}
         lapInput={lapInput}

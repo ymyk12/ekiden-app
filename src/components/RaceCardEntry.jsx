@@ -430,22 +430,106 @@ const RaceCardEntry = ({
         <h4 className="font-black text-sm text-indigo-600 flex items-center gap-2 border-b border-indigo-100 pb-2">
           <Timer size={18} /> レース後
         </h4>
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase flex justify-between">
-            <span>RESULT</span>
-          </label>
-          <input
-            type="text"
-            placeholder={`例: 15'25"40`}
-            className="w-full p-4 bg-indigo-50/50 rounded-xl font-black text-lg text-indigo-700 outline-none border border-indigo-100 focus:border-indigo-400 text-center tracking-wider"
-            value={raceCardInput.resultTime}
-            onChange={(e) =>
-              setRaceCardInput({
-                ...raceCardInput,
-                resultTime: e.target.value,
-              })
-            }
-          />
+        {/* 🌟 結果・ステータス入力ブロック（一新！） */}
+        <div className="space-y-4 bg-slate-50 p-4 rounded-3xl border border-slate-100">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              Race Status
+            </label>
+            {/* 🌟 DNS/DNF/Finish 切り替えボタン */}
+            <div className="flex gap-1 bg-white p-1 rounded-xl border border-slate-200">
+              {[
+                { id: "finish", label: "Finish", color: "text-emerald-600" },
+                { id: "dns", label: "DNS", color: "text-rose-500" },
+                { id: "dnf", label: "DNF", color: "text-amber-600" },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() =>
+                    setRaceCardInput({ ...raceCardInput, status: s.id })
+                  }
+                  className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${
+                    (raceCardInput.status || "finish") === s.id
+                      ? "bg-slate-800 text-white shadow-sm"
+                      : `bg-transparent text-slate-400 hover:bg-slate-50`
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 🌟 Finish：通常のタイム入力 */}
+          {(raceCardInput.status === "finish" || !raceCardInput.status) && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+              <label className="text-[10px] font-black text-slate-400 flex items-center gap-1">
+                <Timer size={12} /> RESULT TIME
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="00:00.00"
+                className="w-full p-4 bg-white rounded-2xl font-black text-xl outline-none border border-slate-200 focus:border-indigo-400 transition-all text-indigo-600"
+                value={raceCardInput.resultTime || ""}
+                onChange={(e) =>
+                  setRaceCardInput({
+                    ...raceCardInput,
+                    resultTime: e.target.value,
+                  })
+                }
+              />
+            </div>
+          )}
+
+          {/* 🌟 DNS：理由のワンタップ選択（テキスト入力なし） */}
+          {raceCardInput.status === "dns" && (
+            <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
+              <label className="text-[10px] font-black text-rose-500 flex items-center gap-1">
+                DNS REASON (欠場理由)
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {["体調不良", "故障", "家事都合", "その他"].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() =>
+                      setRaceCardInput({ ...raceCardInput, dnsReason: reason })
+                    }
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      raceCardInput.dnsReason === reason
+                        ? "bg-rose-500 text-white shadow-md scale-105"
+                        : "bg-white text-rose-400 border border-rose-200 hover:bg-rose-50"
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 🌟 DNF：棄権地点の入力 */}
+          {raceCardInput.status === "dnf" && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+              <label className="text-[10px] font-black text-amber-500 flex items-center gap-1">
+                DNF POINT (途中棄権地点)
+              </label>
+              <input
+                type="text"
+                placeholder="例：3000m地点、2区5km地点など"
+                className="w-full p-4 bg-white rounded-2xl font-bold text-sm outline-none border border-amber-200 focus:border-amber-400 transition-all"
+                value={raceCardInput.dnfPoint || ""}
+                onChange={(e) =>
+                  setRaceCardInput({
+                    ...raceCardInput,
+                    dnfPoint: e.target.value,
+                  })
+                }
+              />
+            </div>
+          )}
         </div>
         {/* 🌟 達成バッジ選択機能 */}
         <div className="space-y-3">
@@ -456,7 +540,7 @@ const RaceCardEntry = ({
             {[
               { label: "自己ベスト", color: "bg-orange-500" },
               { label: "組1位", color: "bg-blue-500" },
-              { label: "県大会出場", color: "bg-emerald-500" },
+              { label: "県大会出場！", color: "bg-emerald-500" },
             ].map((b) => (
               <button
                 key={b.label}
