@@ -2918,8 +2918,8 @@ const CoachView = (props) => {
 
       {/* 大会LAPタイム入力：監督画面用 */}
       <LapTimeModal
-        key={editingCard?.id || "empty"}
-        editingCard={editingLapCard}
+        key={editingLapCard?.id || "empty"}
+        editingLapCard={editingLapCard}
         onClose={() => setEditingLapCard(null)}
         lapInput={lapInput}
         setLapInput={setLapInput}
