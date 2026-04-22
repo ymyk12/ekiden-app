@@ -12,7 +12,7 @@ import { db, appId } from "../firebaseConfig";
 import { ROLES } from "../utils/constants"; // 🌟 追加: 役割の定義を読み込む
 
 // 🌟 引数に role を追加
-export const useTeamData = (user, role) => {
+export const useTeamData = (user, role, fetchCutoff) => {
   const [allRunners, setAllRunners] = useState([]);
   const [allLogs, setAllLogs] = useState([]);
   const [tournaments, setTournaments] = useState([]);
@@ -92,25 +92,15 @@ export const useTeamData = (user, role) => {
       "logs",
     );
 
-    // 監督(COACH)またはシステム管理者(ADMIN)に「確定」していない時は、強制的に過去3ヶ月分に制限する！
-    // (※アプリ起動直後の誰か分からない状態の時も、まずは軽いデータだけ取得させる)
-    if (role !== ROLES.COACH && role !== ROLES.ADMIN) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - 3); // 3ヶ月前の日付を計算
-
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      const cutoffDateStr = `${yyyy}-${mm}-${dd}`; // YYYY-MM-DD形式
-
-      logsQuery = query(logsQuery, where("date", ">=", cutoffDateStr));
+    // 監督またはシステム管理者以外は、App.jsから指定された足切りライン(fetchCutoff)で制限する！
+    if (role !== ROLES.COACH && role !== ROLES.ADMIN && fetchCutoff) {
+      logsQuery = query(logsQuery, where("date", ">=", fetchCutoff));
     }
 
     // 制限をかけた（または監督用の全件）クエリでデータを監視する
     const unsubLogs = onSnapshot(logsQuery, (snap) => {
       setAllLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    // 🌟🌟🌟 制限エリアここまで 🌟🌟🌟
 
     const unsubTournaments = onSnapshot(
       collection(db, "artifacts", appId, "public", "data", "tournaments"),
@@ -181,7 +171,7 @@ export const useTeamData = (user, role) => {
       unsubRaceCards();
       clearTimeout(timeout);
     };
-  }, [user, role]); // 🌟 依存配列に role を追加し、役割が変わった時にリスナーを張り直す！
+  }, [user, role, fetchCutoff]);
 
   // 取ってきたデータをApp.jsに渡す
   return {

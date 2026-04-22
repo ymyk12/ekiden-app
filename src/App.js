@@ -53,7 +53,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.0.0";
+const APP_LAST_UPDATED = "6.1.0";
 
 // --- Print Styles (修正版: 改ページ完全対応) ---
 // --- Print Styles (修正版: 学年別テーブル先頭） ---
@@ -286,8 +286,18 @@ const App = () => {
     onConfirm: null,
   });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  // ★追加: 日誌の開閉状態管理用
+  // 日誌の開閉状態管理用
   const [expandedDiaryId, setExpandedDiaryId] = useState(null);
+
+  // データ取得の「足切りライン（初期値は3ヶ月前）」を管理するステート
+  const [fetchCutoff, setFetchCutoff] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 3);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  });
 
   // Coach specific states
   const [selectedRunner, setSelectedRunner] = useState(null);
@@ -393,7 +403,7 @@ const App = () => {
     dataLoading,
     tournaments,
     raceCards,
-  } = useTeamData(user, role);
+  } = useTeamData(user, role, fetchCutoff);
 
   useEffect(() => {
     if (!selectedPeriod) {
@@ -649,6 +659,20 @@ const App = () => {
       }
     );
   }, [selectedPeriod, availablePeriods]);
+
+  // ユーザーが選んだ期間（targetPeriod）が足切りラインより古ければ、ラインを過去に引き伸ばす！
+  useEffect(() => {
+    if (
+      targetPeriod &&
+      targetPeriod.start &&
+      targetPeriod.start < fetchCutoff
+    ) {
+      setFetchCutoff(targetPeriod.start);
+      console.log(
+        `データ取得ラインを ${targetPeriod.start} まで延長しました！`,
+      );
+    }
+  }, [targetPeriod, fetchCutoff]);
 
   const activeQuarters = useMemo(() => {
     if (targetPeriod.type === "global" || targetPeriod.type === "custom") {
