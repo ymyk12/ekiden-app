@@ -167,14 +167,6 @@ const CoachView = (props) => {
       "2000-01-01T00:00:00.000Z"
     );
   });
-  const [notifiedIds, setNotifiedIds] = useState(() => {
-    try {
-      const item = localStorage.getItem(`notified_ids_coach_${appId}`);
-      return item && item !== "undefined" ? JSON.parse(item) : [];
-    } catch (e) {
-      return [];
-    }
-  });
 
   const notifications = useMemo(() => {
     const list = [];
@@ -280,36 +272,6 @@ const CoachView = (props) => {
     setLastReadTime(nowStr);
     localStorage.setItem(`notif_read_coach_${appId}`, nowStr);
   };
-
-  // プッシュ通知の許可と発射
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      const newNotifs = notifications.filter(
-        (n) => !notifiedIds.includes(n.id) && n.time > lastReadTime,
-      );
-      if (newNotifs.length > 0) {
-        newNotifs.forEach((n) => {
-          new Notification("監督ダッシュボード", {
-            body: n.title + "\n" + n.message,
-            icon: "/favicon.ico",
-          });
-        });
-        const updatedIds = [...notifiedIds, ...newNotifs.map((n) => n.id)];
-        setNotifiedIds(updatedIds);
-        localStorage.setItem(
-          `notified_ids_coach_${appId}`,
-          JSON.stringify(updatedIds),
-        );
-      }
-    }
-  }, [notifications, notifiedIds, appId, lastReadTime]);
-  // 🌟🌟▲▲ 監督用の通知管理システムここまで ▲▲🌟🌟
 
   const [selectedTourId, setSelectedTourId] = useState(null); // 開いている大会一覧
   const [readingCard, setReadingCard] = useState(null); // 読んでいるノート詳細

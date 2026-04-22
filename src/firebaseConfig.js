@@ -2,6 +2,8 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 
+import { getMessaging } from "firebase/messaging";
+
 // Firestoreのパス指定で使っているappIdもここでエクスポート
 export const appId = "kswc-ekidenteam-distancerecords";
 
@@ -28,3 +30,5 @@ enableIndexedDbPersistence(db).catch((err) => {
     console.warn("現在のブラウザはキャッシュ機能をサポートしていません");
   }
 });
+
+export const messaging = getMessaging(app);

@@ -118,16 +118,6 @@ const AthleteView = (props) => {
     );
   });
 
-  // AthleteView.jsx の通知読み込み部分
-  const [notifiedIds, setNotifiedIds] = useState(() => {
-    try {
-      const item = localStorage.getItem(`notified_ids_${currentUserId}`);
-      return item && item !== "undefined" ? JSON.parse(item) : [];
-    } catch (e) {
-      return []; // 記憶が壊れていたら無視して空っぽにする！
-    }
-  });
-
   // アプリ内のデータから「お知らせ」を自動でリストアップ
   const notifications = useMemo(() => {
     const list = [];
@@ -235,36 +225,6 @@ const AthleteView = (props) => {
     setLastReadTime(nowStr);
     localStorage.setItem(`notif_read_${currentUserId}`, nowStr);
   };
-
-  // 【スマホへのプッシュ通知機能】（初回許可取り）
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  // 【スマホへのプッシュ通知機能】（未読があれば鳴らす）
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      const newNotifs = notifications.filter(
-        (n) => !notifiedIds.includes(n.id) && n.time > lastReadTime,
-      );
-      if (newNotifs.length > 0) {
-        newNotifs.forEach((n) => {
-          new Notification("駅伝・陸上アプリ", {
-            body: n.title,
-            icon: "/favicon.ico",
-          });
-        });
-        const updatedIds = [...notifiedIds, ...newNotifs.map((n) => n.id)];
-        setNotifiedIds(updatedIds);
-        localStorage.setItem(
-          `notified_ids_${currentUserId}`,
-          JSON.stringify(updatedIds),
-        );
-      }
-    }
-  }, [notifications, notifiedIds, currentUserId, lastReadTime]);
 
   const safeChangeView = (targetView) => {
     if (

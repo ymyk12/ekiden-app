@@ -37,6 +37,10 @@ import {
 import { auth, db, appId } from "./firebaseConfig";
 import { useTeamData } from "./hooks/useTeamData";
 
+// 通知トークンの取得
+import { getToken } from "firebase/messaging";
+import { messaging } from "./firebaseConfig";
+
 // 🌟 1. 最初の画面たちは、遅延させずに「普通に（即座に）」読み込む！
 import WelcomeScreen from "./components/WelcomeScreen";
 import LoginScreen from "./components/LoginScreen";
@@ -49,7 +53,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "5.6.0";
+const APP_LAST_UPDATED = "6.0.0";
 
 // --- Print Styles (修正版: 改ページ完全対応) ---
 // --- Print Styles (修正版: 学年別テーブル先頭） ---
@@ -336,10 +340,10 @@ const App = () => {
     achieved: true,
     lastName: "",
     firstName: "",
-    memberCode: "", // ★追加：選手ID（例：26001）
+    memberCode: "", // 選手ID（例：26001）
     teamPass: "",
     personalPin: "",
-    isManager: false, // ★追加: マネージャーフラグ
+    isManager: false, //　マネージャーフラグ
   });
 
   const [menuInput, setMenuInput] = useState({ date: getTodayStr(), text: "" });
@@ -479,6 +483,50 @@ const App = () => {
   // user.uidを使うと、logs内のrunnerId(選手番号)と一致せずデータが出ないため
   const currentUserId = previewRunner ? previewRunner.id : profile?.id;
   const currentProfile = previewRunner || profile;
+
+  // 4.プッシュ通知の許可と保存処理
+  useEffect(() => {
+    const requestPushPermission = async () => {
+      // ログインしていない、またはプロフィールがまだ無い時は何もしない
+      if (!currentProfile?.id) return;
+
+      try {
+        // 1. スマホやPCに「通知を送ってもいいですか？」のポップアップを出す
+        const permission = await Notification.requestPermission();
+
+        if (permission === "granted") {
+          // 2. 許可されたら、ステップ1で取得したVAPIDキーを使ってトークンを発行
+          const currentToken = await getToken(messaging, {
+            vapidKey:
+              "BKhAK3cczxwz1pSnOOQjaiIRfRwywvhohAcoqosBZyLLzZecKMk3ZOuFuMnKyoKp01J6A4-0UzkaeCaNrfpeQkY",
+          });
+
+          if (currentToken) {
+            // 3. 取得したトークンを、その人のプロフィール(runnersテーブル)に保存！
+            await updateDoc(
+              doc(
+                db,
+                "artifacts",
+                appId,
+                "public",
+                "data",
+                "runners",
+                currentProfile.id,
+              ),
+              {
+                fcmToken: currentToken,
+              },
+            );
+            console.log("プッシュ通知の準備完了！トークンを保存しました。");
+          }
+        }
+      } catch (error) {
+        console.error("プッシュ通知の設定に失敗しました:", error);
+      }
+    };
+
+    requestPushPermission();
+  }, [currentProfile?.id]);
 
   const availablePeriods = useMemo(() => {
     const periods = [];
