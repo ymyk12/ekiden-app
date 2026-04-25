@@ -23,6 +23,7 @@ import {
   Flag,
   Timer,
   Home,
+  Users,
 } from "lucide-react";
 
 // Utilsから読み込む
@@ -33,6 +34,8 @@ import { getTodayStr } from "../utils/dateUtils";
 import DiaryListItem from "./DiaryListItem";
 // 大会LAPタイム入力
 import LapTimeModal from "./LapTimeModal";
+// 大会チームレポート
+import TeamRaceReport from "./TeamRaceReport";
 
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "react-hot-toast";
@@ -86,6 +89,7 @@ const ManagerDashboard = ({
   const [selectedTourId, setSelectedTourId] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
+  const [showTeamReportId, setShowTeamReportId] = useState(null);
 
   const reinforcementOptions = [
     "コア",
@@ -1124,21 +1128,32 @@ const ManagerDashboard = ({
                     </p>
                   ) : (
                     tournaments.map((tour) => (
-                      <button
-                        key={tour.id}
-                        onClick={() => setSelectedTourId(tour.id)}
-                        className="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center hover:border-indigo-300 transition-all text-left"
-                      >
-                        <div>
-                          <p className="font-black text-slate-700">
-                            {tour.name}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-400">
-                            {tour.startDate} 〜{tour.endDate || ""}
-                          </p>
-                        </div>
-                        <ChevronRight size={18} className="text-slate-300" />
-                      </button>
+                      // 🌟 修正ポイント1: 全体を <div> で囲みます（keyもここに移動）
+                      <div key={tour.id} className="flex flex-col gap-2 mb-3">
+                        {/* 👇 これが元々あった「選手のエントリー一覧を見る」ボタンです */}
+                        <button
+                          onClick={() => setSelectedTourId(tour.id)}
+                          className="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center hover:border-indigo-300 transition-all text-left shadow-sm"
+                        >
+                          <div>
+                            <p className="font-black text-slate-700">
+                              {tour.name}
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-400">
+                              {tour.startDate} 〜{tour.endDate || ""}
+                            </p>
+                          </div>
+                          <ChevronRight size={18} className="text-slate-300" />
+                        </button>
+
+                        {/* 👇 🌟 修正ポイント2: ここに「チームレポートを見る」ボタンを追加します！ */}
+                        <button
+                          onClick={() => setShowTeamReportId(tour.id)}
+                          className="w-full py-3 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl font-black text-sm hover:bg-indigo-100 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          <Users size={18} /> チームレポートを見る
+                        </button>
+                      </div>
                     ))
                   )}
                 </div>
@@ -1357,6 +1372,16 @@ const ManagerDashboard = ({
           </div>
         </div>
       )}
+      {showTeamReportId && (
+        <TeamRaceReport
+          reportTour={tournaments.find((t) => t.id === showTeamReportId)}
+          reportCards={raceCards.filter(
+            (c) => c.tournamentId === showTeamReportId,
+          )}
+          onClose={() => setShowTeamReportId(null)}
+        />
+      )}
+      {/* ========================================== */}
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SmartLapInput from "./SmartLapInput";
 import {
   Calendar,
   MessageSquare,
@@ -470,7 +471,7 @@ const RaceCardEntry = ({
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder="00:00.00"
+                placeholder={`例: 15'20"00`}
                 className="w-full p-4 bg-white rounded-2xl font-black text-xl outline-none border border-slate-200 focus:border-indigo-400 transition-all text-indigo-600"
                 value={raceCardInput.resultTime || ""}
                 onChange={(e) =>
@@ -564,19 +565,18 @@ const RaceCardEntry = ({
           </div>
         </div>
         <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase">
-            LAPタイム
+          <label className="text-[10px] font-black text-indigo-400">
+            ラップタイム
           </label>
-          <textarea
-            placeholder="1000m: 3'00&#10;2000m: 6'05..."
-            className="w-full p-3 bg-indigo-50/50 rounded-xl font-mono text-xs outline-none border border-indigo-100 focus:border-indigo-400 h-20 resize-none"
-            value={raceCardInput.lapTimes}
-            onChange={(e) =>
-              setRaceCardInput({
-                ...raceCardInput,
-                lapTimes: e.target.value,
-              })
+          {/* 🌟 共通部品に置き換え！ */}
+          <SmartLapInput
+            value={raceCardInput.lapTimes || ""}
+            onChange={(newValue) =>
+              setRaceCardInput({ ...raceCardInput, lapTimes: newValue })
             }
+            raceType={raceCardInput.raceType}
+            distance={raceCardInput.distance}
+            placeholder="ラップタイムを入力（スマホのドットで自動変換）"
           />
         </div>
         <div className="space-y-1">

@@ -1,6 +1,6 @@
 // CoachViewはPC画面を前提とし、スマホ画面をサブ的な画面として整える
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Users,
   LayoutDashboard,
