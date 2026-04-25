@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { Timer } from "lucide-react";
 
-const SmartLapInput = ({ value, onChange, raceType, distance }) => {
+const SmartLapInput = ({
+  value,
+  onChange,
+  raceType,
+  distance,
+  onResultChange,
+}) => {
   // 1. 距離を数値化
   const totalDist = useMemo(() => {
     if (!distance) return 0;
@@ -34,7 +41,7 @@ const SmartLapInput = ({ value, onChange, raceType, distance }) => {
     return splits;
   }, [raceType, totalDist]);
 
-  // 3. タイム（M'SS"CC）を秒数（float）に変換
+  // 3. タイム・秒数変換ロジック
   const timeToSeconds = (str) => {
     if (!str) return 0;
     const cleanStr = str.replace(/[()（）]/g, "");
@@ -46,7 +53,6 @@ const SmartLapInput = ({ value, onChange, raceType, distance }) => {
     return m * 60 + s + c;
   };
 
-  // 4. 秒数を M'SS"CC 形式に変換
   const secondsToTime = (totalSeconds) => {
     if (totalSeconds <= 0) return "";
     const m = Math.floor(totalSeconds / 60);
@@ -57,7 +63,6 @@ const SmartLapInput = ({ value, onChange, raceType, distance }) => {
     return m > 0 ? `${m}'${ss}"${cc}` : `${s}"${cc}`;
   };
 
-  // 5. 入力された「.」を「'」や「"」に自動変換
   const formatInput = (text) => {
     if (!text) return "";
     let normalized = text.replace(/['"：:]/g, ".");
@@ -68,8 +73,9 @@ const SmartLapInput = ({ value, onChange, raceType, distance }) => {
     return text;
   };
 
-  // 6. ステート管理
+  // 4. ステート管理
   const [laps, setLaps] = useState({});
+  const [officialResult, setOfficialResult] = useState("");
 
   useEffect(() => {
     if (value && typeof value === "string") {
@@ -80,24 +86,33 @@ const SmartLapInput = ({ value, onChange, raceType, distance }) => {
         if (match) newLaps[match[1]] = match[2];
       });
       setLaps(newLaps);
+
+      if (splitPoints.length > 0) {
+        const lastDist = splitPoints[splitPoints.length - 1];
+        const lastLine = lines.find((l) => l.startsWith(`${lastDist}m:`));
+        const resMatch = lastLine?.match(/\((.*?)\)/);
+        if (resMatch) setOfficialResult(resMatch[1]);
+      }
     }
-  }, [value]);
+  }, [value, splitPoints]);
 
-  const handleLapChange = (dist, rawValue) => {
-    const formatted = formatInput(rawValue);
-    const nextLaps = { ...laps, [dist]: formatted };
-    setLaps(nextLaps);
-
+  // データ統合・テキスト出力処理
+  const updateAll = (nextLaps, nextResult) => {
     let cumulativeSec = 0;
     const finalString = splitPoints
-      .map((d) => {
+      .map((d, idx) => {
+        const isLast = idx === splitPoints.length - 1;
         const segTime = nextLaps[d] || "";
         const segSec = timeToSeconds(segTime);
         cumulativeSec += segSec;
+
         const totalTimeStr =
-          cumulativeSec > 0 && segSec > 0
-            ? `(${secondsToTime(cumulativeSec)})`
-            : "";
+          isLast && nextResult
+            ? `(${nextResult})`
+            : cumulativeSec > 0 && segSec > 0
+              ? `(${secondsToTime(cumulativeSec)})`
+              : "";
+
         return `${d}m:${segTime}${totalTimeStr}`;
       })
       .join(" ");
@@ -105,72 +120,59 @@ const SmartLapInput = ({ value, onChange, raceType, distance }) => {
     onChange(finalString);
   };
 
-  // 🌟🌟 リアルタイム分析（1000m毎 / 400m毎 の全LAP抽出） 🌟🌟
-  const summary = useMemo(() => {
-    let totalSec = 0;
-    let totalEnteredDist = 0;
-    let currentCumul = 0;
+  // リザルト入力による最終ラップの自動調整
+  const handleResultChange = (rawResult) => {
+    const formattedResult = formatInput(rawResult);
+    setOfficialResult(formattedResult);
 
-    const kiloLaps = [];
-    let currentKilo = 1000;
-    let lastKiloCumul = 0;
-
-    const lap400s = [];
-    let current400 = 400;
-    let last400Cumul = 0;
-
-    for (let i = 0; i < splitPoints.length; i++) {
-      const currentDist = splitPoints[i];
-      const prevDist = i === 0 ? 0 : splitPoints[i - 1];
-      const segmentDist = currentDist - prevDist;
-      const sec = timeToSeconds(laps[currentDist]);
-
-      currentCumul += sec;
-
-      if (sec > 0) {
-        totalSec += sec;
-        totalEnteredDist += segmentDist;
-      }
-
-      // 1000mごとのLAP計算（1500m以上の種目用）
-      if (currentDist === currentKilo) {
-        if (currentCumul > lastKiloCumul) {
-          kiloLaps.push({
-            mark: currentKilo,
-            time: currentCumul - lastKiloCumul,
-          });
-          lastKiloCumul = currentCumul;
-        }
-        currentKilo += 1000;
-      }
-
-      // 400mごとのLAP計算（800m種目用）
-      if (currentDist === current400) {
-        if (currentCumul > last400Cumul) {
-          lap400s.push({ mark: current400, time: currentCumul - last400Cumul });
-          last400Cumul = currentCumul;
-        }
-        current400 += 400;
-      }
+    if (onResultChange) {
+      onResultChange(formattedResult);
     }
 
-    return { totalSec, totalEnteredDist, kiloLaps, lap400s };
-  }, [laps, splitPoints]);
+    if (splitPoints.length === 0) return;
 
-  const avgPace =
-    summary.totalEnteredDist > 0
-      ? summary.totalSec /
-        (summary.totalEnteredDist / (totalDist === 800 ? 400 : 1000))
-      : 0;
+    const resSec = timeToSeconds(formattedResult);
+    if (resSec <= 0) {
+      updateAll(laps, formattedResult);
+      return;
+    }
+
+    const lastDist = splitPoints[splitPoints.length - 1];
+    let prevTotalSec = 0;
+    splitPoints.slice(0, -1).forEach((d) => {
+      prevTotalSec += timeToSeconds(laps[d]);
+    });
+
+    const adjustedLastLapSec = resSec - prevTotalSec;
+    if (adjustedLastLapSec > 0) {
+      const nextLaps = {
+        ...laps,
+        [lastDist]: secondsToTime(adjustedLastLapSec),
+      };
+      setLaps(nextLaps);
+      updateAll(nextLaps, formattedResult);
+    } else {
+      updateAll(laps, formattedResult);
+    }
+  };
+
+  // 通常のラップ入力
+  const handleLapChange = (dist, rawValue) => {
+    const formatted = formatInput(rawValue);
+    const nextLaps = { ...laps, [dist]: formatted };
+    setLaps(nextLaps);
+    updateAll(nextLaps, officialResult);
+  };
 
   return (
-    <div className="space-y-3 bg-slate-50 p-4 rounded-3xl border border-slate-100 w-full overflow-hidden flex flex-col h-[400px]">
-      <p className="text-[10px] font-bold text-slate-400 mb-1 px-1 flex-shrink-0">
+    // 🌟 外枠の高さ指定や flex を全削除し、最もシンプルな箱にしました
+    <div className="space-y-3 bg-slate-50 p-4 rounded-3xl border border-slate-100 w-full">
+      <p className="text-[10px] font-bold text-slate-400 mb-1 px-1">
         💡 区間タイムを入力してください。トータルは自動計算されます。
       </p>
 
-      {/* LAP入力リスト */}
-      <div className="space-y-2 flex-1 overflow-y-auto pr-1 custom-scrollbar w-full">
+      {/* 🌟 修正ポイント：高さを「最大250px」と絶対的なピクセルで固定し、確実にはみ出しを防ぎます */}
+      <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar w-full max-h-[250px]">
         {splitPoints.map((dist, index) => {
           let totalUntilNow = 0;
           for (let i = 0; i <= index; i++)
@@ -202,78 +204,22 @@ const SmartLapInput = ({ value, onChange, raceType, distance }) => {
         })}
       </div>
 
-      {/* 🌟🌟 リアルタイム分析ボード (横スクロール対応ラップ一覧) 🌟🌟 */}
-      {summary.totalEnteredDist > 0 && (
-        <div className="flex-shrink-0 bg-slate-800 text-white p-3 rounded-2xl flex flex-col gap-2 shadow-lg animate-in slide-in-from-bottom-2">
-          {/* 1500m以上の場合：1000mごとの全ラップ一覧 */}
-          {totalDist >= 1500 && (
-            <>
-              <div className="flex justify-between items-center px-1">
-                <span className="text-[10px] font-bold text-slate-400">
-                  1000mごとのLAP
-                </span>
-                <span className="text-xs font-black text-indigo-300 bg-indigo-900/50 px-2 py-1 rounded-lg">
-                  AVG: {secondsToTime(avgPace)} /km
-                </span>
-              </div>
-              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
-                {summary.kiloLaps.map((kl, idx) => (
-                  <div
-                    key={kl.mark}
-                    className="flex-shrink-0 bg-slate-700/50 border border-slate-600 px-3 py-1.5 rounded-xl flex items-center gap-2"
-                  >
-                    <span className="text-[9px] font-black text-slate-400">
-                      {idx + 1}k
-                    </span>
-                    <span className="text-sm font-black text-white">
-                      {secondsToTime(kl.time)}
-                    </span>
-                  </div>
-                ))}
-                {summary.kiloLaps.length === 0 && (
-                  <span className="text-[10px] text-slate-500 px-2 py-1">
-                    1000m通過データ待ち...
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* 800mの場合：400mごとの全ラップ一覧 */}
-          {totalDist === 800 && (
-            <>
-              <div className="flex justify-between items-center px-1">
-                <span className="text-[10px] font-bold text-slate-400">
-                  400mごとのLAP
-                </span>
-                <span className="text-xs font-black text-indigo-300 bg-indigo-900/50 px-2 py-1 rounded-lg">
-                  AVG: {secondsToTime(avgPace)} /400m
-                </span>
-              </div>
-              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
-                {summary.lap400s.map((l4, idx) => (
-                  <div
-                    key={l4.mark}
-                    className="flex-shrink-0 bg-slate-700/50 border border-slate-600 px-3 py-1.5 rounded-xl flex items-center gap-2"
-                  >
-                    <span className="text-[9px] font-black text-slate-400">
-                      {l4.mark}m
-                    </span>
-                    <span className="text-sm font-black text-white">
-                      {secondsToTime(l4.time)}
-                    </span>
-                  </div>
-                ))}
-                {summary.lap400s.length === 0 && (
-                  <span className="text-[10px] text-slate-500 px-2 py-1">
-                    400m通過データ待ち...
-                  </span>
-                )}
-              </div>
-            </>
-          )}
+      {/* 公式リザルト入力欄（自動調整用） */}
+      <div className="pt-3 border-t border-slate-200 mt-2">
+        <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
+          <Timer size={12} /> Official Result (自動調整用)
+        </label>
+        <div className="flex items-center gap-3 mt-1 bg-indigo-600 p-2.5 rounded-2xl shadow-md">
+          <input
+            type="text"
+            value={officialResult}
+            inputMode="decimal"
+            placeholder="Result (例: 15.30.00)"
+            onChange={(e) => handleResultChange(e.target.value)}
+            className="flex-1 bg-transparent border-none text-white font-mono font-black text-lg placeholder:text-white/40 outline-none px-2"
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 };

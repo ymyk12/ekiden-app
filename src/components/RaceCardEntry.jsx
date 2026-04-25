@@ -28,7 +28,6 @@ const RaceCardEntry = ({
   handleSaveRaceCard,
   handleDeleteRaceCard,
 }) => {
-  // フィードバック開閉用のステート（AthleteViewからこちらにお引越し！）
   const [isRaceFeedbackOpen, setIsRaceFeedbackOpen] = useState(false);
 
   const currentTour = tournaments.find(
@@ -38,6 +37,17 @@ const RaceCardEntry = ({
   const tourDates = currentTour
     ? `${currentTour.startDate.replace(/-/g, "/")} 〜 ${currentTour.endDate.replace(/-/g, "/")}`
     : "日程未定";
+
+  // 🌟🌟 魔法の自動フォーマット関数（目標タイム用） 🌟🌟
+  const formatTimeInput = (text) => {
+    if (!text) return "";
+    let normalized = text.replace(/['"：:]/g, ".");
+    const parts = normalized.split(".");
+    if (parts.length === 1) return parts[0];
+    if (parts.length === 2) return `${parts[0]}"${parts[1]}`;
+    if (parts.length === 3) return `${parts[0]}'${parts[1]}"${parts[2]}`;
+    return text;
+  };
 
   return (
     <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in slide-in-from-bottom-8 pb-24">
@@ -52,7 +62,7 @@ const RaceCardEntry = ({
         </p>
       </div>
 
-      {/* 監督からのフィードバック表示（アコーディオン式） */}
+      {/* 監督からのフィードバック表示 */}
       {editingRaceCardId && raceCardInput.coachFeedback && (
         <div className="mb-4">
           <button
@@ -197,15 +207,17 @@ const RaceCardEntry = ({
           <label className="text-[10px] font-black text-slate-400 uppercase">
             目標タイム
           </label>
+          {/* 🌟🌟 目標タイム入力を数字キーボード＆自動フォーマットにアップグレード！ 🌟🌟 */}
           <input
             type="text"
-            placeholder={`例: 15'20"00`}
+            inputMode="decimal"
+            placeholder="例: 15.20.00"
             className="w-full p-3 bg-amber-50/50 rounded-xl font-black text-lg text-slate-700 outline-none border border-amber-100 focus:border-amber-400 text-center tracking-wider"
-            value={raceCardInput.targetTime}
+            value={raceCardInput.targetTime || ""}
             onChange={(e) =>
               setRaceCardInput({
                 ...raceCardInput,
-                targetTime: e.target.value,
+                targetTime: formatTimeInput(e.target.value),
               })
             }
           />
@@ -274,16 +286,12 @@ const RaceCardEntry = ({
                   }`}
                 >
                   <span
-                    className={`text-[10px] font-black tracking-wider ${
-                      isSelected ? "text-white" : item.textCol
-                    }`}
+                    className={`text-[10px] font-black tracking-wider ${isSelected ? "text-white" : item.textCol}`}
                   >
                     {item.en}
                   </span>
                   <span
-                    className={`text-[8px] font-bold mt-0.5 ${
-                      isSelected ? "text-white/80" : "text-slate-400"
-                    }`}
+                    className={`text-[8px] font-bold mt-0.5 ${isSelected ? "text-white/80" : "text-slate-400"}`}
                   >
                     {item.jp}
                   </span>
@@ -322,10 +330,7 @@ const RaceCardEntry = ({
             className="w-full p-4 bg-amber-50/50 rounded-xl font-bold text-xs outline-none border border-amber-100 focus:border-amber-400 h-36 resize-none leading-relaxed tracking-wide"
             value={raceCardInput.wupPlan}
             onChange={(e) =>
-              setRaceCardInput({
-                ...raceCardInput,
-                wupPlan: e.target.value,
-              })
+              setRaceCardInput({ ...raceCardInput, wupPlan: e.target.value })
             }
           />
         </div>
@@ -338,10 +343,7 @@ const RaceCardEntry = ({
             className="w-full p-4 bg-amber-50/50 rounded-xl font-bold text-xs outline-none border border-amber-100 focus:border-amber-400 h-24 resize-none"
             value={raceCardInput.racePlan}
             onChange={(e) =>
-              setRaceCardInput({
-                ...raceCardInput,
-                racePlan: e.target.value,
-              })
+              setRaceCardInput({ ...raceCardInput, racePlan: e.target.value })
             }
           />
         </div>
@@ -359,10 +361,7 @@ const RaceCardEntry = ({
               className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none"
               value={raceCardInput.weather}
               onChange={(e) =>
-                setRaceCardInput({
-                  ...raceCardInput,
-                  weather: e.target.value,
-                })
+                setRaceCardInput({ ...raceCardInput, weather: e.target.value })
               }
             >
               {["晴れ", "曇り", "小雨", "本降り", "雪"].map((w) => (
@@ -378,10 +377,7 @@ const RaceCardEntry = ({
               className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none"
               value={raceCardInput.wind}
               onChange={(e) =>
-                setRaceCardInput({
-                  ...raceCardInput,
-                  wind: e.target.value,
-                })
+                setRaceCardInput({ ...raceCardInput, wind: e.target.value })
               }
             >
               {["無風", "弱風", "強風"].map((w) => (
@@ -399,10 +395,7 @@ const RaceCardEntry = ({
               className="w-full p-2 bg-transparent font-bold text-sm outline-none text-right"
               value={raceCardInput.temp}
               onChange={(e) =>
-                setRaceCardInput({
-                  ...raceCardInput,
-                  temp: e.target.value,
-                })
+                setRaceCardInput({ ...raceCardInput, temp: e.target.value })
               }
             />
             <span className="text-xs font-bold text-slate-400 ml-1">℃</span>
@@ -415,10 +408,7 @@ const RaceCardEntry = ({
               className="w-full p-2 bg-transparent font-bold text-sm outline-none text-right"
               value={raceCardInput.humidity}
               onChange={(e) =>
-                setRaceCardInput({
-                  ...raceCardInput,
-                  humidity: e.target.value,
-                })
+                setRaceCardInput({ ...raceCardInput, humidity: e.target.value })
               }
             />
             <span className="text-xs font-bold text-slate-400 ml-1">%</span>
@@ -431,13 +421,13 @@ const RaceCardEntry = ({
         <h4 className="font-black text-sm text-indigo-600 flex items-center gap-2 border-b border-indigo-100 pb-2">
           <Timer size={18} /> レース後
         </h4>
-        {/* 🌟 結果・ステータス入力ブロック（一新！） */}
+
+        {/* Race Status */}
         <div className="space-y-4 bg-slate-50 p-4 rounded-3xl border border-slate-100">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
               Race Status
             </label>
-            {/* 🌟 DNS/DNF/Finish 切り替えボタン */}
             <div className="flex gap-1 bg-white p-1 rounded-xl border border-slate-200">
               {[
                 { id: "finish", label: "Finish", color: "text-emerald-600" },
@@ -462,29 +452,7 @@ const RaceCardEntry = ({
             </div>
           </div>
 
-          {/* 🌟 Finish：通常のタイム入力 */}
-          {(raceCardInput.status === "finish" || !raceCardInput.status) && (
-            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
-              <label className="text-[10px] font-black text-slate-400 flex items-center gap-1">
-                <Timer size={12} /> RESULT TIME
-              </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder={`例: 15'20"00`}
-                className="w-full p-4 bg-white rounded-2xl font-black text-xl outline-none border border-slate-200 focus:border-indigo-400 transition-all text-indigo-600"
-                value={raceCardInput.resultTime || ""}
-                onChange={(e) =>
-                  setRaceCardInput({
-                    ...raceCardInput,
-                    resultTime: e.target.value,
-                  })
-                }
-              />
-            </div>
-          )}
-
-          {/* 🌟 DNS：理由のワンタップ選択（テキスト入力なし） */}
+          {/* DNS：理由選択 */}
           {raceCardInput.status === "dns" && (
             <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
               <label className="text-[10px] font-black text-rose-500 flex items-center gap-1">
@@ -511,7 +479,7 @@ const RaceCardEntry = ({
             </div>
           )}
 
-          {/* 🌟 DNF：棄権地点の入力 */}
+          {/* DNF：棄権地点 */}
           {raceCardInput.status === "dnf" && (
             <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
               <label className="text-[10px] font-black text-amber-500 flex items-center gap-1">
@@ -532,8 +500,29 @@ const RaceCardEntry = ({
             </div>
           )}
         </div>
-        {/* 🌟 達成バッジ選択機能 */}
-        <div className="space-y-3">
+
+        {/* 統合版！RESULT & LAP TIMES (DNSの時は非表示) */}
+        {raceCardInput.status !== "dns" && (
+          <div className="space-y-1 animate-in slide-in-from-top-2 pt-2">
+            <label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-1">
+              <Timer size={12} /> Result & Lap Times
+            </label>
+            <SmartLapInput
+              value={raceCardInput.lapTimes || ""}
+              onChange={(newValue) =>
+                setRaceCardInput({ ...raceCardInput, lapTimes: newValue })
+              }
+              onResultChange={(newResult) =>
+                setRaceCardInput({ ...raceCardInput, resultTime: newResult })
+              }
+              raceType={raceCardInput.raceType}
+              distance={raceCardInput.distance}
+            />
+          </div>
+        )}
+
+        {/* 達成バッジ選択機能 */}
+        <div className="space-y-3 pt-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
             <Award size={12} /> Achievements (達成バッジ)
           </label>
@@ -564,21 +553,8 @@ const RaceCardEntry = ({
             ))}
           </div>
         </div>
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-indigo-400">
-            ラップタイム
-          </label>
-          {/* 🌟 共通部品に置き換え！ */}
-          <SmartLapInput
-            value={raceCardInput.lapTimes || ""}
-            onChange={(newValue) =>
-              setRaceCardInput({ ...raceCardInput, lapTimes: newValue })
-            }
-            raceType={raceCardInput.raceType}
-            distance={raceCardInput.distance}
-            placeholder="ラップタイムを入力（スマホのドットで自動変換）"
-          />
-        </div>
+
+        {/* 振り返りテキストエリア群 */}
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 uppercase">
             良かった点・収穫
@@ -587,10 +563,7 @@ const RaceCardEntry = ({
             className="w-full p-4 bg-indigo-50/50 rounded-xl font-bold text-xs outline-none border border-indigo-100 focus:border-indigo-400 h-24 resize-none"
             value={raceCardInput.goodPoints}
             onChange={(e) =>
-              setRaceCardInput({
-                ...raceCardInput,
-                goodPoints: e.target.value,
-              })
+              setRaceCardInput({ ...raceCardInput, goodPoints: e.target.value })
             }
           />
         </div>
@@ -602,10 +575,7 @@ const RaceCardEntry = ({
             className="w-full p-4 bg-indigo-50/50 rounded-xl font-bold text-xs outline-none border border-indigo-100 focus:border-indigo-400 h-24 resize-none"
             value={raceCardInput.issues}
             onChange={(e) =>
-              setRaceCardInput({
-                ...raceCardInput,
-                issues: e.target.value,
-              })
+              setRaceCardInput({ ...raceCardInput, issues: e.target.value })
             }
           />
         </div>
@@ -633,10 +603,7 @@ const RaceCardEntry = ({
             className="w-full p-4 bg-slate-50 rounded-xl font-bold text-xs outline-none border border-slate-200 focus:border-slate-400 h-20 resize-none"
             value={raceCardInput.nextGoal}
             onChange={(e) =>
-              setRaceCardInput({
-                ...raceCardInput,
-                nextGoal: e.target.value,
-              })
+              setRaceCardInput({ ...raceCardInput, nextGoal: e.target.value })
             }
           />
         </div>

@@ -37,7 +37,7 @@ const LoginScreen = ({
             <div className="relative">
               <input
                 type="tel"
-                inputMode="numeric" // Reactではラクダこぶ型(inputMode)にします
+                inputMode="numeric"
                 pattern="[0-9]*"
                 maxLength={5}
                 placeholder="選手番号 (例: 26001)"
@@ -62,6 +62,8 @@ const LoginScreen = ({
             <div className="relative">
               <input
                 type="password"
+                inputMode="numeric" // 🌟 ここを追加！スマホでテンキーが開きます
+                pattern="[0-9]*" // 🌟 ここを追加！iPhone等で確実に数字キーを出すためのおまじない
                 maxLength={4}
                 placeholder="0000"
                 className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500 text-lg tracking-widest"
@@ -100,7 +102,6 @@ const LoginScreen = ({
           >
             {isSubmitting ? (
               <>
-                {/* ぐるぐる回るアイコン（animate-spinがミソです！） */}
                 <Loader2 size={20} className="animate-spin" />
                 検索中...
               </>

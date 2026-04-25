@@ -46,6 +46,9 @@ const LapTimeModal = ({
           onChange={setLapInput}
           raceType={editingCard.raceType}
           distance={editingCard.distance}
+          onResultChange={(newResult) =>
+            editingCard({ ...editingCard, resultTime: newResult })
+          }
         />
 
         <div className="flex gap-2 pt-2">
