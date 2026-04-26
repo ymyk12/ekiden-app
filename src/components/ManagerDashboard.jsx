@@ -515,6 +515,7 @@ const ManagerDashboard = ({
           ),
           {
             lapTimes: lapInput,
+            resultTime: editingCard.resultTime || "",
             updatedAt: new Date().toISOString(),
             updatedBy: `${profile.lastName} (MG)`,
           },
@@ -1284,6 +1285,9 @@ const ManagerDashboard = ({
         lapInput={lapInput}
         setLapInput={setLapInput}
         onSave={saveLapTime}
+        onResultChange={(newResult) =>
+          setEditingCard({ ...editingCard, resultTime: newResult })
+        }
       />
 
       {/* 詳細モーダル */}

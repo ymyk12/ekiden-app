@@ -120,59 +120,77 @@ const SmartLapInput = ({
     onChange(finalString);
   };
 
-  // リザルト入力による最終ラップの自動調整
+  // 🌟 公式リザルト入力時の処理
   const handleResultChange = (rawResult) => {
     const formattedResult = formatInput(rawResult);
     setOfficialResult(formattedResult);
 
+    // 🌟 通信渋滞（上書き）を防ぐため、親への送信をほんの少し遅らせる魔法！
     if (onResultChange) {
-      onResultChange(formattedResult);
+      setTimeout(() => {
+        onResultChange(formattedResult);
+      }, 50);
     }
 
     if (splitPoints.length === 0) return;
 
     const resSec = timeToSeconds(formattedResult);
-    if (resSec <= 0) {
-      updateAll(laps, formattedResult);
-      return;
+    let nextLaps = { ...laps };
+
+    if (resSec > 0) {
+      const lastDist = splitPoints[splitPoints.length - 1];
+      let prevTotalSec = 0;
+      splitPoints.slice(0, -1).forEach((d) => {
+        prevTotalSec += timeToSeconds(nextLaps[d]);
+      });
+
+      const adjustedLastLapSec = resSec - prevTotalSec;
+      if (adjustedLastLapSec > 0) {
+        nextLaps[lastDist] = secondsToTime(adjustedLastLapSec);
+      } else {
+        nextLaps[lastDist] = "";
+      }
     }
 
-    const lastDist = splitPoints[splitPoints.length - 1];
-    let prevTotalSec = 0;
-    splitPoints.slice(0, -1).forEach((d) => {
-      prevTotalSec += timeToSeconds(laps[d]);
-    });
-
-    const adjustedLastLapSec = resSec - prevTotalSec;
-    if (adjustedLastLapSec > 0) {
-      const nextLaps = {
-        ...laps,
-        [lastDist]: secondsToTime(adjustedLastLapSec),
-      };
-      setLaps(nextLaps);
-      updateAll(nextLaps, formattedResult);
-    } else {
-      updateAll(laps, formattedResult);
-    }
+    setLaps(nextLaps);
+    updateAll(nextLaps, formattedResult);
   };
 
-  // 通常のラップ入力
+  // 🌟 通常ラップ入力時の処理（ここでも最終ラップを自動再計算する！）
   const handleLapChange = (dist, rawValue) => {
     const formatted = formatInput(rawValue);
-    const nextLaps = { ...laps, [dist]: formatted };
+    let nextLaps = { ...laps, [dist]: formatted };
+
+    // 公式リザルトが存在し、かつ「最終ラップ以外」を編集している場合、最終ラップを再調整
+    if (officialResult && splitPoints.length > 0) {
+      const lastDist = splitPoints[splitPoints.length - 1];
+      if (dist !== lastDist) {
+        const resSec = timeToSeconds(officialResult);
+        let prevTotalSec = 0;
+        splitPoints.slice(0, -1).forEach((d) => {
+          prevTotalSec += timeToSeconds(nextLaps[d]);
+        });
+        const adjustedLastLapSec = resSec - prevTotalSec;
+        if (adjustedLastLapSec > 0) {
+          nextLaps[lastDist] = secondsToTime(adjustedLastLapSec);
+        } else {
+          nextLaps[lastDist] = "";
+        }
+      }
+    }
+
     setLaps(nextLaps);
     updateAll(nextLaps, officialResult);
   };
 
   return (
-    // 🌟 外枠の高さ指定や flex を全削除し、最もシンプルな箱にしました
     <div className="space-y-3 bg-slate-50 p-4 rounded-3xl border border-slate-100 w-full">
       <p className="text-[10px] font-bold text-slate-400 mb-1 px-1">
         💡 区間タイムを入力してください。トータルは自動計算されます。
       </p>
 
-      {/* 🌟 修正ポイント：高さを「最大250px」と絶対的なピクセルで固定し、確実にはみ出しを防ぎます */}
-      <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar w-full max-h-[250px]">
+      {/* 🌟 修正ポイント：高さ制限（max-h-*** や overflow-y-auto）を完全撤廃しました！ */}
+      <div className="space-y-2 w-full">
         {splitPoints.map((dist, index) => {
           let totalUntilNow = 0;
           for (let i = 0; i <= index; i++)

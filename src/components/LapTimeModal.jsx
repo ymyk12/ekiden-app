@@ -1,6 +1,6 @@
 import React from "react";
 import { X, Save, Timer } from "lucide-react";
-import SmartLapInput from "./SmartLapInput"; // 🌟 作った部品をインポート！
+import SmartLapInput from "./SmartLapInput";
 
 const LapTimeModal = ({
   editingCard,
@@ -8,6 +8,7 @@ const LapTimeModal = ({
   lapInput,
   setLapInput,
   onSave,
+  onResultChange, // 🌟 修正ポイント1：親(ManagerDashboard)から通信パイプを受け取る！
 }) => {
   if (!editingCard) return null;
 
@@ -40,15 +41,13 @@ const LapTimeModal = ({
           </p>
         </div>
 
-        {/* 🌟 共通化した部品をここに配置するだけ！ */}
+        {/* 🌟 修正ポイント2：受け取った通信パイプをそのままSmartLapInputに繋ぐ！ */}
         <SmartLapInput
           value={lapInput}
           onChange={setLapInput}
           raceType={editingCard.raceType}
           distance={editingCard.distance}
-          onResultChange={(newResult) =>
-            editingCard({ ...editingCard, resultTime: newResult })
-          }
+          onResultChange={onResultChange}
         />
 
         <div className="flex gap-2 pt-2">
