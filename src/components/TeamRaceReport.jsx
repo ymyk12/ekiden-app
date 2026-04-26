@@ -50,7 +50,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
     return m > 0 ? `${m}'${ss}"${cc}` : `${s}"${cc}`;
   };
 
-  // 🌟 黒い四角用だった不要な計算を削ぎ落とし、美しいテキスト化だけに特化！
   const analyzeLaps = (lapStr, raceType, distanceStr, ekidenDist) => {
     if (!lapStr) return null;
     let targetDistStr = ekidenDist ? String(ekidenDist) + "km" : distanceStr;
@@ -59,12 +58,19 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
 
     const lines = lapStr.replace(/\s+(?=\d+(?:km|m):)/g, "\n").split("\n");
     let currentKilo = 1000;
+    let current400 = 400;
     let lastKiloCumul = 0;
+    let last400Cumul = 0;
 
     let totalSec = 0;
     let totalEnteredDist = 0;
 
     const formattedLines = [];
+
+    // 🌟 種目が1500m以上かどうかを判定
+    const isLongDistance =
+      totalDist >= 1500 ||
+      (raceType && (raceType.includes("駅伝") || raceType.includes("ロード")));
 
     lines.forEach((line) => {
       const cleanLine = line.trim().replace(/\s/g, "").replace(/km:/g, "000m:");
@@ -93,21 +99,30 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
         displayLine += ` ${cumulTimeStr}`;
       }
 
+      // 🌟 1500m以上なら「1000mごと」に()内のLAPを追加
       if (dist === currentKilo) {
         const splitSec = cumulSec - lastKiloCumul;
-        displayLine += `(${secondsToTime(splitSec)})`;
+        if (isLongDistance) {
+          displayLine += `(${secondsToTime(splitSec)})`;
+        }
         lastKiloCumul = cumulSec;
         currentKilo += 1000;
+      }
+
+      // 🌟 800m以下なら「400mごと」に()内のLAPを追加
+      if (dist === current400) {
+        const splitSec = cumulSec - last400Cumul;
+        if (!isLongDistance) {
+          displayLine += `(${secondsToTime(splitSec)})`;
+        }
+        last400Cumul = cumulSec;
+        current400 += 400;
       }
 
       formattedLines.push(displayLine);
     });
 
     if (totalEnteredDist === 0) return null;
-
-    const isLongDistance =
-      totalDist >= 1500 ||
-      (raceType && (raceType.includes("駅伝") || raceType.includes("ロード")));
 
     const avgPace = isLongDistance
       ? totalSec / (totalEnteredDist / 1000)
@@ -263,38 +278,34 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
                       </div>
                     </div>
 
-                    {/* 🌟 蛇足だった黒い分析ボードをごっそり削除しました！ */}
-
-                    {/* 🌟 究極に洗練されたLAPリスト */}
                     {card.lapTimes ? (
                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-1 print:bg-white print:p-2 print:border-none w-full">
                         <p className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-2">
                           <Timer size={10} /> LAP TIMES
                         </p>
-                        <div className="max-h-40 overflow-y-auto custom-scrollbar pr-1 print:max-h-none print:overflow-visible">
-                          <div className="flex flex-col gap-0.5">
-                            {analysis && analysis.formattedLines
-                              ? analysis.formattedLines.map((lap, idx) => (
-                                  <span
-                                    key={idx}
-                                    className={`text-xs font-mono font-bold block tracking-tight ${
-                                      lap.startsWith("AVG")
-                                        ? "text-indigo-500 mt-1"
-                                        : "text-slate-600"
-                                    }`}
-                                  >
-                                    {lap}
-                                  </span>
-                                ))
-                              : card.lapTimes.split(/\n/).map((lap, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-xs font-mono text-slate-600 font-bold block tracking-tight"
-                                  >
-                                    {lap}
-                                  </span>
-                                ))}
-                          </div>
+                        {/* 🌟 修正ポイント：高さ制限とスクロールバーを削除して自然に全行表示させるようにしました！ */}
+                        <div className="flex flex-col gap-0.5">
+                          {analysis && analysis.formattedLines
+                            ? analysis.formattedLines.map((lap, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`text-xs font-mono font-bold block tracking-tight ${
+                                    lap.startsWith("AVG")
+                                      ? "text-indigo-500 mt-1"
+                                      : "text-slate-600"
+                                  }`}
+                                >
+                                  {lap}
+                                </span>
+                              ))
+                            : card.lapTimes.split(/\n/).map((lap, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-xs font-mono text-slate-600 font-bold block tracking-tight"
+                                >
+                                  {lap}
+                                </span>
+                              ))}
                         </div>
                       </div>
                     ) : (

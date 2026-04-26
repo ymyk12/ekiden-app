@@ -1,5 +1,3 @@
-// CoachViewはPC画面を前提とし、スマホ画面をサブ的な画面として整える
-
 import { useState, useMemo } from "react";
 import {
   Users,
@@ -71,8 +69,110 @@ import LapTimeModal from "./LapTimeModal";
 // 大会ノート印刷設定
 import TeamRaceReport from "./TeamRaceReport";
 
+// 🌟🌟▼▼ LAP解析用の共通ヘルパー関数（追加） ▼▼🌟🌟
+const timeToSeconds = (str) => {
+  if (!str) return 0;
+  const cleanStr = str.replace(/[()（）]/g, "");
+  const match = cleanStr.match(/(?:(\d+)')?(?:(\d+)")?(\d+)?/);
+  if (!match) return 0;
+  const m = parseFloat(match[1] || 0);
+  const s = parseFloat(match[2] || 0);
+  const c = parseFloat(match[3] || 0) / 100;
+  return m * 60 + s + c;
+};
+
+const secondsToTime = (totalSeconds) => {
+  if (totalSeconds <= 0) return "";
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.floor(totalSeconds % 60);
+  const c = Math.round((totalSeconds % 1) * 100);
+  const ss = String(s).padStart(2, "0");
+  const cc = String(c).padStart(2, "0");
+  return m > 0 ? `${m}'${ss}"${cc}` : `${s}"${cc}`;
+};
+
+const analyzeLaps = (lapStr, raceType, distanceStr, ekidenDist) => {
+  if (!lapStr) return null;
+  let targetDistStr = ekidenDist ? String(ekidenDist) + "km" : distanceStr;
+  let totalDist = parseInt((targetDistStr || "").replace(/[^0-9]/g, ""));
+  if ((targetDistStr || "").toLowerCase().includes("km")) totalDist *= 1000;
+
+  const lines = lapStr.replace(/\s+(?=\d+(?:km|m):)/g, "\n").split("\n");
+  let currentKilo = 1000;
+  let current400 = 400;
+  let lastKiloCumul = 0;
+  let last400Cumul = 0;
+
+  let totalSec = 0;
+  let totalEnteredDist = 0;
+
+  const formattedLines = [];
+
+  const isLongDistance =
+    totalDist >= 1500 ||
+    (raceType && (raceType.includes("駅伝") || raceType.includes("ロード")));
+
+  lines.forEach((line) => {
+    const cleanLine = line.trim().replace(/\s/g, "").replace(/km:/g, "000m:");
+    const match = cleanLine.match(/(\d+)m:(.*?)(?:\((.*?)\))?$/);
+    if (!match) {
+      if (line.trim()) formattedLines.push(line.trim());
+      return;
+    }
+
+    const dist = parseInt(match[1]);
+    const segTime = match[2];
+    const cumulTimeStr = match[3] || match[2];
+
+    const cumulSec = timeToSeconds(cumulTimeStr);
+    if (cumulSec <= 0) {
+      formattedLines.push(`${dist}m: ${segTime}`);
+      return;
+    }
+
+    totalSec = cumulSec;
+    totalEnteredDist = dist;
+
+    let displayLine = `${dist}m: ${segTime}`;
+
+    if (cumulTimeStr !== segTime) {
+      displayLine += ` ${cumulTimeStr}`;
+    }
+
+    if (dist === currentKilo) {
+      const splitSec = cumulSec - lastKiloCumul;
+      if (isLongDistance) {
+        displayLine += `(${secondsToTime(splitSec)})`;
+      }
+      lastKiloCumul = cumulSec;
+      currentKilo += 1000;
+    }
+
+    if (dist === current400) {
+      const splitSec = cumulSec - last400Cumul;
+      if (!isLongDistance) {
+        displayLine += `(${secondsToTime(splitSec)})`;
+      }
+      last400Cumul = cumulSec;
+      current400 += 400;
+    }
+
+    formattedLines.push(displayLine);
+  });
+
+  if (totalEnteredDist === 0) return null;
+
+  const avgPace = isLongDistance
+    ? totalSec / (totalEnteredDist / 1000)
+    : totalSec / (totalEnteredDist / 400);
+
+  formattedLines.push(`AVG ${secondsToTime(avgPace)}`);
+
+  return { formattedLines };
+};
+// 🌟🌟▲▲ LAP解析用の共通ヘルパー関数ここまで ▲▲🌟🌟
+
 const CoachView = (props) => {
-  // App.js から渡されたデータを展開
   const {
     view,
     setView,
@@ -156,10 +256,8 @@ const CoachView = (props) => {
     allFeedbacks,
   } = props;
 
-  // フックから直接 handlePrint を取り出す！
   const { handlePrint } = usePrint();
 
-  // 🌟🌟▼▼ 監督用の通知管理システム ▼▼🌟🌟
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [lastReadTime, setLastReadTime] = useState(() => {
     return (
@@ -170,7 +268,6 @@ const CoachView = (props) => {
 
   const notifications = useMemo(() => {
     const list = [];
-    // 1. 大会ノートの提出・更新
     if (raceCards && raceCards.length > 0) {
       raceCards.forEach((c) => {
         const timeStr = c.updatedAt || c.createdAt;
@@ -192,7 +289,6 @@ const CoachView = (props) => {
       });
     }
 
-    // 2. 振り返りの提出・更新
     if (allFeedbacks && allFeedbacks.length > 0) {
       allFeedbacks.forEach((f) => {
         if (f.runnerComment && f.updatedAt) {
@@ -205,7 +301,7 @@ const CoachView = (props) => {
             onClick: () => {
               setIsNotifOpen(false);
               const runner = activeRunners.find((r) => r.id === f.runnerId);
-              if (runner) handleCoachEditRunner(runner); // 該当選手の詳細画面へジャンプ
+              if (runner) handleCoachEditRunner(runner);
             },
           });
         }
@@ -223,7 +319,6 @@ const CoachView = (props) => {
 
   const unreadCount = notifications.filter((n) => n.time > lastReadTime).length;
 
-  // 🌟🌟▼▼ 監督用のLAPタイム入力システム ▼▼🌟🌟
   const [editingLapCard, setEditingLapCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
   const handleSaveLapTime = async () => {
@@ -264,7 +359,6 @@ const CoachView = (props) => {
       );
     }
   };
-  // 🌟🌟▲▲ LAP入力システムここまで ▲▲🌟🌟
 
   const handleOpenNotif = () => {
     setIsNotifOpen(true);
@@ -273,26 +367,22 @@ const CoachView = (props) => {
     localStorage.setItem(`notif_read_coach_${appId}`, nowStr);
   };
 
-  const [selectedTourId, setSelectedTourId] = useState(null); // 開いている大会一覧
-  const [readingCard, setReadingCard] = useState(null); // 読んでいるノート詳細
-  const [coachFeedbackInput, setCoachFeedbackInput] = useState(""); //監督からのフィードバック
-  const [showTeamReportId, setShowTeamReportId] = useState(null); // 大会チームレポート用
+  const [selectedTourId, setSelectedTourId] = useState(null);
+  const [readingCard, setReadingCard] = useState(null);
+  const [coachFeedbackInput, setCoachFeedbackInput] = useState("");
+  const [showTeamReportId, setShowTeamReportId] = useState(null);
 
-  // ▼▼▼ チーム日誌のリスト表示用 ▼▼▼
-  const [diaryMode, setDiaryMode] = useState("list"); // "list" か "edit"
+  const [diaryMode, setDiaryMode] = useState("list");
   const [listMonth, setListMonth] = useState(new Date());
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 print:bg-white print:pb-0 print:h-auto md:flex">
-      {/* Header / Sidebar for PC */}
-      {/* ... (sidebar remains same) ... */}
       <header className="bg-slate-950 text-white p-5 sticky top-0 z-50 md:h-screen md:w-64 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
         <div>
           <h1 className="font-black italic text-xl flex items-center gap-2 tracking-tighter mb-8 md:mb-10">
             <Users size={20} className="text-blue-400" /> COACH TERMINAL
           </h1>
 
-          {/* PC Navigation */}
           <nav className="hidden md:flex flex-col gap-2">
             {[
               "stats",
@@ -323,7 +413,6 @@ const CoachView = (props) => {
           </nav>
         </div>
         <div className="space-y-4 mt-8 md:mt-auto">
-          {/* 🌟 ベルマーク */}
           <button
             onClick={handleOpenNotif}
             className={`flex items-center gap-2 font-bold text-sm transition-all relative ${
@@ -359,9 +448,7 @@ const CoachView = (props) => {
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="flex-1 p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none md:overflow-y-auto md:h-screen print:max-w-none print:p-0 print:w-full print:overflow-visible">
-        {/* Mobile Navigation Tabs (アイコン化) */}
         <div className="md:hidden flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-x-auto no-scrollbar print:hidden mb-6 gap-2">
           {[
             { id: "stats", icon: LayoutDashboard },
@@ -391,7 +478,6 @@ const CoachView = (props) => {
           })}
         </div>
 
-        {/* ... Period Selector ... */}
         <div className="mb-6 flex justify-end items-center gap-3 no-print">
           <span className="text-xs font-bold text-slate-400">Target:</span>
           {availablePeriods.length > 0 && selectedPeriod && (
@@ -417,7 +503,6 @@ const CoachView = (props) => {
                       value={p.id}
                       className="text-slate-900 bg-white"
                     >
-                      {/* ▼▼▼ 修正: 「月/日」の表示 ▼▼▼ */}
                       {p.name} ({p.start.slice(5).replace("-", "/")}~
                       {p.end.slice(5).replace("-", "/")})
                     </option>
@@ -447,12 +532,9 @@ const CoachView = (props) => {
           )}
         </div>
 
-        {/* ... (Existing views: stats, report, check, menu, roster, settings) ... */}
         {(view === "coach-stats" || !view.startsWith("coach-")) && (
           <div className="space-y-6 animate-in fade-in">
-            {/* ... stats content ... */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* ... existing summary cards ... */}
               <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-slate-500">
                 <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
                   Total Members
@@ -473,7 +555,6 @@ const CoachView = (props) => {
                   <span className="text-sm font-black text-slate-400">%</span>
                 </div>
               </div>
-              {/* 🌟 チーム平均疲労度 (Avg RPE) のカード */}
               <div
                 className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 ${
                   coachStats.avgRpe >= 8
@@ -534,7 +615,6 @@ const CoachView = (props) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] flex flex-col">
-                {/* ... ranking chart ... */}
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2">
                     <Trophy size={18} className="text-orange-500" /> Team
@@ -661,35 +741,31 @@ const CoachView = (props) => {
                             {l.distance}km
                           </span>
                         </div>
-                        {/* ★修正：日付・カテゴリの行 */}
                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-5 mb-2">
                           {l.date.slice(5).replace("-", "/")} · {l.category}
                         </div>
 
-                        {/* ★追加：コンディション（RPE・Pain）をバッジで目立たせる行 */}
                         <div className="flex gap-2 ml-5 mb-1">
-                          {/* RPEバッジ */}
                           <span
                             className={`px-2 py-1 rounded-md text-[10px] font-black ${
                               l.rpe >= 8
-                                ? "bg-rose-100 text-rose-600 border border-rose-200" // 高強度：赤
+                                ? "bg-rose-100 text-rose-600 border border-rose-200"
                                 : l.rpe >= 5
-                                  ? "bg-orange-100 text-orange-600 border border-orange-200" // 中強度：オレンジ
-                                  : "bg-blue-50 text-blue-600 border border-blue-100" // 低強度：青
+                                  ? "bg-orange-100 text-orange-600 border border-orange-200"
+                                  : "bg-blue-50 text-blue-600 border border-blue-100"
                             }`}
                           >
                             RPE {l.rpe}
                           </span>
 
-                          {/* Painバッジ（痛みがある場合のみ表示） */}
                           {l.pain > 1 && (
                             <span
                               className={`px-2 py-1 rounded-md text-[10px] font-black flex items-center gap-1 ${
                                 l.pain >= 4
-                                  ? "bg-purple-100 text-purple-600 border border-purple-200 animate-pulse" // 激痛：紫（点滅）
+                                  ? "bg-purple-100 text-purple-600 border border-purple-200 animate-pulse"
                                   : l.pain === 3
-                                    ? "bg-rose-100 text-rose-600 border border-rose-200" // 痛みあり：赤
-                                    : "bg-yellow-100 text-yellow-700 border border-yellow-200" // 違和感：黄色
+                                    ? "bg-rose-100 text-rose-600 border border-rose-200"
+                                    : "bg-yellow-100 text-yellow-700 border border-yellow-200"
                               }`}
                             >
                               <HeartPulse size={12} /> Pain {l.pain}
@@ -724,13 +800,10 @@ const CoachView = (props) => {
         )}
 
         {view === "coach-check" && (
-          // ... (Check view remains same) ...
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
-            {/* ... (existing content) ... */}
             <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
               Status Check
             </h3>
-            {/* ... (content) ... */}
             <div className="flex flex-col md:flex-row items-center justify-center mb-6 gap-6">
               <input
                 type="date"
@@ -821,7 +894,6 @@ const CoachView = (props) => {
 
         {view === "coach-menu" &&
           (() => {
-            // 月間データの絞り込み
             const year = listMonth.getFullYear();
             const month = listMonth.getMonth() + 1;
             const prefix = `${year}-${String(month).padStart(2, "0")}`;
@@ -832,17 +904,12 @@ const CoachView = (props) => {
             return (
               <div className="space-y-6 animate-in fade-in">
                 {diaryMode === "list" ? (
-                  /* ==========================================
-                   1. 月間リスト表示モード
-                ========================================== */
                   <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 max-w-2xl mx-auto">
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 flex items-center gap-2">
                         <BookOpen size={14} /> Team Diary Check & Edit
                       </h3>
                     </div>
-
-                    {/* 月めくりカレンダー */}
                     <div className="flex justify-between items-center bg-slate-50 p-4 rounded-[2rem] border border-slate-100">
                       <button
                         onClick={() => {
@@ -873,8 +940,6 @@ const CoachView = (props) => {
                         <ChevronRight size={20} />
                       </button>
                     </div>
-
-                    {/* 新規作成・今日のチェックボタン */}
                     <button
                       onClick={() => {
                         setMenuInput({ ...menuInput, date: getTodayStr() });
@@ -884,8 +949,6 @@ const CoachView = (props) => {
                     >
                       <Plus size={20} /> 今日の日誌をチェック・作成する
                     </button>
-
-                    {/* 日誌リスト */}
                     <div className="space-y-3 pt-4 border-t border-slate-100">
                       {monthlyLogs.length > 0 ? (
                         monthlyLogs.map((log) => (
@@ -908,9 +971,6 @@ const CoachView = (props) => {
                     </div>
                   </div>
                 ) : (
-                  /* ==========================================
-                   2. 編集・確認モード (Edit Mode)
-                ========================================== */
                   <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 max-w-2xl mx-auto relative">
                     <div className="flex justify-between items-center mb-2">
                       <button
@@ -923,8 +983,6 @@ const CoachView = (props) => {
                         <BookOpen size={14} /> Team Diary Check & Edit
                       </h3>
                     </div>
-
-                    {/* 日付選択 */}
                     <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
                         Date
@@ -938,12 +996,10 @@ const CoachView = (props) => {
                         }
                       />
                     </div>
-
                     {(() => {
                       const diary = teamLogs?.find(
                         (l) => l.date === menuInput.date,
                       );
-
                       if (!diary) {
                         return (
                           <div className="text-center py-10 bg-slate-50 rounded-[2rem] border border-slate-100 border-dashed mt-4">
@@ -957,10 +1013,8 @@ const CoachView = (props) => {
                           </div>
                         );
                       }
-
                       return (
                         <div className="space-y-5 mt-2">
-                          {/* マネージャー入力のメタ情報 */}
                           <div className="flex flex-wrap gap-2">
                             <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200">
                               {diary.weather}{" "}
@@ -984,8 +1038,6 @@ const CoachView = (props) => {
                               </span>
                             )}
                           </div>
-
-                          {/* メニュー内容 (監督が直接編集可能) */}
                           <div className="space-y-2">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 ml-1">
                               <Edit size={12} /> Menu (メニュー)
@@ -996,8 +1048,6 @@ const CoachView = (props) => {
                               className="w-full p-4 bg-white rounded-2xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 min-h-[120px] text-sm resize-none shadow-sm"
                             />
                           </div>
-
-                          {/* 補強 */}
                           {diary.reinforcements &&
                             diary.reinforcements.length > 0 && (
                               <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
@@ -1022,8 +1072,6 @@ const CoachView = (props) => {
                                 </div>
                               </div>
                             )}
-
-                          {/* 結果・ノート (監督が直接編集可能) */}
                           <div className="space-y-2">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 ml-1">
                               <Edit size={12} /> Results / Notes (報告・所感)
@@ -1034,14 +1082,12 @@ const CoachView = (props) => {
                               className="w-full p-4 bg-white rounded-2xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 min-h-[100px] text-sm resize-none shadow-sm"
                             />
                           </div>
-
                           <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold px-1">
                             <span>
                               ※書き換えて保存すると選手画面に反映されます
                             </span>
                             <span>Written by {diary.updatedBy}</span>
                           </div>
-
                           <button
                             onClick={async () => {
                               const newMenu =
@@ -1052,7 +1098,6 @@ const CoachView = (props) => {
                                 document.getElementById(
                                   "edit-diary-result",
                                 ).value;
-
                               await updateDoc(
                                 doc(
                                   db,
@@ -1069,7 +1114,6 @@ const CoachView = (props) => {
                                   updatedAt: new Date().toISOString(),
                                 },
                               );
-
                               import("react-hot-toast").then((module) => {
                                 module.toast.success("日誌を更新しました！");
                               });
@@ -1087,7 +1131,6 @@ const CoachView = (props) => {
             );
           })()}
 
-        {/* ▼▼▼ 大会管理画面 (Race Management) 完成版 ▼▼▼ */}
         {view === "coach-race" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in max-w-2xl mx-auto">
             <div className="flex items-center justify-between mb-4">
@@ -1095,7 +1138,6 @@ const CoachView = (props) => {
                 Race & Tournament
               </h3>
             </div>
-
             <div className="bg-blue-50 p-6 rounded-3xl space-y-4 border border-blue-100">
               <h4 className="font-black text-blue-600 text-sm flex items-center gap-2">
                 <Flag size={18} /> 新しい大会を登録する
@@ -1104,13 +1146,12 @@ const CoachView = (props) => {
                 ここで大会を登録すると、選手たちの画面に「振り返りシート（Race
                 Card）」の入力ボタンが表示されるようになります。
               </p>
-
               <div className="space-y-3">
                 <input
                   type="text"
                   placeholder="大会名 (例: 秋季県大会)"
                   className="w-full p-4 bg-white rounded-xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 text-sm shadow-sm"
-                  value={newTournamentInput.name} // ✨ 入力データを繋ぐ！
+                  value={newTournamentInput.name}
                   onChange={(e) =>
                     setNewTournamentInput({
                       ...newTournamentInput,
@@ -1126,7 +1167,7 @@ const CoachView = (props) => {
                     <input
                       type="date"
                       className="w-full p-4 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-xs shadow-sm"
-                      value={newTournamentInput.startDate} // ✨ 入力データを繋ぐ！
+                      value={newTournamentInput.startDate}
                       onChange={(e) =>
                         setNewTournamentInput({
                           ...newTournamentInput,
@@ -1142,7 +1183,7 @@ const CoachView = (props) => {
                     <input
                       type="date"
                       className="w-full p-4 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-xs shadow-sm"
-                      value={newTournamentInput.endDate} // ✨ 入力データを繋ぐ！
+                      value={newTournamentInput.endDate}
                       onChange={(e) =>
                         setNewTournamentInput({
                           ...newTournamentInput,
@@ -1153,7 +1194,7 @@ const CoachView = (props) => {
                   </div>
                 </div>
                 <button
-                  onClick={handleSaveTournament} // ✨ 保存関数を繋ぐ！
+                  onClick={handleSaveTournament}
                   disabled={isSubmitting}
                   className={`w-full py-4 rounded-xl font-black text-sm shadow-md transition-all mt-2 ${isSubmitting ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"}`}
                 >
@@ -1161,13 +1202,10 @@ const CoachView = (props) => {
                 </button>
               </div>
             </div>
-
-            {/* 登録済みの大会リスト */}
             <div className="space-y-3 pt-6 border-t border-slate-100">
               <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
                 Registered Races
               </h4>
-
               {tournaments.length === 0 ? (
                 <p className="text-center text-xs text-slate-400 font-bold py-8 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                   大会はまだ登録されていません
@@ -1179,7 +1217,6 @@ const CoachView = (props) => {
                       key={tour.id}
                       className="bg-white border border-slate-200 p-4 rounded-2xl flex justify-between items-center shadow-sm"
                     >
-                      {/* 🌟 大会名をボタン化 */}
                       <div
                         className="flex-1 cursor-pointer group pr-4"
                         onClick={() => setShowTeamReportId(tour.id)}
@@ -1197,7 +1234,6 @@ const CoachView = (props) => {
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        {/* 選手たちが提出したシートの枚数（タップして一覧を開くボタンに変更） */}
                         <button
                           onClick={() => setSelectedTourId(tour.id)}
                           className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 active:scale-95 transition-all hover:bg-indigo-100 cursor-pointer shadow-sm"
@@ -1211,7 +1247,7 @@ const CoachView = (props) => {
                           枚提出
                         </button>
                         <button
-                          onClick={() => handleDeleteTournament(tour.id)} // ✨ 削除関数を繋ぐ！
+                          onClick={() => handleDeleteTournament(tour.id)}
                           className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                           title="大会を削除する"
                         >
@@ -1226,7 +1262,6 @@ const CoachView = (props) => {
           </div>
         )}
 
-        {/* 管理者ツール画面 (Admin Tools)  */}
         {view === "coach-admin" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
             <div className="flex items-center justify-between mb-4">
@@ -1234,7 +1269,6 @@ const CoachView = (props) => {
                 Admin Tools
               </h3>
             </div>
-
             <div className="bg-purple-50/50 p-6 rounded-3xl border border-purple-100 space-y-4">
               <h4 className="font-black text-sm text-purple-700 flex items-center gap-2 mb-2">
                 <Eye size={18} /> システム管理者機能
@@ -1242,7 +1276,6 @@ const CoachView = (props) => {
               <p className="text-[10px] text-slate-600 font-bold leading-relaxed mb-6">
                 この機能はシステム管理者用です。他のユーザー権限での動作確認や、設定のテストを行うことができます。
               </p>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   onClick={() => setDemoMode("manager")}
@@ -1251,7 +1284,6 @@ const CoachView = (props) => {
                   <Users size={24} />
                   マネージャープレビュー
                 </button>
-
                 <button
                   onClick={() => {
                     setDemoMode("admin");
@@ -1265,7 +1297,6 @@ const CoachView = (props) => {
                 </button>
               </div>
             </div>
-
             <div className="mt-8 pt-8 border-t border-slate-100 text-center">
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                 KSWC System Control
@@ -1279,8 +1310,6 @@ const CoachView = (props) => {
             <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
               Team Roster
             </h3>
-
-            {/* ▼▼▼ データを選手とマネージャーに分離 ▼▼▼ */}
             {(() => {
               const athletes = activeRunners.filter(
                 (r) => r.role !== ROLES.MANAGER,
@@ -1288,10 +1317,8 @@ const CoachView = (props) => {
               const managers = activeRunners.filter(
                 (r) => r.role === ROLES.MANAGER,
               );
-
               return (
                 <>
-                  {/* --- 1. 選手リスト --- */}
                   <div className="space-y-4">
                     <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
                       <UserCheck size={16} /> Athletes ({athletes.length})
@@ -1344,8 +1371,6 @@ const CoachView = (props) => {
                       ))}
                     </div>
                   </div>
-
-                  {/* --- 2. マネージャーリスト (存在する場合のみ表示) --- */}
                   {managers.length > 0 && (
                     <div className="space-y-4 pt-6 border-t border-slate-100">
                       <h4 className="text-xs font-black uppercase text-indigo-600 flex items-center gap-2">
@@ -1359,7 +1384,6 @@ const CoachView = (props) => {
                             onClick={() => handleCoachEditRunner(r)}
                           >
                             <div className="flex items-center gap-3">
-                              {/* マネージャーはインディゴ色 */}
                               <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center font-black text-indigo-600">
                                 {r.lastName.charAt(0)}
                               </div>
@@ -1404,8 +1428,6 @@ const CoachView = (props) => {
                 </>
               );
             })()}
-
-            {/* --- 3. 引退/アーカイブ (既存のまま) --- */}
             <div className="space-y-4 pt-8 border-t border-slate-100">
               <h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
                 <Archive size={16} /> Retired / Inactive
@@ -1504,7 +1526,6 @@ const CoachView = (props) => {
                 )}
               </div>
             </div>
-
             <button
               onClick={() => setView("coach-stats")}
               className="w-full py-3 text-slate-400 font-bold text-xs uppercase tracking-widest"
@@ -1514,7 +1535,6 @@ const CoachView = (props) => {
           </div>
         )}
 
-        {/* Coach Runner Detail View (With Goal Editing) */}
         {view === "coach-runner-detail" && selectedRunner && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-10 max-w-2xl mx-auto">
             <div className="flex items-center gap-4 mb-6">
@@ -1527,11 +1547,8 @@ const CoachView = (props) => {
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
                 Athlete Detail
               </h3>
-              <div className="w-9" />{" "}
-              {/* レイアウト調整用の透明な箱（タイトルを真ん中に保つため） */}
+              <div className="w-9" />
             </div>
-
-            {/* Profile Form */}
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -1589,14 +1606,11 @@ const CoachView = (props) => {
                 プロフィール更新
               </button>
             </div>
-
-            {/* Goal Management Section (NEW) */}
             <div className="border-t border-slate-100 pt-6 space-y-4">
               <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2">
                   <Target size={16} /> Goal Management
                 </h4>
-                {/* FIX: 詳細画面で期間を切り替えられるように変更 */}
                 <select
                   className="bg-slate-50 border border-slate-200 text-slate-700 font-bold text-[10px] rounded-lg px-2 py-1 outline-none focus:border-blue-500"
                   value={selectedPeriod?.id || ""}
@@ -1614,9 +1628,7 @@ const CoachView = (props) => {
                   ))}
                 </select>
               </div>
-
               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-                {/* Monthly Goal (Always visible) */}
                 <div className="space-y-1">
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                     Monthly Goal (Global)
@@ -1634,8 +1646,6 @@ const CoachView = (props) => {
                     }
                   />
                 </div>
-
-                {/* Period Total (If not Month type) */}
                 {targetPeriod.type !== "month" && (
                   <div className="space-y-1">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
@@ -1655,8 +1665,6 @@ const CoachView = (props) => {
                     />
                   </div>
                 )}
-
-                {/* Quarters (If Custom or Global) */}
                 {(targetPeriod.type === "custom" ||
                   targetPeriod.type === "global") &&
                   activeQuarters.length > 0 && (
@@ -1681,7 +1689,6 @@ const CoachView = (props) => {
                       ))}
                     </div>
                   )}
-
                 <button
                   onClick={handleCoachSaveGoals}
                   className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all mt-2"
@@ -1690,8 +1697,6 @@ const CoachView = (props) => {
                 </button>
               </div>
             </div>
-
-            {/* Recent Logs Section */}
             <div className="border-t border-slate-100 pt-6 space-y-4">
               <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2">
                 <FileText size={16} /> Recent Logs
@@ -1707,7 +1712,6 @@ const CoachView = (props) => {
                       className="bg-slate-50 p-3 rounded-xl flex justify-between items-start group relative hover:border hover:border-blue-200 border border-transparent transition-all"
                     >
                       <div className="w-full">
-                        {/* 1行目: 日付とカテゴリ */}
                         <div className="flex justify-between items-center pr-2">
                           <p className="text-[10px] font-black text-slate-400 flex items-center gap-2">
                             {l.date.slice(5).replace("-", "/")}{" "}
@@ -1715,15 +1719,11 @@ const CoachView = (props) => {
                               {l.category}
                             </span>
                           </p>
-                          {/* 距離を右側に配置 */}
                           <p className="text-sm font-black text-blue-600">
                             {l.distance}km
                           </p>
                         </div>
-
-                        {/* 2行目: RPEとPainのバッジ（ここを追加） */}
                         <div className="flex gap-2 mt-2 mb-2">
-                          {/* RPEバッジ */}
                           <span
                             className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${
                               l.rpe >= 8
@@ -1735,8 +1735,6 @@ const CoachView = (props) => {
                           >
                             RPE {l.rpe}
                           </span>
-
-                          {/* Painバッジ（痛みがある時のみ） */}
                           {l.pain > 1 && (
                             <span
                               className={`px-2 py-0.5 rounded-md text-[9px] font-black border flex items-center gap-1 ${
@@ -1751,16 +1749,12 @@ const CoachView = (props) => {
                             </span>
                           )}
                         </div>
-
-                        {/* 3行目: コメント */}
                         {l.menuDetail && (
                           <p className="text-[10px] text-slate-500 bg-white/60 p-1.5 rounded-lg leading-relaxed">
                             {l.menuDetail}
                           </p>
                         )}
                       </div>
-
-                      {/* 修正ボタン（絶対配置に変更して右上に固定） */}
                       <button
                         onClick={() => openCoachEditModal(l)}
                         className="absolute right-2 top-2 bg-white p-1.5 rounded-lg text-slate-300 hover:text-blue-600 shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1778,13 +1772,10 @@ const CoachView = (props) => {
                 )}
               </div>
             </div>
-
-            {/* Feedback Section */}
             <div className="border-t border-slate-100 pt-6 space-y-4">
               <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2">
                 <MessageSquare size={16} /> Feedback for {targetPeriod.name}
               </h4>
-
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                 <p className="text-[9px] text-slate-400 font-bold uppercase mb-2 flex items-center gap-1">
                   <User size={10} /> Runner's Comment
@@ -1794,7 +1785,6 @@ const CoachView = (props) => {
                     "（未入力）"}
                 </p>
               </div>
-
               <div className="space-y-2">
                 <p className="text-[9px] text-slate-400 font-bold uppercase ml-2 flex items-center gap-1">
                   <Edit size={10} /> Coach Comment
@@ -1815,8 +1805,6 @@ const CoachView = (props) => {
                 </button>
               </div>
             </div>
-
-            {/* Status Management */}
             <div className="border-t border-slate-100 pt-8 mt-4 space-y-4">
               <h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
                 <Settings size={16} /> Status Management
@@ -1841,9 +1829,7 @@ const CoachView = (props) => {
                             "runners",
                             selectedRunner.id,
                           ),
-                          {
-                            status: "retired",
-                          },
+                          { status: "retired" },
                         );
                         setConfirmDialog({
                           isOpen: false,
@@ -1865,7 +1851,6 @@ const CoachView = (props) => {
                 </button>
               </div>
             </div>
-
             <button
               onClick={() => setView("coach-roster")}
               className="w-full py-3 text-slate-400 font-bold text-xs uppercase tracking-widest"
@@ -1875,11 +1860,8 @@ const CoachView = (props) => {
           </div>
         )}
 
-        {/* ... Coach Settings ... */}
         {view === "coach-settings" && (
-          // ... (Settings view remains same) ...
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
-            {/* 戻るボタンとタイトルを並べる */}
             <div className="flex items-center justify-between">
               <button
                 onClick={() => setView("menu")}
@@ -1890,11 +1872,8 @@ const CoachView = (props) => {
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em] m-0">
                 Settings
               </h3>
-              <div className="w-9" />{" "}
-              {/* レイアウト調整用の透明な箱（タイトルを真ん中に保つため） */}
+              <div className="w-9" />
             </div>
-
-            {/* ... (Settings content) ... */}
             <div className="bg-slate-50 p-6 rounded-3xl space-y-4 border border-slate-100">
               <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
                 <RotateCcw size={16} /> Default Display Period
@@ -1922,15 +1901,12 @@ const CoachView = (props) => {
                 </select>
               </div>
             </div>
-
-            {/* カスタム期間の追加・削除UI */}
             <div className="space-y-6">
               <div className="bg-slate-50 p-6 rounded-3xl space-y-4 border border-slate-100">
                 <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
                   <Calendar size={16} />{" "}
                   {editingPeriodId ? "Edit Period" : "Add Custom Period"}
                 </h4>
-                {/* ... Period inputs ... */}
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <input
@@ -1968,8 +1944,6 @@ const CoachView = (props) => {
                       }
                     />
                   </div>
-
-                  {/* Q1-Q4 詳細設定 */}
                   {newPeriodInput.start && newPeriodInput.end && (
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 mt-2 animate-in fade-in">
                       <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">
@@ -2011,7 +1985,6 @@ const CoachView = (props) => {
                       </div>
                     </div>
                   )}
-
                   <div className="flex gap-2">
                     {editingPeriodId && (
                       <button
@@ -2029,8 +2002,6 @@ const CoachView = (props) => {
                     </button>
                   </div>
                 </div>
-
-                {/* 登録済みリスト */}
                 <div className="space-y-2 mt-6 pt-4 border-t border-slate-200">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     Existing Periods
@@ -2073,7 +2044,6 @@ const CoachView = (props) => {
                   )}
                 </div>
               </div>
-
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">
                   Passcode
@@ -2100,14 +2070,10 @@ const CoachView = (props) => {
                   className="w-full p-5 bg-slate-50 rounded-2xl font-black text-2xl text-center outline-none border-2 border-transparent focus:border-emerald-500 tracking-widest text-emerald-600"
                   value={appSettings.teamPass}
                   onChange={(e) =>
-                    setAppSettings({
-                      ...appSettings,
-                      teamPass: e.target.value,
-                    })
+                    setAppSettings({ ...appSettings, teamPass: e.target.value })
                   }
                 />
               </div>
-              {/* ... Default period setting ... */}
               <div className="space-y-2 opacity-50 hover:opacity-100 transition-opacity">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">
                   Global Default Period (Legacy)
@@ -2137,8 +2103,6 @@ const CoachView = (props) => {
                   />
                 </div>
               </div>
-
-              {/* 選手データの統合 (Merge)  */}
               <div className="bg-rose-50 p-6 rounded-3xl space-y-4 border border-rose-100 mt-8">
                 <h4 className="text-xs font-black uppercase text-rose-600 flex items-center gap-2">
                   <AlertTriangle size={16} /> Data Merge (選手データの統合)
@@ -2201,8 +2165,6 @@ const CoachView = (props) => {
                   </button>
                 </div>
               </div>
-
-              {/* 設定保存 */}
               <button
                 onClick={() => {
                   setDoc(
@@ -2228,9 +2190,7 @@ const CoachView = (props) => {
           </div>
         )}
 
-        {/* Coach Edit Log Modal (Already implemented) */}
         {isCoachEditModalOpen && (
-          // ... (Modal code remains same) ...
           <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
               <h3 className="font-black text-lg text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -2323,9 +2283,7 @@ const CoachView = (props) => {
                   </div>
                 </div>
               </div>
-              {/* ▼▼▼ 修正: ボタンエリアに削除ボタンを追加 ▼▼▼ */}
               <div className="flex gap-2 pt-4 border-t border-slate-100 mt-2">
-                {/* 1. 削除ボタン (赤) */}
                 <button
                   onClick={handleCoachDeleteLog}
                   className="p-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs hover:bg-rose-100 transition-colors"
@@ -2333,8 +2291,6 @@ const CoachView = (props) => {
                 >
                   <Trash2 size={18} />
                 </button>
-
-                {/* 2. キャンセルボタン */}
                 <button
                   onClick={() => {
                     setIsCoachEditModalOpen(false);
@@ -2345,8 +2301,6 @@ const CoachView = (props) => {
                 >
                   キャンセル
                 </button>
-
-                {/* 3. 更新ボタン (青) */}
                 <button
                   onClick={handleCoachUpdateLog}
                   className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-lg hover:bg-blue-700 transition-colors"
@@ -2354,13 +2308,10 @@ const CoachView = (props) => {
                   更新して保存
                 </button>
               </div>
-              {/* ▲▲▲ 修正ここまで ▲▲▲ */}
             </div>
           </div>
         )}
 
-        {/* ▼▼▼ 追加: Pain Alert List Modal ▼▼▼ */}
-        {/* ▼▼▼ Condition Alert List Modal ▼▼▼ */}
         {isPainAlertModalOpen && (
           <div
             className="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
@@ -2381,7 +2332,6 @@ const CoachView = (props) => {
                   <X size={18} />
                 </button>
               </div>
-
               <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
                 {coachStats.alertList?.map(({ runner, latestLog, alerts }) => (
                   <div
@@ -2404,8 +2354,6 @@ const CoachView = (props) => {
                           </p>
                         </div>
                       </div>
-
-                      {/* アラートバッジを縦に並べて表示 */}
                       <div className="flex flex-col gap-1 items-end">
                         {alerts.map((a, idx) => (
                           <span
@@ -2422,8 +2370,6 @@ const CoachView = (props) => {
                         ))}
                       </div>
                     </div>
-
-                    {/* メニュー詳細（痛みの原因や状況）を表示 */}
                     {latestLog && (
                       <div className="bg-white/60 p-2 rounded-xl mt-1">
                         <p className="text-[11px] text-slate-600 font-bold">
@@ -2434,12 +2380,10 @@ const CoachView = (props) => {
                         </p>
                       </div>
                     )}
-
-                    {/* 監督用の「詳細へ」ボタン */}
                     <button
                       onClick={() => {
                         setIsPainAlertModalOpen(false);
-                        handleCoachEditRunner(runner); // その選手の詳細画面へ移動
+                        handleCoachEditRunner(runner);
                       }}
                       className="text-[10px] font-bold text-rose-400 text-right hover:text-rose-600 flex items-center justify-end gap-1 mt-1"
                     >
@@ -2451,7 +2395,7 @@ const CoachView = (props) => {
             </div>
           </div>
         )}
-        {/* ▼▼▼ 通知センター (Notification Modal) ▼▼▼ */}
+
         {isNotifOpen && (
           <div
             className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in"
@@ -2522,10 +2466,8 @@ const CoachView = (props) => {
             </div>
           </div>
         )}
-        {/* ▲▲▲ 通知センター ここまで ▲▲▲ */}
       </main>
 
-      {/* 🌟 チームレポート（全画面・印刷用） */}
       {showTeamReportId && (
         <TeamRaceReport
           reportTour={tournaments.find((t) => t.id === showTeamReportId)}
@@ -2536,10 +2478,8 @@ const CoachView = (props) => {
         />
       )}
 
-      {/* 提出されたRace Cardの閲覧画面  */}
       {selectedTourId &&
         (() => {
-          // 選択された大会と、その大会に提出されたカードを抽出
           const currentTour = tournaments.find((t) => t.id === selectedTourId);
           const submittedCards = raceCards.filter(
             (c) => c.tournamentId === selectedTourId,
@@ -2547,12 +2487,11 @@ const CoachView = (props) => {
 
           return (
             <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col animate-in slide-in-from-bottom-4">
-              {/* ヘッダー */}
               <div className="bg-slate-900 text-white p-4 flex items-center justify-between shadow-md pt-12 pb-6">
                 <button
                   onClick={() => {
                     setSelectedTourId(null);
-                    setReadingCard(null); // 閉じるときは詳細もリセット
+                    setReadingCard(null);
                   }}
                   className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
                 >
@@ -2567,7 +2506,6 @@ const CoachView = (props) => {
                 <div className="w-10" />
               </div>
 
-              {/* ノート詳細を読んでいる場合 */}
               {readingCard ? (
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-24 relative">
                   <button
@@ -2577,7 +2515,6 @@ const CoachView = (props) => {
                     <ArrowLeft size={14} /> 提出一覧に戻る
                   </button>
 
-                  {/* ノートの中身（フル項目表示デザイン） */}
                   <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-6">
                     <div className="border-b border-slate-100 pb-4">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -2599,12 +2536,10 @@ const CoachView = (props) => {
                     </div>
 
                     <div className="space-y-5">
-                      {/* 🎯 レース前 (PRE-RACE) */}
                       <div className="bg-amber-50/50 p-5 rounded-2xl border border-amber-100 space-y-4">
                         <h4 className="font-black text-sm text-amber-600 flex items-center gap-2 border-b border-amber-200/50 pb-2">
                           <Target size={16} /> PRE-RACE (レース前)
                         </h4>
-
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <p className="text-[10px] font-black text-amber-600">
@@ -2643,7 +2578,6 @@ const CoachView = (props) => {
                             </p>
                           </div>
                         </div>
-
                         <div>
                           <p className="text-[10px] font-black text-amber-600">
                             W-UP計画
@@ -2662,7 +2596,6 @@ const CoachView = (props) => {
                         </div>
                       </div>
 
-                      {/* 🌤️ 気象条件 (CONDITION) */}
                       <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
                         <h4 className="font-black text-sm text-slate-500 flex items-center gap-2 border-b border-slate-200 pb-2">
                           <Cloud size={16} /> CONDITION (気象条件)
@@ -2710,7 +2643,6 @@ const CoachView = (props) => {
                         </div>
                       </div>
 
-                      {/* 🏁 レース後 (POST-RACE) */}
                       <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-4">
                         <h4 className="font-black text-sm text-indigo-600 flex items-center gap-2 border-b border-indigo-200/50 pb-2">
                           <Flag size={16} /> POST-RACE (レース後)
@@ -2723,27 +2655,61 @@ const CoachView = (props) => {
                             {readingCard.resultTime || "未入力"}
                           </p>
                         </div>
-                        {readingCard.lapTimes && (
-                          <div>
-                            <p className="text-[10px] font-black text-indigo-600">
-                              ラップタイム
-                            </p>
-                            <p className="font-mono text-xs text-slate-700 whitespace-pre-wrap mt-1 leading-relaxed bg-white p-3 rounded-xl border border-indigo-100/50">
-                              {readingCard.lapTimes}
-                            </p>
-                          </div>
-                        )}
-                        {/* 🌟 監督用のLAPタイム入力ボタン */}
+
+                        {/* 🌟🌟 修正ポイント：LAP表示をフォーマット適用版に書き換えました！ 🌟🌟 */}
+                        {readingCard.lapTimes &&
+                          (() => {
+                            const analysis = analyzeLaps(
+                              readingCard.lapTimes,
+                              readingCard.raceType,
+                              readingCard.distance,
+                              readingCard.ekidenDistance,
+                            );
+                            return (
+                              <div>
+                                <p className="text-[10px] font-black text-indigo-600 mb-1">
+                                  ラップタイム
+                                </p>
+                                <div className="bg-white p-3 rounded-xl border border-indigo-100/50 flex flex-col gap-0.5">
+                                  {analysis && analysis.formattedLines
+                                    ? analysis.formattedLines.map(
+                                        (lap, idx) => (
+                                          <span
+                                            key={idx}
+                                            className={`text-xs font-mono font-bold block tracking-tight ${
+                                              lap.startsWith("AVG")
+                                                ? "text-indigo-500 mt-1"
+                                                : "text-slate-700"
+                                            }`}
+                                          >
+                                            {lap}
+                                          </span>
+                                        ),
+                                      )
+                                    : readingCard.lapTimes
+                                        .split(/\n/)
+                                        .map((lap, idx) => (
+                                          <span
+                                            key={idx}
+                                            className="text-xs font-mono text-slate-700 font-bold block tracking-tight"
+                                          >
+                                            {lap}
+                                          </span>
+                                        ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                         <button
                           onClick={() => {
-                            setEditingLapCard(readingCard); // cardはmap等で回しているRaceCardデータ
+                            setEditingLapCard(readingCard);
                             setLapInput(readingCard.lapTimes || "");
                           }}
                           className="mt-3 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-xs font-black shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1 w-full hover:bg-indigo-200"
                         >
                           <Timer size={14} /> LAPタイムを入力・編集する
                         </button>
-
                         <div>
                           <p className="text-[10px] font-black text-indigo-600">
                             良かった点・収穫
@@ -2762,7 +2728,6 @@ const CoachView = (props) => {
                         </div>
                       </div>
 
-                      {/* 🤝 仲間と次への目標 */}
                       <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 space-y-4">
                         <div>
                           <p className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
@@ -2781,7 +2746,6 @@ const CoachView = (props) => {
                           </p>
                         </div>
                       </div>
-                      {/* ▼▼▼ 新規追加: 監督からのフィードバック入力欄 ▼▼▼ */}
                       <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-200 space-y-3 mt-4">
                         <h4 className="font-black text-sm text-indigo-700 flex items-center gap-2 border-b border-indigo-200/50 pb-2">
                           <MessageSquare size={16} /> Coach Feedback
@@ -2816,7 +2780,6 @@ const CoachView = (props) => {
                   </div>
                 </div>
               ) : (
-                /* 提出者一覧画面 */
                 <div className="flex-1 overflow-y-auto p-5 space-y-3 pb-24 bg-slate-50">
                   {submittedCards.length === 0 ? (
                     <div className="text-center py-10 opacity-50">
@@ -2878,17 +2841,38 @@ const CoachView = (props) => {
           );
         })()}
 
-      {/* 大会LAPタイム入力：監督画面用 */}
       <LapTimeModal
         key={editingLapCard?.id || "empty"}
-        editingLapCard={editingLapCard}
+        editingCard={editingLapCard}
         onClose={() => setEditingLapCard(null)}
         lapInput={lapInput}
         setLapInput={setLapInput}
         onSave={handleSaveLapTime}
+        // 🌟 ここにも双方向同期パイプを繋ぎます！
+        onResultChange={async (newResult) => {
+          if (!editingLapCard) return;
+          try {
+            await updateDoc(
+              doc(
+                db,
+                "artifacts",
+                appId,
+                "public",
+                "data",
+                "raceCards",
+                editingLapCard.id,
+              ),
+              { resultTime: newResult },
+            );
+            if (readingCard && readingCard.id === editingLapCard.id) {
+              setReadingCard({ ...readingCard, resultTime: newResult });
+            }
+          } catch (e) {
+            console.error("ResultTimeの同期保存に失敗:", e);
+          }
+        }}
       />
 
-      {/* ... (Confirm dialog remains same) ... */}
       {confirmDialog.isOpen && (
         <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
