@@ -120,12 +120,11 @@ const SmartLapInput = ({
     onChange(finalString);
   };
 
-  // 🌟 公式リザルト入力時の処理
+  // 公式リザルト入力時の処理 (上から下への連動)
   const handleResultChange = (rawResult) => {
     const formattedResult = formatInput(rawResult);
     setOfficialResult(formattedResult);
 
-    // 🌟 通信渋滞（上書き）を防ぐため、親への送信をほんの少し遅らせる魔法！
     if (onResultChange) {
       setTimeout(() => {
         onResultChange(formattedResult);
@@ -156,15 +155,37 @@ const SmartLapInput = ({
     updateAll(nextLaps, formattedResult);
   };
 
-  // 🌟 通常ラップ入力時の処理（ここでも最終ラップを自動再計算する！）
+  // 通常ラップ入力時の処理（下から上への連動も追加！）
   const handleLapChange = (dist, rawValue) => {
     const formatted = formatInput(rawValue);
     let nextLaps = { ...laps, [dist]: formatted };
+    let currentOfficialResult = officialResult; // 🌟 現在のOfficial Resultを保持
 
-    // 公式リザルトが存在し、かつ「最終ラップ以外」を編集している場合、最終ラップを再調整
-    if (officialResult && splitPoints.length > 0) {
+    if (splitPoints.length > 0) {
       const lastDist = splitPoints[splitPoints.length - 1];
-      if (dist !== lastDist) {
+
+      // 🌟 [追加ロジック] 最終LAPを直接編集した場合は、合計タイムをOfficial Resultに反映させる！
+      if (dist === lastDist) {
+        let newTotalSec = 0;
+        splitPoints.forEach((d) => {
+          newTotalSec += timeToSeconds(nextLaps[d]);
+        });
+
+        // 全てのLAPが少しでも入力されていれば、リザルトを更新
+        if (newTotalSec > 0) {
+          currentOfficialResult = secondsToTime(newTotalSec);
+          setOfficialResult(currentOfficialResult);
+
+          // 親コンポーネント(RESULT TIME)にも送信！
+          if (onResultChange) {
+            setTimeout(() => {
+              onResultChange(currentOfficialResult);
+            }, 50);
+          }
+        }
+      }
+      // 途中のLAPを編集した場合（かつOfficial Resultが既にある場合）は、最終LAPを伸び縮みさせる
+      else if (officialResult) {
         const resSec = timeToSeconds(officialResult);
         let prevTotalSec = 0;
         splitPoints.slice(0, -1).forEach((d) => {
@@ -180,7 +201,7 @@ const SmartLapInput = ({
     }
 
     setLaps(nextLaps);
-    updateAll(nextLaps, officialResult);
+    updateAll(nextLaps, currentOfficialResult); // 🌟 更新されたリザルトを使って全体を生成
   };
 
   return (
@@ -189,7 +210,6 @@ const SmartLapInput = ({
         💡 区間タイムを入力してください。トータルは自動計算されます。
       </p>
 
-      {/* 🌟 修正ポイント：高さ制限（max-h-*** や overflow-y-auto）を完全撤廃しました！ */}
       <div className="space-y-2 w-full">
         {splitPoints.map((dist, index) => {
           let totalUntilNow = 0;
@@ -222,7 +242,7 @@ const SmartLapInput = ({
         })}
       </div>
 
-      {/* 公式リザルト入力欄（自動調整用） */}
+      {/* 公式リザルト入力欄 */}
       <div className="pt-3 border-t border-slate-200 mt-2">
         <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
           <Timer size={12} /> Official Result (自動調整用)
