@@ -96,7 +96,6 @@ const SmartLapInput = ({
     }
   }, [value, splitPoints]);
 
-  // データ統合・テキスト出力処理
   const updateAll = (nextLaps, nextResult) => {
     let cumulativeSec = 0;
     const finalString = splitPoints
@@ -120,15 +119,14 @@ const SmartLapInput = ({
     onChange(finalString);
   };
 
-  // 公式リザルト入力時の処理 (上から下への連動)
+  // 🌟 公式リザルト入力時の処理
   const handleResultChange = (rawResult) => {
     const formattedResult = formatInput(rawResult);
     setOfficialResult(formattedResult);
 
+    // 🌟 修正：setTimeout を削除し、瞬時に親コンポーネントへ送信！
     if (onResultChange) {
-      setTimeout(() => {
-        onResultChange(formattedResult);
-      }, 50);
+      onResultChange(formattedResult);
     }
 
     if (splitPoints.length === 0) return;
@@ -155,37 +153,31 @@ const SmartLapInput = ({
     updateAll(nextLaps, formattedResult);
   };
 
-  // 通常ラップ入力時の処理（下から上への連動も追加！）
+  // 🌟 通常ラップ入力時の処理
   const handleLapChange = (dist, rawValue) => {
     const formatted = formatInput(rawValue);
     let nextLaps = { ...laps, [dist]: formatted };
-    let currentOfficialResult = officialResult; // 🌟 現在のOfficial Resultを保持
+    let currentOfficialResult = officialResult;
 
     if (splitPoints.length > 0) {
       const lastDist = splitPoints[splitPoints.length - 1];
 
-      // 🌟 [追加ロジック] 最終LAPを直接編集した場合は、合計タイムをOfficial Resultに反映させる！
       if (dist === lastDist) {
         let newTotalSec = 0;
         splitPoints.forEach((d) => {
           newTotalSec += timeToSeconds(nextLaps[d]);
         });
 
-        // 全てのLAPが少しでも入力されていれば、リザルトを更新
         if (newTotalSec > 0) {
           currentOfficialResult = secondsToTime(newTotalSec);
           setOfficialResult(currentOfficialResult);
 
-          // 親コンポーネント(RESULT TIME)にも送信！
+          // 🌟 修正：setTimeout を削除し、瞬時に親コンポーネントへ送信！
           if (onResultChange) {
-            setTimeout(() => {
-              onResultChange(currentOfficialResult);
-            }, 50);
+            onResultChange(currentOfficialResult);
           }
         }
-      }
-      // 途中のLAPを編集した場合（かつOfficial Resultが既にある場合）は、最終LAPを伸び縮みさせる
-      else if (officialResult) {
+      } else if (officialResult) {
         const resSec = timeToSeconds(officialResult);
         let prevTotalSec = 0;
         splitPoints.slice(0, -1).forEach((d) => {
@@ -201,7 +193,7 @@ const SmartLapInput = ({
     }
 
     setLaps(nextLaps);
-    updateAll(nextLaps, currentOfficialResult); // 🌟 更新されたリザルトを使って全体を生成
+    updateAll(nextLaps, currentOfficialResult);
   };
 
   return (
@@ -242,7 +234,6 @@ const SmartLapInput = ({
         })}
       </div>
 
-      {/* 公式リザルト入力欄 */}
       <div className="pt-3 border-t border-slate-200 mt-2">
         <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
           <Timer size={12} /> Official Result (自動調整用)

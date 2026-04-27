@@ -17,14 +17,13 @@ const LapTimeModal = ({
       className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
       onClick={onClose}
     >
-      {/* 🌟 修正ポイント：ここに max-h-[90vh] と overflow-y-auto を追加し、はみ出しを防ぎます！ */}
       <div
         className="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl space-y-4 animate-in zoom-in-95 flex flex-col max-h-[90vh] overflow-y-auto custom-scrollbar"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
           <h3 className="font-black text-lg text-indigo-600 flex items-center gap-2">
-            <Timer size={20} /> LAPタイム入力
+            <Timer size={20} /> 記録入力
           </h3>
           <button
             onClick={onClose}
@@ -38,20 +37,56 @@ const LapTimeModal = ({
           <p className="text-[10px] font-bold text-slate-400">対象選手</p>
           <p className="font-bold text-slate-700">{editingCard.runnerName}</p>
           <p className="text-xs font-bold text-indigo-500">
-            {editingCard.raceType} / {editingCard.distance}
+            {editingCard.raceType} /{" "}
+            {editingCard.distance === "その他"
+              ? editingCard.ekidenDistance
+              : editingCard.distance}
           </p>
         </div>
 
-        {/* LAP入力コンポーネント（制限なしで自然に伸びます） */}
-        <div className="flex-1">
-          <SmartLapInput
-            value={lapInput}
-            onChange={setLapInput}
-            raceType={editingCard.raceType}
-            distance={editingCard.distance}
-            onResultChange={onResultChange}
-          />
-        </div>
+        {/* 🌟 魔法の分岐：監督モーダルでも「その他」なら自由記述に！ */}
+        {editingCard.distance === "その他" ? (
+          <div className="flex-1 space-y-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">
+                LAP / 試技記録
+              </label>
+              <textarea
+                className="w-full p-4 bg-slate-50 rounded-2xl font-mono text-sm outline-none border border-slate-200 focus:border-indigo-400 min-h-[150px] resize-none"
+                placeholder={`例:\n1本目: 6m50\n2本目: F\n3本目: 6m80`}
+                value={lapInput}
+                onChange={(e) => setLapInput(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">
+                Official Result
+              </label>
+              <input
+                type="text"
+                className="w-full p-4 bg-slate-50 rounded-2xl font-black text-lg text-indigo-600 outline-none border border-slate-200 focus:border-indigo-400"
+                placeholder="例: 6m80, 11.50"
+                value={editingCard.resultTime || ""}
+                onChange={(e) => onResultChange(e.target.value)}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1">
+            <SmartLapInput
+              value={lapInput}
+              resultValue={editingCard.resultTime || ""}
+              onChange={setLapInput}
+              raceType={editingCard.raceType}
+              distance={
+                editingCard.raceType === "駅伝"
+                  ? editingCard.ekidenDistance
+                  : editingCard.distance
+              }
+              onResultChange={onResultChange}
+            />
+          </div>
+        )}
 
         <div className="flex gap-2 pt-4 flex-shrink-0 border-t border-slate-100 mt-2">
           <button

@@ -6,12 +6,43 @@ import {
   Droplets,
   Users,
   Timer,
+  Calendar, // 🌟 カレンダーアイコンを追加！
 } from "lucide-react";
 
 const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
   if (!reportTour) return null;
 
-  const repCard = reportCards.find((c) => c.weather || c.temp || c.humidity);
+  // コンディション表示用のグループ化
+  const conditionsMap = {};
+  reportCards.forEach((c) => {
+    const actualDate = c.date || reportTour.startDate;
+    const actualWeather = c.weather || "晴れ";
+    const actualWind = c.wind || "無風";
+
+    let score = 0;
+    if (c.temp) score += 10;
+    if (c.humidity) score += 10;
+    if (c.weather) score += 1;
+    if (c.wind) score += 1;
+
+    const key = actualDate || "single";
+    if (!conditionsMap[key] || score > conditionsMap[key].score) {
+      conditionsMap[key] = {
+        date: actualDate,
+        weather: actualWeather,
+        wind: actualWind,
+        temp: c.temp,
+        humidity: c.humidity,
+        score: score,
+      };
+    }
+  });
+
+  const conditionList = Object.values(conditionsMap).sort((a, b) => {
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date > b.date ? 1 : -1;
+  });
 
   const parseMeters = (d) => {
     if (!d) return 0;
@@ -25,9 +56,24 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
     return val;
   };
 
+  // 1. まずは距離順に全カードをソートする
   const sortedCards = [...reportCards].sort(
     (a, b) => parseMeters(a.distance) - parseMeters(b.distance),
   );
+
+  // 🌟🌟 2. ソート済みのカードを「日付ごと」のグループに分ける！ 🌟🌟
+  const cardsByDate = {};
+  sortedCards.forEach((card) => {
+    // 日付が未入力の場合は大会開始日を代入
+    const cardDate = card.date || reportTour.startDate || "日付不明";
+    if (!cardsByDate[cardDate]) {
+      cardsByDate[cardDate] = [];
+    }
+    cardsByDate[cardDate].push(card);
+  });
+
+  // 日付を昇順（古い順）に並び替える
+  const sortedDates = Object.keys(cardsByDate).sort((a, b) => (a > b ? 1 : -1));
 
   const timeToSeconds = (str) => {
     if (!str) return 0;
@@ -67,7 +113,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
 
     const formattedLines = [];
 
-    // 🌟 種目が1500m以上かどうかを判定
     const isLongDistance =
       totalDist >= 1500 ||
       (raceType && (raceType.includes("駅伝") || raceType.includes("ロード")));
@@ -99,7 +144,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
         displayLine += ` ${cumulTimeStr}`;
       }
 
-      // 🌟 1500m以上なら「1000mごと」に()内のLAPを追加
       if (dist === currentKilo) {
         const splitSec = cumulSec - lastKiloCumul;
         if (isLongDistance) {
@@ -109,7 +153,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
         currentKilo += 1000;
       }
 
-      // 🌟 800m以下なら「400mごと」に()内のLAPを追加
       if (dist === current400) {
         const splitSec = cumulSec - last400Cumul;
         if (!isLongDistance) {
@@ -176,148 +219,195 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
             {reportTour.endDate?.replace(/-/g, "/") || ""}
           </p>
 
-          <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl print:bg-white print:border print:border-slate-200">
-            <div className="text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase">
-                Weather
-              </p>
-              <p className="font-bold text-slate-700">
-                {repCard?.weather || "-"}
+          {/* コンディション表示部 */}
+          {conditionList.length === 0 ? (
+            <div className="bg-slate-50 p-4 rounded-2xl text-center print:bg-white print:border print:border-slate-200">
+              <p className="text-xs font-bold text-slate-400">
+                コンディション未入力
               </p>
             </div>
-            <div className="text-center">
-              <p className="text-[10px] font-black text-slate-400 flex items-center justify-center gap-1">
-                <Thermometer size={10} className="text-rose-400" /> Temp
-              </p>
-              <p className="font-bold text-slate-700">
-                {repCard?.temp ? `${repCard.temp}℃` : "-"}
-              </p>
+          ) : (
+            <div className="space-y-2">
+              {conditionList.map((cond, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl print:bg-white print:border print:border-slate-200"
+                >
+                  {cond.date && (
+                    <div className="font-black text-slate-500 w-12 text-center border-r border-slate-200 pr-2">
+                      <p className="text-[10px] leading-tight">
+                        {cond.date.slice(5).replace("-", "/")}
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex-1 grid grid-cols-4 gap-2">
+                    <div className="text-center">
+                      <p className="text-[9px] font-black text-slate-400 uppercase">
+                        Weather
+                      </p>
+                      <p className="font-bold text-slate-700 text-sm">
+                        {cond.weather || "-"}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] font-black text-slate-400 uppercase">
+                        Wind
+                      </p>
+                      <p className="font-bold text-slate-700 text-sm">
+                        {cond.wind || "-"}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] font-black text-slate-400 flex items-center justify-center gap-0.5">
+                        <Thermometer size={10} className="text-rose-400" /> Temp
+                      </p>
+                      <p className="font-bold text-slate-700 text-sm">
+                        {cond.temp ? `${cond.temp}℃` : "-"}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] font-black text-slate-400 flex items-center justify-center gap-0.5">
+                        <Droplets size={10} className="text-blue-400" /> Humid
+                      </p>
+                      <p className="font-bold text-slate-700 text-sm">
+                        {cond.humidity ? `${cond.humidity}%` : "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="text-center">
-              <p className="text-[10px] font-black text-slate-400 flex items-center justify-center gap-1">
-                <Droplets size={10} className="text-blue-400" /> Humid
-              </p>
-              <p className="font-bold text-slate-700">
-                {repCard?.humidity ? `${repCard.humidity}%` : "-"}
-              </p>
-            </div>
-          </div>
+          )}
         </div>
 
+        {/* 🌟🌟 選手記録一覧（日付ごとにグループ化） 🌟🌟 */}
         <div>
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-2 mb-4 flex items-center gap-2">
-            <Users size={16} /> 選手記録一覧 (距離順)
-          </h3>
-
-          {sortedCards.length === 0 ? (
+          {sortedDates.length === 0 ? (
             <p className="text-center py-10 text-slate-300 font-bold bg-white rounded-3xl border border-slate-100">
               まだ記録がありません
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 print:grid-cols-2">
-              {sortedCards.map((card) => {
-                const analysis = analyzeLaps(
-                  card.lapTimes,
-                  card.raceType,
-                  card.distance,
-                  card.ekidenDistance,
-                );
+            <div className="space-y-12">
+              {sortedDates.map((dateStr) => (
+                <div key={dateStr} className="space-y-4">
+                  {/* 日付ごとの美しい見出しバー */}
+                  <h3 className="text-sm font-black text-indigo-600 uppercase tracking-widest ml-2 flex items-center gap-2 border-b-2 border-indigo-100 pb-2 print:text-slate-800 print:border-slate-800">
+                    <Calendar size={18} />
+                    {dateStr === "日付不明"
+                      ? dateStr
+                      : `${dateStr.replace(/-/g, "/")} `}
+                  </h3>
 
-                return (
-                  <div
-                    key={card.id}
-                    className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col print:shadow-none print:break-inside-avoid print:border print:p-4 w-full overflow-hidden"
-                  >
-                    <div className="flex justify-between items-start border-b border-slate-50 pb-3 mb-3 print:border-slate-200">
-                      <div>
-                        <p className="font-black text-xl text-slate-800">
-                          {card.runnerName}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-1 mb-1">
-                          {(card.badges || []).map((badge) => (
-                            <span
-                              key={badge}
-                              className={`text-[8px] font-black px-2 py-0.5 rounded-md text-white print:border print:text-slate-700 ${
-                                badge === "自己ベスト"
-                                  ? "bg-orange-500 print:border-orange-500"
-                                  : badge === "組1位"
-                                    ? "bg-blue-500 print:border-blue-500"
-                                    : "bg-emerald-500 print:border-emerald-500"
-                              }`}
-                            >
-                              {badge}
-                            </span>
-                          ))}
-                        </div>
-                        <p className="text-[10px] font-bold text-indigo-500 mt-1 bg-indigo-50 inline-block px-2 py-0.5 rounded-md print:bg-transparent print:px-0">
-                          {card.raceType} /{" "}
-                          {card.raceType === "駅伝"
-                            ? `${card.distance}(${card.ekidenDistance}km)`
-                            : card.distance}
-                        </p>
-                      </div>
-                      <div className="text-right bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 print:bg-transparent print:border-none print:p-0">
-                        <p className="text-[10px] font-black text-slate-400 mb-0.5">
-                          RESULT
-                        </p>
-                        <p
-                          className={`text-xl font-black tracking-tighter whitespace-nowrap print:text-slate-800 ${
-                            card.status === "dns"
-                              ? "text-rose-400"
-                              : card.status === "dnf"
-                                ? "text-amber-500"
-                                : "text-indigo-600"
-                          }`}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 print:grid-cols-2">
+                    {cardsByDate[dateStr].map((card) => {
+                      const analysis = analyzeLaps(
+                        card.lapTimes,
+                        card.raceType,
+                        card.distance,
+                        card.ekidenDistance,
+                      );
+
+                      return (
+                        <div
+                          key={card.id}
+                          className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col print:shadow-none print:break-inside-avoid print:border print:p-4 w-full overflow-hidden"
                         >
-                          {card.status === "dns"
-                            ? `DNS (${card.dnsReason || "棄権"})`
-                            : card.status === "dnf"
-                              ? `DNF (${card.dnfPoint || "途中棄権"})`
-                              : card.resultTime || "未入力"}
-                        </p>
-                      </div>
-                    </div>
+                          <div className="flex justify-between items-start border-b border-slate-50 pb-3 mb-3 print:border-slate-200">
+                            <div>
+                              <p className="font-black text-xl text-slate-800">
+                                {card.runnerName}
+                              </p>
+                              <div className="flex flex-wrap gap-1 mt-1 mb-1">
+                                {(card.badges || []).map((badge) => (
+                                  <span
+                                    key={badge}
+                                    className={`text-[8px] font-black px-2 py-0.5 rounded-md text-white print:border print:text-slate-700 ${
+                                      badge === "自己ベスト"
+                                        ? "bg-orange-500 print:border-orange-500"
+                                        : badge === "組1位"
+                                          ? "bg-blue-500 print:border-blue-500"
+                                          : "bg-emerald-500 print:border-emerald-500"
+                                    }`}
+                                  >
+                                    {badge}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-[10px] font-bold text-indigo-500 mt-1 bg-indigo-50 inline-block px-2 py-0.5 rounded-md print:bg-transparent print:px-0">
+                                {card.raceType} /{" "}
+                                {card.distance === "その他"
+                                  ? card.ekidenDistance
+                                  : card.raceType === "駅伝"
+                                    ? `${card.distance}(${card.ekidenDistance}km)`
+                                    : card.distance}
+                              </p>
+                            </div>
+                            <div className="text-right bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 print:bg-transparent print:border-none print:p-0">
+                              <p className="text-[10px] font-black text-slate-400 mb-0.5">
+                                RESULT
+                              </p>
+                              <p
+                                className={`text-xl font-black tracking-tighter whitespace-nowrap print:text-slate-800 ${
+                                  card.status === "dns"
+                                    ? "text-rose-400"
+                                    : card.status === "dnf"
+                                      ? "text-amber-500"
+                                      : "text-indigo-600"
+                                }`}
+                              >
+                                {card.status === "dns"
+                                  ? `DNS (${card.dnsReason || "棄権"})`
+                                  : card.status === "dnf"
+                                    ? `DNF (${card.dnfPoint || "途中棄権"})`
+                                    : card.resultTime || "未入力"}
+                              </p>
+                            </div>
+                          </div>
 
-                    {card.lapTimes ? (
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-1 print:bg-white print:p-2 print:border-none w-full">
-                        <p className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-2">
-                          <Timer size={10} /> LAP TIMES
-                        </p>
-                        {/* 🌟 修正ポイント：高さ制限とスクロールバーを削除して自然に全行表示させるようにしました！ */}
-                        <div className="flex flex-col gap-0.5">
-                          {analysis && analysis.formattedLines
-                            ? analysis.formattedLines.map((lap, idx) => (
-                                <span
-                                  key={idx}
-                                  className={`text-xs font-mono font-bold block tracking-tight ${
-                                    lap.startsWith("AVG")
-                                      ? "text-indigo-500 mt-1"
-                                      : "text-slate-600"
-                                  }`}
-                                >
-                                  {lap}
-                                </span>
-                              ))
-                            : card.lapTimes.split(/\n/).map((lap, idx) => (
-                                <span
-                                  key={idx}
-                                  className="text-xs font-mono text-slate-600 font-bold block tracking-tight"
-                                >
-                                  {lap}
-                                </span>
-                              ))}
+                          {card.lapTimes ? (
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-1 print:bg-white print:p-2 print:border-none w-full">
+                              <p className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-2">
+                                <Timer size={10} /> LAP TIMES
+                              </p>
+                              <div className="flex flex-col gap-0.5">
+                                {analysis && analysis.formattedLines
+                                  ? analysis.formattedLines.map((lap, idx) => (
+                                      <span
+                                        key={idx}
+                                        className={`text-xs font-mono font-bold block tracking-tight ${
+                                          lap.startsWith("AVG")
+                                            ? "text-indigo-500 mt-1"
+                                            : "text-slate-600"
+                                        }`}
+                                      >
+                                        {lap}
+                                      </span>
+                                    ))
+                                  : card.lapTimes
+                                      .split(/\n/)
+                                      .map((lap, idx) => (
+                                        <span
+                                          key={idx}
+                                          className="text-xs font-mono text-slate-600 font-bold block tracking-tight"
+                                        >
+                                          {lap}
+                                        </span>
+                                      ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex-1 flex items-center justify-center">
+                              <p className="text-xs text-slate-300 font-bold bg-slate-50 px-4 py-2 rounded-xl">
+                                LAP未入力
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center">
-                        <p className="text-xs text-slate-300 font-bold bg-slate-50 px-4 py-2 rounded-xl">
-                          LAP未入力
-                        </p>
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>

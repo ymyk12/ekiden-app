@@ -38,7 +38,6 @@ const RaceCardEntry = ({
     ? `${currentTour.startDate.replace(/-/g, "/")} 〜 ${currentTour.endDate.replace(/-/g, "/")}`
     : "日程未定";
 
-  // 🌟🌟 魔法の自動フォーマット関数（目標タイム用） 🌟🌟
   const formatTimeInput = (text) => {
     if (!text) return "";
     let normalized = text.replace(/['"：:]/g, ".");
@@ -122,7 +121,10 @@ const RaceCardEntry = ({
                 setRaceCardInput({
                   ...raceCardInput,
                   raceType: e.target.value,
+                  // 区分を変えたら、自動的にその区分の最初の種目にセット
                   distance: RACE_DISTANCES[e.target.value][0],
+                  // リセット
+                  ekidenDistance: "",
                 })
               }
             >
@@ -144,6 +146,11 @@ const RaceCardEntry = ({
                 setRaceCardInput({
                   ...raceCardInput,
                   distance: e.target.value,
+                  // 「その他」を選んだ瞬間に詳細枠をリセット
+                  ekidenDistance:
+                    e.target.value === "その他"
+                      ? ""
+                      : raceCardInput.ekidenDistance,
                 })
               }
             >
@@ -155,17 +162,25 @@ const RaceCardEntry = ({
             </select>
           </div>
         </div>
+
+        {/* 🌟🌟 修正ポイント：「駅伝」と「その他」で入力欄のラベルとプレースホルダーを賢く切り替える！ 🌟🌟 */}
         {(raceCardInput.raceType === RACE_TYPES.EKIDEN ||
           raceCardInput.distance === "その他") && (
           <div className="space-y-1 animate-in fade-in">
             <label className="text-[10px] font-black text-slate-400 uppercase">
-              距離・詳細 (kmなど)
+              {raceCardInput.distance === "その他"
+                ? "種目名 (手入力)"
+                : "区間距離 (km)"}
             </label>
             <input
               type="text"
-              placeholder="例: 3.0"
-              className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500"
-              value={raceCardInput.ekidenDistance}
+              placeholder={
+                raceCardInput.distance === "その他"
+                  ? "例: 100m、走幅跳など"
+                  : "例: 3.0"
+              }
+              className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500 border border-slate-100"
+              value={raceCardInput.ekidenDistance} // 保存場所は ekidenDistance をそのまま再利用します
               onChange={(e) =>
                 setRaceCardInput({
                   ...raceCardInput,
@@ -177,26 +192,47 @@ const RaceCardEntry = ({
         )}
       </div>
 
-      {/* スタート時刻 */}
-      <div className="space-y-1 pt-2">
-        <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1">
-          <Timer size={12} className="text-indigo-400" /> スタート予定時刻
-        </label>
-        <input
-          type="time"
-          className="w-full p-4 bg-indigo-50/30 rounded-2xl font-black text-xl text-indigo-700 outline-none border border-indigo-100 focus:border-indigo-400 text-center shadow-sm"
-          value={raceCardInput.startTime}
-          onChange={(e) =>
-            setRaceCardInput({
-              ...raceCardInput,
-              startTime: e.target.value,
-            })
-          }
-        />
-        <p className="text-[9px] text-center text-slate-400 font-bold mt-1">
-          ※この時刻から逆算してW-upを計画しましょう
-        </p>
+      {/* 出場日・スタート時刻 */}
+      <div className="grid grid-cols-2 gap-3 pt-2">
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1">
+            <Calendar size={12} className="text-indigo-400" /> 出場日
+          </label>
+          <input
+            type="date"
+            // 値がない時は、自動的にその大会の開始日(startDate)をセットしてあげる親切設計！
+            value={
+              raceCardInput.date || (currentTour ? currentTour.startDate : "")
+            }
+            onChange={(e) =>
+              setRaceCardInput({
+                ...raceCardInput,
+                date: e.target.value,
+              })
+            }
+            className="w-full p-4 bg-indigo-50/30 rounded-2xl font-black text-sm text-indigo-700 outline-none border border-indigo-100 focus:border-indigo-400 shadow-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1">
+            <Timer size={12} className="text-indigo-400" /> スタート予定
+          </label>
+          <input
+            type="time"
+            value={raceCardInput.startTime || ""}
+            onChange={(e) =>
+              setRaceCardInput({
+                ...raceCardInput,
+                startTime: e.target.value,
+              })
+            }
+            className="w-full p-4 bg-indigo-50/30 rounded-2xl font-black text-xl text-indigo-700 outline-none border border-indigo-100 focus:border-indigo-400 text-center shadow-sm"
+          />
+        </div>
       </div>
+      <p className="text-[9px] text-center text-slate-400 font-bold mt-1">
+        ※この時刻から逆算してW-upを計画しましょう
+      </p>
 
       {/* レース前 */}
       <div className="space-y-4">
@@ -207,7 +243,6 @@ const RaceCardEntry = ({
           <label className="text-[10px] font-black text-slate-400 uppercase">
             目標タイム
           </label>
-          {/* 🌟🌟 目標タイム入力を数字キーボード＆自動フォーマットにアップグレード！ 🌟🌟 */}
           <input
             type="text"
             inputMode="decimal"
@@ -503,21 +538,74 @@ const RaceCardEntry = ({
 
         {/* 統合版！RESULT & LAP TIMES (DNSの時は非表示) */}
         {raceCardInput.status !== "dns" && (
-          <div className="space-y-1 animate-in slide-in-from-top-2 pt-2">
+          <div className="space-y-3 animate-in slide-in-from-top-2 pt-2">
             <label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-1">
               <Timer size={12} /> Result & Lap Times
             </label>
-            <SmartLapInput
-              value={raceCardInput.lapTimes || ""}
-              onChange={(newValue) =>
-                setRaceCardInput({ ...raceCardInput, lapTimes: newValue })
-              }
-              onResultChange={(newResult) =>
-                setRaceCardInput({ ...raceCardInput, resultTime: newResult })
-              }
-              raceType={raceCardInput.raceType}
-              distance={raceCardInput.distance}
-            />
+
+            {/* 🌟 魔法の分岐：「その他」の時は自由記述に切り替える！ */}
+            {raceCardInput.distance === "その他" ? (
+              <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-4">
+                <p className="text-[10px] font-bold text-slate-400 px-1">
+                  💡
+                  自由記述形式です。試技の記録やラップを自由に文字で入力してください。
+                </p>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-indigo-400 ml-1">
+                    LAP / 試技記録など
+                  </label>
+                  <textarea
+                    className="w-full p-4 bg-white rounded-2xl font-mono text-sm outline-none border border-slate-200 focus:border-indigo-400 min-h-[120px] resize-none"
+                    placeholder={`例:\n1本目: 6m50\n2本目: F\n3本目: 6m80`}
+                    value={raceCardInput.lapTimes || ""}
+                    onChange={(e) =>
+                      setRaceCardInput((prev) => ({
+                        ...prev,
+                        lapTimes: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-indigo-400 ml-1">
+                    Official Result
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-4 bg-white rounded-2xl font-black text-xl text-indigo-600 outline-none border border-slate-200 focus:border-indigo-400"
+                    placeholder="例: 6m80, 11.50"
+                    value={raceCardInput.resultTime || ""}
+                    onChange={(e) =>
+                      setRaceCardInput((prev) => ({
+                        ...prev,
+                        resultTime: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            ) : (
+              /* それ以外（長距離・中距離・駅伝）の時はSmartLapInputを表示 */
+              <SmartLapInput
+                value={raceCardInput.lapTimes || ""}
+                resultValue={raceCardInput.resultTime || ""}
+                onChange={(newValue) =>
+                  setRaceCardInput((prev) => ({ ...prev, lapTimes: newValue }))
+                }
+                onResultChange={(newResult) =>
+                  setRaceCardInput((prev) => ({
+                    ...prev,
+                    resultTime: newResult,
+                  }))
+                }
+                raceType={raceCardInput.raceType}
+                distance={
+                  raceCardInput.raceType === "駅伝"
+                    ? raceCardInput.ekidenDistance
+                    : raceCardInput.distance
+                }
+              />
+            )}
           </div>
         )}
 

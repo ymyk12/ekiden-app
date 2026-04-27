@@ -321,6 +321,7 @@ const CoachView = (props) => {
 
   const [editingLapCard, setEditingLapCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
+  const [lapResultInput, setLapResultInput] = useState("");
   const handleSaveLapTime = async () => {
     if (!editingLapCard) return;
     try {
@@ -343,6 +344,7 @@ const CoachView = (props) => {
         ),
         {
           lapTimes: lapInput,
+          resultTime: lapResultInput, // 🌟 専用の保管庫から取るから絶対に間違えない！
           updatedAt: new Date().toISOString(),
           updatedBy: "監督",
         },
@@ -2528,9 +2530,11 @@ const CoachView = (props) => {
                           {readingCard.raceType}
                         </span>
                         <span className="text-xs font-bold text-slate-600">
-                          {readingCard.raceType === "駅伝"
-                            ? `${readingCard.distance} (${readingCard.ekidenDistance}km)`
-                            : readingCard.distance}
+                          {readingCard.distance === "その他"
+                            ? readingCard.ekidenDistance
+                            : readingCard.raceType === "駅伝"
+                              ? `${readingCard.distance} (${readingCard.ekidenDistance}km)`
+                              : readingCard.distance}
                         </span>
                       </div>
                     </div>
@@ -2818,12 +2822,21 @@ const CoachView = (props) => {
                           </div>
                         </div>
                         <div className="text-right flex items-center">
-                          {card.resultTime ? (
+                          {/* 🌟 バッジの判定をプロ仕様に強化！DNSやDNFも正しく表示します */}
+                          {card.resultTime || card.status === "finish" ? (
                             <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
                               Resultあり
                             </span>
-                          ) : (
+                          ) : card.status === "dns" ? (
+                            <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">
+                              DNS
+                            </span>
+                          ) : card.status === "dnf" ? (
                             <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+                              DNF
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
                               レース前
                             </span>
                           )}
@@ -2848,27 +2861,12 @@ const CoachView = (props) => {
         lapInput={lapInput}
         setLapInput={setLapInput}
         onSave={handleSaveLapTime}
-        // 🌟 ここにも双方向同期パイプを繋ぎます！
-        onResultChange={async (newResult) => {
-          if (!editingLapCard) return;
-          try {
-            await updateDoc(
-              doc(
-                db,
-                "artifacts",
-                appId,
-                "public",
-                "data",
-                "raceCards",
-                editingLapCard.id,
-              ),
-              { resultTime: newResult },
-            );
-            if (readingCard && readingCard.id === editingLapCard.id) {
-              setReadingCard({ ...readingCard, resultTime: newResult });
-            }
-          } catch (e) {
-            console.error("ResultTimeの同期保存に失敗:", e);
+        // 🌟 専用の保管庫(lapResultInput)に同期させる！
+        onResultChange={(newResult) => {
+          setLapResultInput(newResult);
+          // 画面(詳細ビュー)を開いている場合は即座に見た目も反映する
+          if (readingCard && readingCard.id === editingLapCard?.id) {
+            setReadingCard((prev) => ({ ...prev, resultTime: newResult }));
           }
         }}
       />

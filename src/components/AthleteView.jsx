@@ -1844,9 +1844,11 @@ const AthleteView = (props) => {
                             <div className="flex justify-between items-end">
                               <div>
                                 <p className="font-black text-lg text-slate-700">
-                                  {card.raceType === "駅伝"
-                                    ? `${card.distance} (${card.ekidenDistance}km)`
-                                    : card.distance}
+                                  {card.distance === "その他"
+                                    ? card.ekidenDistance
+                                    : card.raceType === "駅伝"
+                                      ? `${card.distance}(${card.ekidenDistance}km)`
+                                      : card.distance}
                                 </p>
                                 <p className="text-[10px] font-bold text-slate-400 mt-1">
                                   目標: {card.targetTime || "未設定"}
