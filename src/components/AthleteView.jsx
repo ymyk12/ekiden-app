@@ -1,6 +1,11 @@
-// ==========================================
-//   import
-// ==========================================
+/*
+ * AthleteView — 選手ダッシュボード（メイン画面）
+ *
+ * 選手がログイン後に使うすべての機能を含む大型コンポーネント。
+ * 練習記録の入力・閲覧、走行距離グラフ、目標設定、
+ * 大会振り返りノート、監督フィードバックの確認などを担当する。
+ * 監督が特定選手のデータをプレビューする際にも使用される。
+ */
 import { useState, useMemo, useEffect } from "react";
 
 import {
@@ -38,12 +43,8 @@ import { ROLES, CATEGORY } from "../utils/constants";
 
 import { getGoalValue, getTodayStr, getDatesInRange } from "../utils/dateUtils";
 
-// 練習日誌
 import DiaryListItem from "./DiaryListItem";
-
-// 大会ノート
 import RaceCardEntry from "./RaceCardEntry";
-// 大会レポート（チーム）
 import TeamRaceReport from "./TeamRaceReport";
 
 const AthleteView = (props) => {
@@ -74,8 +75,8 @@ const AthleteView = (props) => {
     teamLogs,
     allLogs,
     activeRunners,
-    formData,
-    setFormData,
+    logInput,
+    setLogInput,
     isSubmitting,
     editingLogId,
     setEditingLogId,
@@ -100,6 +101,9 @@ const AthleteView = (props) => {
     setRaceCardInput,
     handleSaveRaceCard,
     handleDeleteRaceCard,
+    isAthleteEditModalOpen,
+    setIsAthleteEditModalOpen,
+    handleAthleteUpdateLog,
   } = props;
 
   // 画面（view）が切り替わるたびに、スクロールを一番上（0, 0）に戻す
@@ -109,7 +113,6 @@ const AthleteView = (props) => {
 
   const isPreview = role === ROLES.COACH && previewRunner;
 
-  // 通知管理システム
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [lastReadTime, setLastReadTime] = useState(() => {
     return (
@@ -122,7 +125,6 @@ const AthleteView = (props) => {
   const notifications = useMemo(() => {
     const list = [];
 
-    // 1. 大会ノートへのフィードバック
     const myCards = raceCards.filter(
       (c) => c.runnerId === currentUserId && c.coachFeedback,
     );
@@ -143,7 +145,6 @@ const AthleteView = (props) => {
       });
     });
 
-    // 2. 振り返りへのフィードバック
     if (currentFeedback && currentFeedback.coachComment) {
       list.push({
         id: `fb_period_${targetPeriod.id}`,
@@ -159,7 +160,7 @@ const AthleteView = (props) => {
     }
 
     // 3. 新しい大会が追加された（便宜上、トーナメント一覧の最後を最新とみなす）
-    // 🌟 修正：全ての大会を通知リストに追加（未読判定は後続のロジックで行われます）
+    // 全ての大会を通知リストに追加（未読判定は後続のロジックで行う）
     if (tournaments && tournaments.length > 0) {
       tournaments.forEach((tour) => {
         list.push({
@@ -176,9 +177,6 @@ const AthleteView = (props) => {
       });
     }
 
-    // 🌟 チーム日誌のブロックは削除しました！
-
-    // 新しい順に並び替え
     return list.sort((a, b) => (a.time < b.time ? 1 : -1));
   }, [
     raceCards,
@@ -191,23 +189,19 @@ const AthleteView = (props) => {
     setView,
   ]);
 
-  // 未読件数の計算
   const unreadCount = notifications.filter((n) => n.time > lastReadTime).length;
 
-  // 🌟 追加：カテゴリごとの未読判定（バッジ表示用）
+  // カテゴリごとの未読判定（バッジ表示用）
   const unreadNotifs = notifications.filter((n) => n.time > lastReadTime);
-  // 大会・レース関連
   const hasUnreadRace = unreadNotifs.some(
     (n) => n.id.startsWith("fb_race_") || n.id.startsWith("tour_"),
   );
-  // 大会振り返り関連
   const hasUnreadReview = unreadNotifs.some((n) =>
     n.id.startsWith("fb_period_"),
   );
-  // 大会レポート（チーム）の閲覧
   const [showTeamReportId, setShowTeamReportId] = useState(null);
 
-  // 🌟 修正：日誌の赤バッジ判定を独立させる（一覧やプッシュ通知には出さないため）
+  // 日誌の赤バッジ判定を独立させる（一覧やプッシュ通知には出ない）
   const latestDiaryTime =
     teamLogs && teamLogs.length > 0
       ? Math.max(
@@ -218,7 +212,6 @@ const AthleteView = (props) => {
       : 0;
   const hasUnreadDiary = latestDiaryTime > new Date(lastReadTime).getTime();
 
-  // ベルを開いた時の処理（既読にする）
   const handleOpenNotif = () => {
     setIsNotifOpen(true);
     const nowStr = new Date().toISOString();
@@ -230,7 +223,7 @@ const AthleteView = (props) => {
     if (
       view === "entry" &&
       targetView !== "entry" &&
-      (formData.distance !== "" || formData.menuDetail !== "")
+      (logInput.distance !== "" || logInput.menuDetail !== "")
     ) {
       setConfirmDialog({
         isOpen: true,
@@ -286,7 +279,6 @@ const AthleteView = (props) => {
             <h3 className="font-black text-center text-slate-400 uppercase tracking-widest text-xs">
               Menu
             </h3>
-            {/* 大会ノート*/}
             <button
               onClick={() => {
                 safeChangeView("race");
@@ -295,7 +287,7 @@ const AthleteView = (props) => {
               className="w-full py-4 bg-indigo-50 text-indigo-700 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
             >
               <Flag size={20} /> 大会ノート (Race Card)
-              {/* 🌟 大会関連の未読があれば赤丸を表示 */}
+              {/* 大会関連の未読があれば赤丸を表示 */}
               {hasUnreadRace && (
                 <span className="absolute top-4 right-4 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -303,7 +295,6 @@ const AthleteView = (props) => {
                 </span>
               )}
             </button>
-            {/* 目標設定 */}
             <button
               onClick={() => {
                 safeChangeView("goal");
@@ -339,7 +330,7 @@ const AthleteView = (props) => {
             className="bg-white/20 p-2.5 rounded-2xl active:scale-90 transition-all text-white"
           >
             <Menu size={20} />
-            {/* 🌟 大会関連の未読があれば赤丸を表示 */}
+            {/* 大会関連の未読があれば赤丸を表示 */}
             {hasUnreadRace && (
               <span className="absolute -top-1 -right-1 flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -355,14 +346,12 @@ const AthleteView = (props) => {
               {currentProfile.lastName} {currentProfile.firstName}
             </h1>
           </div>
-          {/* 通知ベルアイコン  */}
           <div className="relative">
             <button
               onClick={handleOpenNotif}
               className="bg-white/20 p-2.5 rounded-2xl active:scale-90 transition-all text-white relative shadow-sm hover:bg-white/30"
             >
               <Bell size={20} />
-              {/* 未読がある場合、ピカピカ光る赤丸バッジを表示！ */}
               {unreadCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -498,7 +487,7 @@ const AthleteView = (props) => {
                       <div
                         key={dateStr}
                         onClick={() => {
-                          setFormData({ ...formData, date: dateStr });
+                          setLogInput({ ...logInput, date: dateStr });
                           setView("entry");
                         }}
                         className="bg-amber-400 text-slate-900 py-2 px-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer active:scale-95 transition-transform border border-slate-900/10"
@@ -534,7 +523,7 @@ const AthleteView = (props) => {
               </div>
             )}
 
-            <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-blue-900/5 space-y-6">
+            <div className="bg-white p-7 rounded-[2.5rem] shadow-md shadow-blue-900/5 border border-slate-100/80 space-y-6">
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-widest">
@@ -681,7 +670,7 @@ const AthleteView = (props) => {
                 )}
             </div>
 
-            <div className="bg-slate-900 p-7 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden mb-6">
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-7 rounded-[2.5rem] text-white shadow-xl shadow-slate-900/30 relative overflow-hidden mb-6">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl -mr-10 -mt-10"></div>
               {(() => {
                 const todayStr = getTodayStr();
@@ -757,7 +746,7 @@ const AthleteView = (props) => {
                           </p>
                         </div>
                       )}
-                      {/* ▼▼▼ 監督からの追記 (ホーム画面用デザイン) ▼▼▼ */}
+                      {/* 監督からの追記 */}
                       {diary.coachNote && (
                         <div className="bg-amber-400/10 p-3 rounded-xl border border-amber-400/20 mt-3">
                           <p className="text-[10px] font-black text-amber-300 mb-1 flex items-center gap-1 uppercase tracking-widest">
@@ -880,10 +869,10 @@ const AthleteView = (props) => {
                   </label>
                   <input
                     type="date"
-                    className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 text-sm"
-                    value={formData.date}
+                    className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 focus:border-transparent text-sm"
+                    value={logInput.date}
                     onChange={(e) =>
-                      setFormData({ ...formData, date: e.target.value })
+                      setLogInput({ ...logInput, date: e.target.value })
                     }
                   />
                 </div>
@@ -892,10 +881,10 @@ const AthleteView = (props) => {
                     Type
                   </label>
                   <select
-                    className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 text-sm appearance-none"
-                    value={formData.category}
+                    className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 focus:border-transparent text-sm appearance-none"
+                    value={logInput.category}
                     onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
+                      setLogInput({ ...logInput, category: e.target.value })
                     }
                   >
                     {Object.values(CATEGORY).map((cat) => (
@@ -914,10 +903,10 @@ const AthleteView = (props) => {
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  className="w-full p-6 bg-blue-50/50 rounded-3xl font-black text-4xl text-blue-600 text-center outline-none focus:ring-2 ring-blue-500"
-                  value={formData.distance}
+                  className="w-full p-6 bg-blue-50/30 border border-blue-100 rounded-3xl font-black text-4xl text-blue-600 text-center outline-none focus:ring-2 ring-blue-500 focus:border-transparent"
+                  value={logInput.distance}
                   onChange={(e) =>
-                    setFormData({ ...formData, distance: e.target.value })
+                    setLogInput({ ...logInput, distance: e.target.value })
                   }
                 />
               </div>
@@ -927,76 +916,76 @@ const AthleteView = (props) => {
                 </label>
                 <textarea
                   placeholder="メニューの内容、タイムなど"
-                  className="w-full p-4 bg-slate-50 rounded-3xl font-bold text-slate-600 outline-none focus:ring-2 ring-blue-500 min-h-[100px] text-sm resize-none"
-                  value={formData.menuDetail}
+                  className="w-full p-4 bg-white border border-slate-200 rounded-3xl font-bold text-slate-600 outline-none focus:ring-2 ring-blue-500 focus:border-transparent min-h-[100px] text-sm resize-none"
+                  value={logInput.menuDetail}
                   onChange={(e) =>
-                    setFormData({ ...formData, menuDetail: e.target.value })
+                    setLogInput({ ...logInput, menuDetail: e.target.value })
                   }
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-3">
                 <div className="bg-slate-50 p-4 rounded-3xl space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    RPE (1-10)
-                  </label>
                   <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      RPE ※練習強度(1-10)
+                    </label>
                     <span className="text-2xl font-black text-slate-700">
-                      {formData.rpe}
+                      {logInput.rpe}
                     </span>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      step="1"
-                      className="w-20"
-                      value={formData.rpe}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          rpe:
-                            e.target.value === ""
-                              ? ""
-                              : parseInt(e.target.value, 10),
-                        })
-                      }
-                    />
                   </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    className="w-full accent-blue-600"
+                    value={logInput.rpe}
+                    onChange={(e) =>
+                      setLogInput({
+                        ...logInput,
+                        rpe:
+                          e.target.value === ""
+                            ? ""
+                            : parseInt(e.target.value, 10),
+                      })
+                    }
+                  />
                 </div>
                 <div className="bg-slate-50 p-4 rounded-3xl space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Pain (1-5)
-                  </label>
                   <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Pain※痛み (1-5)
+                    </label>
                     <span
-                      className={`text-2xl font-black ${formData.pain >= 3 ? "text-rose-500" : "text-slate-700"}`}
+                      className={`text-2xl font-black ${logInput.pain >= 3 ? "text-rose-500" : "text-slate-700"}`}
                     >
-                      {formData.pain}
+                      {logInput.pain}
                     </span>
-                    <input
-                      type="range"
-                      min="1"
-                      max="5"
-                      step="1"
-                      className="w-20 accent-rose-500"
-                      value={formData.pain}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          pain:
-                            e.target.value === ""
-                              ? ""
-                              : parseInt(e.target.value, 10),
-                        })
-                      }
-                    />
                   </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    step="1"
+                    className="w-full accent-rose-500"
+                    value={logInput.pain}
+                    onChange={(e) =>
+                      setLogInput({
+                        ...logInput,
+                        pain:
+                          e.target.value === ""
+                            ? ""
+                            : parseInt(e.target.value, 10),
+                      })
+                    }
+                  />
                 </div>
               </div>
               <div className="pt-4 space-y-3">
                 <button
                   onClick={handleSaveLog}
-                  disabled={isSubmitting || !formData.distance}
-                  className={`w-full py-5 rounded-3xl font-black text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${isSubmitting || !formData.distance ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white active:scale-95"}`}
+                  disabled={isSubmitting || !logInput.distance}
+                  className={`w-full py-5 rounded-3xl font-black text-lg flex items-center justify-center gap-2 transition-all ${isSubmitting || !logInput.distance ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-500/30 active:scale-95"}`}
                 >
                   {isSubmitting ? (
                     <>
@@ -1024,7 +1013,7 @@ const AthleteView = (props) => {
                     </button>
                   </div>
                 )}
-                {!formData.distance && !editingLogId && (
+                {!logInput.distance && !editingLogId && (
                   <button
                     onClick={handleRestRegister}
                     disabled={isSubmitting}
@@ -1189,7 +1178,7 @@ const AthleteView = (props) => {
                         setExpandedDiaryId(isExpanded ? null : log.date)
                       }
                     >
-                      {/* ▼▼ ここから下は isExpanded の中身として渡されます ▼▼ */}
+                      {/* 展開時の詳細コンテンツ */}
                       <div className="px-4 pb-4 space-y-4 border-t border-slate-200/50 pt-4 animate-in slide-in-from-top-2">
                         <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
                           <div className="bg-white p-2 rounded-lg border border-slate-100">
@@ -1241,7 +1230,7 @@ const AthleteView = (props) => {
                             </p>
                           </div>
                         )}
-                        {/* ▼▼▼ 監督からの追記 (一覧画面用デザイン) ▼▼▼ */}
+                        {/* 監督からの追記 */}
                         {log.coachNote && (
                           <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 mt-3">
                             <p className="text-[9px] font-black text-amber-600 uppercase mb-1 flex items-center gap-1 tracking-widest">
@@ -1488,9 +1477,18 @@ const AthleteView = (props) => {
             </div>
             <button
               onClick={handleSaveReview}
-              className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+              disabled={isSubmitting}
+              className={`w-full py-5 rounded-3xl font-black flex items-center justify-center gap-2 transition-all ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-gradient-to-br from-slate-800 to-slate-950 text-white shadow-lg shadow-slate-900/20 active:scale-95"}`}
             >
-              <Save size={18} /> 振り返りを保存
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" /> 保存中...
+                </>
+              ) : (
+                <>
+                  <Save size={18} /> 振り返りを保存
+                </>
+              )}
             </button>
 
             <div className="bg-emerald-50 p-6 rounded-3xl space-y-4 relative overflow-hidden">
@@ -1670,9 +1668,18 @@ const AthleteView = (props) => {
             <div className="space-y-3">
               <button
                 onClick={updateGoals}
-                className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                disabled={isSubmitting}
+                className={`w-full py-5 rounded-3xl font-black flex items-center justify-center gap-2 transition-all ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-500/30 active:scale-95"}`}
               >
-                <Save size={18} /> 目標を保存
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" /> 保存中...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} /> 目標を保存
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1815,7 +1822,7 @@ const AthleteView = (props) => {
                                 <span className="bg-slate-800 text-white text-[10px] font-black px-2 py-1 rounded-lg">
                                   {card.raceType}
                                 </span>
-                                {/* 🌟 達成バッジを表示 */}
+                                {/* 達成バッジ */}
                                 {(card.badges || []).map((badge) => (
                                   <span
                                     key={badge}
@@ -1830,7 +1837,7 @@ const AthleteView = (props) => {
                                     {badge}
                                   </span>
                                 ))}
-                                {/* ✨ フィードバックがあれば通知バッジを表示 ✨ */}
+                                {/* フィードバックがあれば通知バッジを表示 */}
                                 {card.coachFeedback && (
                                   <span className="bg-indigo-500 text-white text-[9px] font-black px-2 py-1 rounded-full animate-pulse flex items-center gap-1 shadow-sm">
                                     <MessageSquare size={10} /> コメントあり
@@ -1929,6 +1936,8 @@ const AthleteView = (props) => {
             isSubmitting={isSubmitting}
             handleSaveRaceCard={handleSaveRaceCard}
             handleDeleteRaceCard={handleDeleteRaceCard}
+            raceCards={raceCards}
+            currentUserId={currentUserId}
           />
         )}
       </main>
@@ -1974,7 +1983,7 @@ const AthleteView = (props) => {
           >
             <div className="relative">
               <BookOpen size={22} strokeWidth={view === "diary" ? 3 : 2} />
-              {/* 🌟 日誌の未読があれば赤丸を表示 */}
+              {/* 日誌の未読があれば赤丸を表示 */}
               {hasUnreadDiary && (
                 <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -1996,7 +2005,7 @@ const AthleteView = (props) => {
                 size={22}
                 strokeWidth={view === "review" ? 3 : 2}
               />
-              {/* 🌟 振り返りの未読があれば赤丸を表示 */}
+              {/* 振り返りの未読があれば赤丸を表示 */}
               {hasUnreadReview && (
                 <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -2115,7 +2124,6 @@ const AthleteView = (props) => {
           </div>
         </div>
       )}
-      {/* 🌟 画面の最後にこれを追加！ (既存の</div>の内側の一番下) */}
       {showTeamReportId && (
         <TeamRaceReport
           reportTour={tournaments.find((t) => t.id === showTeamReportId)}
@@ -2124,6 +2132,159 @@ const AthleteView = (props) => {
           )}
           onClose={() => setShowTeamReportId(null)}
         />
+      )}
+
+      {/* 選手自身の練習記録編集モーダル */}
+      {isAthleteEditModalOpen && (
+        <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <h3 className="font-black text-sm text-slate-800">
+              記録を修正する
+            </h3>
+
+            {/* 日付・区分 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  日付
+                </label>
+                <input
+                  type="date"
+                  value={logInput.date}
+                  onChange={(e) =>
+                    setLogInput({ ...logInput, date: e.target.value })
+                  }
+                  className="w-full mt-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  区分
+                </label>
+                <select
+                  value={logInput.category}
+                  onChange={(e) =>
+                    setLogInput({ ...logInput, category: e.target.value })
+                  }
+                  className="w-full mt-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500 focus:border-transparent"
+                >
+                  {Object.values(CATEGORY).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* 距離 */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase">
+                距離 (km)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={logInput.distance}
+                onChange={(e) =>
+                  setLogInput({ ...logInput, distance: e.target.value })
+                }
+                className="w-full mt-1 p-3 bg-blue-50/30 border border-blue-100 rounded-xl font-black text-2xl text-center outline-none focus:ring-2 ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* メニュー詳細 */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase">
+                メニュー詳細
+              </label>
+              <textarea
+                value={logInput.menuDetail}
+                onChange={(e) =>
+                  setLogInput({ ...logInput, menuDetail: e.target.value })
+                }
+                className="w-full mt-1 p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500 focus:border-transparent min-h-[80px] resize-none"
+              />
+            </div>
+
+            {/* RPE・痛み */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  RPE (1-10)
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={logInput.rpe}
+                  onChange={(e) =>
+                    setLogInput({ ...logInput, rpe: e.target.value })
+                  }
+                  className="w-full mt-2 accent-blue-600"
+                />
+                <p className="text-center font-black text-lg text-blue-600">
+                  {logInput.rpe}
+                </p>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  痛み (1-5)
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  value={logInput.pain}
+                  onChange={(e) =>
+                    setLogInput({ ...logInput, pain: e.target.value })
+                  }
+                  className="w-full mt-2 accent-rose-500"
+                />
+                <p
+                  className={`text-center font-black text-lg ${logInput.pain >= 3 ? "text-rose-500" : "text-slate-500"}`}
+                >
+                  {logInput.pain}
+                </p>
+              </div>
+            </div>
+
+            {/* ボタン */}
+            <div className="flex gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setIsAthleteEditModalOpen(false);
+                  handleDeleteLog(editingLogId);
+                }}
+                className="p-3 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-100 active:scale-95 transition-all"
+              >
+                <Trash2 size={18} />
+              </button>
+              <button
+                onClick={() => {
+                  setIsAthleteEditModalOpen(false);
+                  resetForm();
+                }}
+                className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleAthleteUpdateLog}
+                disabled={isSubmitting}
+                className={`flex-1 py-3 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-1.5 ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-500/25 active:scale-95"}`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> 更新中...
+                  </>
+                ) : (
+                  "更新する"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div> //  AthleteViewの最後の閉じタグ
   );

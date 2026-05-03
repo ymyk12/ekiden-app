@@ -1,5 +1,13 @@
+/*
+ * ManagerDashboard — マネージャーダッシュボード
+ *
+ * マネージャーが使う画面。チームの練習日誌・スケジュール・
+ * 大会情報の閲覧・入力を担当する。
+ * デモモード時は isDemoMode フラグで保存処理を抑制する。
+ */
 import React, { useState } from "react";
-import { doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { docRef } from "../utils/firestore";
 import {
   LogOut,
   ChevronRight,
@@ -46,8 +54,8 @@ const ManagerDashboard = ({
   allRunners,
   allLogs,
   teamLogs,
-  tournaments = [], // 🌟 大会データ
-  raceCards = [], // 🌟 種目データ
+  tournaments = [],
+  raceCards = [],
   db,
   appId,
   setSuccessMsg,
@@ -80,12 +88,12 @@ const ManagerDashboard = ({
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiImage, setAiImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // 詳細モーダル関連のステート
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  // 🌟 大会・LAP入力関連のステート
   const [selectedTourId, setSelectedTourId] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
@@ -103,7 +111,7 @@ const ManagerDashboard = ({
     "その他",
   ];
 
-  // 曜日や季節から「時間」の初期設定を自動判定する関数 🌟🌟
+  // 曜日・季節からデフォルト練習時間を自動判定する
   const getDefaultTimes = (dateString) => {
     const d = new Date(dateString);
     const day = d.getDay(); // 0:日, 1:月, 2:火, 3:水, 4:木, 5:金, 6:土
@@ -134,7 +142,6 @@ const ManagerDashboard = ({
   }, [teamLogs, checkDate]);
 
   React.useEffect(() => {
-    // 🌟 今選んでいる日付から、その日のデフォルトの時間を取得！
     const defaultTimes = getDefaultTimes(checkDate);
 
     if (existingLog) {
@@ -144,7 +151,6 @@ const ManagerDashboard = ({
         temp: existingLog.temp || "",
         wind: existingLog.wind || 1,
         humidity: existingLog.humidity || "",
-        // 🌟 既存データに時間がない場合はデフォルトをセット
         startTime: existingLog.startTime || defaultTimes.startTime,
         endTime: existingLog.endTime || defaultTimes.endTime,
         location: existingLog.location || "1.53kmコース",
@@ -161,7 +167,6 @@ const ManagerDashboard = ({
         temp: "",
         wind: 1,
         humidity: "",
-        // 🌟 新規作成時は、判定したデフォルトの時間をセット！
         startTime: defaultTimes.startTime,
         endTime: defaultTimes.endTime,
         location: "1.53kmコース",
@@ -298,25 +303,25 @@ const ManagerDashboard = ({
       );
       return;
     }
+    setIsSaving(true);
     try {
-      await setDoc(
-        doc(db, "artifacts", appId, "public", "data", "team_logs", checkDate),
-        {
-          ...diaryInput,
-          date: checkDate,
-          updatedBy: `${profile.lastName} (MG)`,
-          updatedAt: new Date().toISOString(),
-        },
-      );
-      await setDoc(
-        doc(db, "artifacts", appId, "public", "data", "menus", checkDate),
-        { date: checkDate, text: diaryInput.menu },
-      );
+      await setDoc(docRef("team_logs", checkDate), {
+        ...diaryInput,
+        date: checkDate,
+        updatedBy: `${profile.lastName} (MG)`,
+        updatedAt: new Date().toISOString(),
+      });
+      await setDoc(docRef("menus", checkDate), {
+        date: checkDate,
+        text: diaryInput.menu,
+      });
       toast.success(
         existingLog ? "日誌を更新しました！" : "日誌を保存しました！",
       );
     } catch (e) {
       toast.error("エラー: " + e.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -339,24 +344,24 @@ const ManagerDashboard = ({
       return;
     }
 
+    setIsSaving(true);
     try {
-      await setDoc(
-        doc(db, "artifacts", appId, "public", "data", "team_logs", checkDate),
-        {
-          ...restData,
-          date: checkDate,
-          updatedBy: `${profile.lastName} (MG)`,
-          updatedAt: new Date().toISOString(),
-        },
-      );
-      await setDoc(
-        doc(db, "artifacts", appId, "public", "data", "menus", checkDate),
-        { date: checkDate, text: restData.menu },
-      );
+      await setDoc(docRef("team_logs", checkDate), {
+        ...restData,
+        date: checkDate,
+        updatedBy: `${profile.lastName} (MG)`,
+        updatedAt: new Date().toISOString(),
+      });
+      await setDoc(docRef("menus", checkDate), {
+        date: checkDate,
+        text: restData.menu,
+      });
       toast.success(`${checkDate} を休養日として保存しました！☕`);
       setDiaryMode("list"); // 保存したらすぐに一覧画面に戻る！
     } catch (e) {
       toast.error("エラー: " + e.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -368,12 +373,8 @@ const ManagerDashboard = ({
       return;
     }
     try {
-      await deleteDoc(
-        doc(db, "artifacts", appId, "public", "data", "team_logs", checkDate),
-      );
-      await deleteDoc(
-        doc(db, "artifacts", appId, "public", "data", "menus", checkDate),
-      );
+      await deleteDoc(docRef("team_logs", checkDate));
+      await deleteDoc(docRef("menus", checkDate));
       toast.success("日誌を削除しました🗑️");
       setDiaryInput({
         weather: "晴れ",
@@ -498,28 +499,16 @@ const ManagerDashboard = ({
     }
   };
 
-  // 🌟 LAPタイムの保存機能 (マネージャーが選手のノートを更新する)
   const saveLapTime = async () => {
     if (!editingCard) return;
     try {
       if (!isDemoMode) {
-        await updateDoc(
-          doc(
-            db,
-            "artifacts",
-            appId,
-            "public",
-            "data",
-            "raceCards",
-            editingCard.id,
-          ),
-          {
-            lapTimes: lapInput,
-            resultTime: editingCard.resultTime || "",
-            updatedAt: new Date().toISOString(),
-            updatedBy: `${profile.lastName} (MG)`,
-          },
-        );
+        await updateDoc(docRef("raceCards", editingCard.id), {
+          lapTimes: lapInput,
+          resultTime: editingCard.resultTime || "",
+          updatedAt: new Date().toISOString(),
+          updatedBy: `${profile.lastName} (MG)`,
+        });
       }
       toast.success(`${editingCard.runnerName}選手のLAPを更新しました！`);
       setEditingCard(null);
@@ -864,9 +853,11 @@ const ManagerDashboard = ({
                   {/* ボタンの mb-6 を消し、幅をシュッとさせる（px-5） */}
                   <button
                     onClick={handleRestRegister}
-                    className="py-3 px-5 bg-emerald-500 text-white rounded-xl font-black shadow-md hover:bg-emerald-600 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                    disabled={isSaving}
+                    className={`py-3 px-5 rounded-xl font-black shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 ${isSaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-emerald-500 text-white hover:bg-emerald-600"}`}
                   >
-                    <Home size={16} /> 休養日
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Home size={16} />}
+                    {isSaving ? "保存中..." : "休養日"}
                   </button>
                 </div>
 
@@ -1103,10 +1094,14 @@ const ManagerDashboard = ({
 
                 <button
                   onClick={saveDiary}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  disabled={isSaving}
+                  className={`w-full py-4 rounded-xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${isSaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-indigo-600 text-white shadow-indigo-200"}`}
                 >
-                  <Save size={18} />{" "}
-                  {existingLog ? "日誌を更新" : "日誌を保存・公開"}
+                  {isSaving ? (
+                    <><Loader2 size={18} className="animate-spin" /> 保存中...</>
+                  ) : (
+                    <><Save size={18} /> {existingLog ? "日誌を更新" : "日誌を保存・公開"}</>
+                  )}
                 </button>
               </div>
             )}
@@ -1129,7 +1124,6 @@ const ManagerDashboard = ({
                     </p>
                   ) : (
                     tournaments.map((tour) => (
-                      // 🌟 修正ポイント1: 全体を <div> で囲みます（keyもここに移動）
                       <div key={tour.id} className="flex flex-col gap-2 mb-3">
                         {/* 👇 これが元々あった「選手のエントリー一覧を見る」ボタンです */}
                         <button
@@ -1147,7 +1141,6 @@ const ManagerDashboard = ({
                           <ChevronRight size={18} className="text-slate-300" />
                         </button>
 
-                        {/* 👇 🌟 修正ポイント2: ここに「チームレポートを見る」ボタンを追加します！ */}
                         <button
                           onClick={() => setShowTeamReportId(tour.id)}
                           className="w-full py-3 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl font-black text-sm hover:bg-indigo-100 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
@@ -1212,7 +1205,7 @@ const ManagerDashboard = ({
         )}
       </main>
 
-      {/* ▼▼▼ AI作成ポップアップ（モーダル） ▼▼▼ */}
+      {/* AI作成ポップアップ */}
       {showAIModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">

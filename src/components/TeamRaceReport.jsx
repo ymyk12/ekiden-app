@@ -1,12 +1,17 @@
+/*
+ * TeamRaceReport — チーム大会レポート画面
+ *
+ * チーム全員の大会振り返りシートを一覧で表示する画面。
+ * 日付ごとにグループ化して並べ、印刷・PDF出力にも対応している。
+ */
 import React from "react";
 import {
   ArrowLeft,
   Printer,
   Thermometer,
   Droplets,
-  Users,
   Timer,
-  Calendar, // 🌟 カレンダーアイコンを追加！
+  Calendar,
 } from "lucide-react";
 
 const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
@@ -61,7 +66,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
     (a, b) => parseMeters(a.distance) - parseMeters(b.distance),
   );
 
-  // 🌟🌟 2. ソート済みのカードを「日付ごと」のグループに分ける！ 🌟🌟
   const cardsByDate = {};
   sortedCards.forEach((card) => {
     // 日付が未入力の場合は大会開始日を代入
@@ -280,7 +284,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
           )}
         </div>
 
-        {/* 🌟🌟 選手記録一覧（日付ごとにグループ化） 🌟🌟 */}
+        {/* 選手記録一覧（日付ごとグループ化） */}
         <div>
           {sortedDates.length === 0 ? (
             <p className="text-center py-10 text-slate-300 font-bold bg-white rounded-3xl border border-slate-100">

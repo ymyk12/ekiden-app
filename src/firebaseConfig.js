@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
-
+import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
 import { getMessaging } from "firebase/messaging";
 
 // Firestoreのパス指定で使っているappIdもここでエクスポート
@@ -20,15 +19,9 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
-
-// 🌟🌟🌟 キャッシュ機能（オフライン永続化）をONにする 🌟🌟🌟
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code === "failed-precondition") {
-    console.warn("複数タブで開かれているためキャッシュが有効になりません");
-  } else if (err.code === "unimplemented") {
-    console.warn("現在のブラウザはキャッシュ機能をサポートしていません");
-  }
+// オフライン永続化（キャッシュ）を有効化
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache(),
 });
 
 export const messaging = getMessaging(app);

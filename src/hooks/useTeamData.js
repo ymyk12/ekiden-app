@@ -1,17 +1,21 @@
+/*
+ * useTeamData — チーム全体のデータをリアルタイムで取得するカスタムフック
+ *
+ * Firestore の複数コレクション（選手・練習記録・大会・フィードバックなど）を
+ * onSnapshot で購読し、常に最新状態を返す。
+ * ロール（coach / runner / manager）に応じて取得範囲を切り替える。
+ */
 import { useState, useEffect } from "react";
 import {
-  collection,
-  doc,
   onSnapshot,
   getDoc,
   setDoc,
-  query, // 🌟 追加
-  where, // 🌟 追加
+  query,
+  where,
 } from "firebase/firestore";
-import { db, appId } from "../firebaseConfig";
-import { ROLES } from "../utils/constants"; // 🌟 追加: 役割の定義を読み込む
+import { ROLES } from "../utils/constants";
+import { colRef, settingsDocRef } from "../utils/firestore";
 
-// 🌟 引数に role を追加
 export const useTeamData = (user, role, fetchCutoff) => {
   const [allRunners, setAllRunners] = useState([]);
   const [allLogs, setAllLogs] = useState([]);
@@ -37,15 +41,7 @@ export const useTeamData = (user, role, fetchCutoff) => {
     if (!user) return; // ユーザーがいない時は何もしない
     const timeout = setTimeout(() => setDataLoading(false), 5000);
 
-    const settingsDoc = doc(
-      db,
-      "artifacts",
-      appId,
-      "public",
-      "data",
-      "settings",
-      "global",
-    );
+    const settingsDoc = settingsDocRef();
 
     // 設定ファイルの初期化チェック
     getDoc(settingsDoc)
@@ -73,57 +69,32 @@ export const useTeamData = (user, role, fetchCutoff) => {
       .catch((e) => console.log("Settings init error", e));
 
     // 各コレクションの監視（リアルタイムリスナー）
-    const unsubRunners = onSnapshot(
-      collection(db, "artifacts", appId, "public", "data", "runners"),
-      (snap) => {
-        setAllRunners(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setDataLoading(false);
-        clearTimeout(timeout);
-      },
-    );
+    const unsubRunners = onSnapshot(colRef("runners"), (snap) => {
+      setAllRunners(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setDataLoading(false);
+      clearTimeout(timeout);
+    });
 
-    // 🌟🌟🌟 【Lv.2】 過去データの制限（クエリの分岐） 🌟🌟🌟
-    let logsQuery = collection(
-      db,
-      "artifacts",
-      appId,
-      "public",
-      "data",
-      "logs",
-    );
-
-    // 監督またはシステム管理者以外は、App.jsから指定された足切りライン(fetchCutoff)で制限する！
+    // 監督・管理者以外は fetchCutoff で取得範囲を制限する
+    let logsQuery = colRef("logs");
     if (role !== ROLES.COACH && role !== ROLES.ADMIN && fetchCutoff) {
       logsQuery = query(logsQuery, where("date", ">=", fetchCutoff));
     }
 
-    // 制限をかけた（または監督用の全件）クエリでデータを監視する
     const unsubLogs = onSnapshot(logsQuery, (snap) => {
       setAllLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubTournaments = onSnapshot(
-      collection(db, "artifacts", appId, "public", "data", "tournaments"),
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        data.sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
-        setTournaments(data);
-      },
-    );
+    const unsubTournaments = onSnapshot(colRef("tournaments"), (snapshot) => {
+      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      data.sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
+      setTournaments(data);
+    });
 
-    const unsubRaceCards = onSnapshot(
-      collection(db, "artifacts", appId, "public", "data", "raceCards"),
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setRaceCards(data);
-      },
-    );
+    const unsubRaceCards = onSnapshot(colRef("raceCards"), (snapshot) => {
+      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setRaceCards(data);
+    });
 
     const unsubSettings = onSnapshot(settingsDoc, (snap) => {
       if (snap.exists()) {
@@ -138,26 +109,17 @@ export const useTeamData = (user, role, fetchCutoff) => {
       }
     });
 
-    const unsubMenus = onSnapshot(
-      collection(db, "artifacts", appId, "public", "data", "menus"),
-      (snap) => {
-        setPracticeMenus(snap.docs.map((d) => d.data()));
-      },
-    );
+    const unsubMenus = onSnapshot(colRef("menus"), (snap) => {
+      setPracticeMenus(snap.docs.map((d) => d.data()));
+    });
 
-    const unsubFeedbacks = onSnapshot(
-      collection(db, "artifacts", appId, "public", "data", "feedbacks"),
-      (snap) => {
-        setAllFeedbacks(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      },
-    );
+    const unsubFeedbacks = onSnapshot(colRef("feedbacks"), (snap) => {
+      setAllFeedbacks(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
 
-    const unsubTeamLogs = onSnapshot(
-      collection(db, "artifacts", appId, "public", "data", "team_logs"),
-      (snap) => {
-        setTeamLogs(snap.docs.map((d) => ({ date: d.id, ...d.data() })));
-      },
-    );
+    const unsubTeamLogs = onSnapshot(colRef("team_logs"), (snap) => {
+      setTeamLogs(snap.docs.map((d) => ({ date: d.id, ...d.data() })));
+    });
 
     // クリーンアップ関数（コンポーネントが消えたり、roleが変わったりした時に古い監視を解除する）
     return () => {

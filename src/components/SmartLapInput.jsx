@@ -1,3 +1,10 @@
+/*
+ * SmartLapInput — LAPタイム入力コンポーネント
+ *
+ * レースの区間タイムを入力するとトータルタイムを自動計算して表示する。
+ * 種目・距離に応じて計測ポイント（200m・400m・1000m等）が自動で切り替わる。
+ * 公式リザルトを先に入力すると、最終区間のタイムを逆算する機能も持つ。
+ */
 import React, { useState, useEffect, useMemo } from "react";
 import { Timer } from "lucide-react";
 
@@ -119,12 +126,10 @@ const SmartLapInput = ({
     onChange(finalString);
   };
 
-  // 🌟 公式リザルト入力時の処理
   const handleResultChange = (rawResult) => {
     const formattedResult = formatInput(rawResult);
     setOfficialResult(formattedResult);
 
-    // 🌟 修正：setTimeout を削除し、瞬時に親コンポーネントへ送信！
     if (onResultChange) {
       onResultChange(formattedResult);
     }
@@ -153,7 +158,6 @@ const SmartLapInput = ({
     updateAll(nextLaps, formattedResult);
   };
 
-  // 🌟 通常ラップ入力時の処理
   const handleLapChange = (dist, rawValue) => {
     const formatted = formatInput(rawValue);
     let nextLaps = { ...laps, [dist]: formatted };
@@ -172,7 +176,6 @@ const SmartLapInput = ({
           currentOfficialResult = secondsToTime(newTotalSec);
           setOfficialResult(currentOfficialResult);
 
-          // 🌟 修正：setTimeout を削除し、瞬時に親コンポーネントへ送信！
           if (onResultChange) {
             onResultChange(currentOfficialResult);
           }

@@ -1,3 +1,10 @@
+/*
+ * CoachView — 監督ダッシュボード（メイン画面）
+ *
+ * 監督がログイン後に使うすべての機能を含む大型コンポーネント。
+ * チーム全体の練習状況確認、選手個別管理、大会・振り返り管理、
+ * レポート表示、期間設定、データエクスポートなどを担当する。
+ */
 import { useState, useMemo } from "react";
 import {
   Users,
@@ -40,6 +47,7 @@ import {
   Plus,
   Bell,
   BellRing,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -53,23 +61,18 @@ import {
   Cell,
   LabelList,
 } from "recharts";
-import { doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { docRef, settingsDocRef } from "../utils/firestore";
 import { ROLES } from "../utils/constants";
 import { getTodayStr } from "../utils/dateUtils";
 
-// 練習日誌
 import DiaryListItem from "./DiaryListItem";
-// グラフ設定
 import CoachReportView from "./CoachReportView";
-// 走行距離印刷設定
 import { usePrint } from "../hooks/usePrint";
-// 大会LAPタイム入力
 import LapTimeModal from "./LapTimeModal";
-// 大会ノート印刷設定
 import TeamRaceReport from "./TeamRaceReport";
 
-// 🌟🌟▼▼ LAP解析用の共通ヘルパー関数（追加） ▼▼🌟🌟
+// LAP解析ヘルパー関数
 const timeToSeconds = (str) => {
   if (!str) return 0;
   const cleanStr = str.replace(/[()（）]/g, "");
@@ -170,7 +173,6 @@ const analyzeLaps = (lapStr, raceType, distanceStr, ekidenDist) => {
 
   return { formattedLines };
 };
-// 🌟🌟▲▲ LAP解析用の共通ヘルパー関数ここまで ▲▲🌟🌟
 
 const CoachView = (props) => {
   const {
@@ -189,7 +191,6 @@ const CoachView = (props) => {
     setIsPainAlertModalOpen,
     rankingData,
     exportCSV,
-    printStyles,
     reportChartData,
     activeQuarters,
     cumulativeData,
@@ -199,7 +200,6 @@ const CoachView = (props) => {
     allLogs,
     menuInput,
     setMenuInput,
-    setSuccessMsg,
     teamLogs,
     appId,
     handleCoachEditRunner,
@@ -217,17 +217,16 @@ const CoachView = (props) => {
     handleSaveCustomPeriod,
     handleEditCustomPeriod,
     handleDeleteCustomPeriod,
-    mergeTargetId,
-    setMergeTargetId,
-    mergeSourceId,
-    setMergeSourceId,
+    isPeriodSaving,
+    mergeInput,
+    setMergeInput,
     errorMsg,
     isSubmitting,
     handleMergeRunners,
     isCoachEditModalOpen,
     setIsCoachEditModalOpen,
-    formData,
-    setFormData,
+    logInput,
+    setLogInput,
     handleCoachDeleteLog,
     setEditingLogId,
     resetForm,
@@ -332,23 +331,12 @@ const CoachView = (props) => {
         setEditingLapCard(null);
         return;
       }
-      await updateDoc(
-        doc(
-          db,
-          "artifacts",
-          appId,
-          "public",
-          "data",
-          "raceCards",
-          editingLapCard.id,
-        ),
-        {
-          lapTimes: lapInput,
-          resultTime: lapResultInput, // 🌟 専用の保管庫から取るから絶対に間違えない！
-          updatedAt: new Date().toISOString(),
-          updatedBy: "監督",
-        },
-      );
+      await updateDoc(docRef("raceCards", editingLapCard.id), {
+        lapTimes: lapInput,
+        resultTime: lapResultInput,
+        updatedAt: new Date().toISOString(),
+        updatedBy: "監督",
+      });
       import("react-hot-toast").then((m) =>
         m.toast.success(
           `${editingLapCard.runnerName}選手のLAPを更新しました！`,
@@ -376,6 +364,8 @@ const CoachView = (props) => {
 
   const [diaryMode, setDiaryMode] = useState("list");
   const [listMonth, setListMonth] = useState(new Date());
+  const [isDiarySaving, setIsDiarySaving] = useState(false);
+  const [isSettingsSaving, setIsSettingsSaving] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 print:bg-white print:pb-0 print:h-auto md:flex">
@@ -791,7 +781,6 @@ const CoachView = (props) => {
           <CoachReportView
             handleExportMatrixCSV={handleExportMatrixCSV}
             handlePrint={handlePrint}
-            printStyles={printStyles}
             activeRunners={activeRunners}
             targetPeriod={targetPeriod}
             reportMatrix={reportMatrix}
@@ -803,7 +792,7 @@ const CoachView = (props) => {
 
         {view === "coach-check" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
-            <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 text-center tracking-[0.3em]">
               Status Check
             </h3>
             <div className="flex flex-col md:flex-row items-center justify-center mb-6 gap-6">
@@ -1092,37 +1081,30 @@ const CoachView = (props) => {
                           </div>
                           <button
                             onClick={async () => {
-                              const newMenu =
-                                document.getElementById(
-                                  "edit-diary-menu",
-                                ).value;
-                              const newResult =
-                                document.getElementById(
-                                  "edit-diary-result",
-                                ).value;
-                              await updateDoc(
-                                doc(
-                                  db,
-                                  "artifacts",
-                                  appId,
-                                  "public",
-                                  "data",
-                                  "team_logs",
-                                  menuInput.date,
-                                ),
-                                {
+                              setIsDiarySaving(true);
+                              try {
+                                const newMenu = document.getElementById("edit-diary-menu").value;
+                                const newResult = document.getElementById("edit-diary-result").value;
+                                await updateDoc(docRef("team_logs", menuInput.date), {
                                   menu: newMenu,
                                   result: newResult,
                                   updatedAt: new Date().toISOString(),
-                                },
-                              );
-                              import("react-hot-toast").then((module) => {
-                                module.toast.success("日誌を更新しました！");
-                              });
+                                });
+                                import("react-hot-toast").then((module) => {
+                                  module.toast.success("日誌を更新しました！");
+                                });
+                              } catch (e) {
+                                import("react-hot-toast").then((module) => {
+                                  module.toast.error("エラー: " + e.message);
+                                });
+                              } finally {
+                                setIsDiarySaving(false);
+                              }
                             }}
-                            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+                            disabled={isDiarySaving}
+                            className={`w-full py-4 rounded-2xl font-black shadow-md transition-all flex items-center justify-center gap-2 ${isDiarySaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-blue-600 text-white active:scale-95"}`}
                           >
-                            <Save size={16} /> 内容を上書き保存する
+                            {isDiarySaving ? <><Loader2 size={16} className="animate-spin" /> 保存中...</> : <><Save size={16} /> 内容を上書き保存する</>}
                           </button>
                         </div>
                       );
@@ -1136,7 +1118,7 @@ const CoachView = (props) => {
         {view === "coach-race" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in max-w-2xl mx-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">
+              <h3 className="font-black uppercase text-[10px] text-slate-400 tracking-[0.3em]">
                 Race & Tournament
               </h3>
             </div>
@@ -1267,7 +1249,7 @@ const CoachView = (props) => {
         {view === "coach-admin" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">
+              <h3 className="font-black uppercase text-[10px] text-slate-400 tracking-[0.3em]">
                 Admin Tools
               </h3>
             </div>
@@ -1278,7 +1260,7 @@ const CoachView = (props) => {
               <p className="text-[10px] text-slate-600 font-bold leading-relaxed mb-6">
                 この機能はシステム管理者用です。他のユーザー権限での動作確認や、設定のテストを行うことができます。
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div id="demo-buttons-section" className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   onClick={() => setDemoMode("manager")}
                   className="p-5 bg-amber-50 text-amber-700 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-amber-100 border border-amber-200 shadow-sm active:scale-95 transition-all"
@@ -1309,9 +1291,16 @@ const CoachView = (props) => {
 
         {view === "coach-roster" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in fade-in">
-            <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 text-center tracking-[0.3em]">
               Team Roster
             </h3>
+            {/* マネージャー画面の確認ショートカット */}
+            <button
+              onClick={() => setDemoMode("manager")}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 text-amber-700 rounded-2xl font-black text-xs border border-amber-100 active:scale-95 transition-all hover:bg-amber-100"
+            >
+              <Users size={14} /> マネージャー画面を確認する
+            </button>
             {(() => {
               const athletes = activeRunners.filter(
                 (r) => r.role !== ROLES.MANAGER,
@@ -1462,18 +1451,9 @@ const CoachView = (props) => {
                               isOpen: true,
                               message: `${r.lastName}選手を現役復帰させますか？`,
                               onConfirm: async () => {
-                                await updateDoc(
-                                  doc(
-                                    db,
-                                    "artifacts",
-                                    appId,
-                                    "public",
-                                    "data",
-                                    "runners",
-                                    r.id,
-                                  ),
-                                  { status: "active" },
-                                );
+                                await updateDoc(docRef("runners", r.id), {
+                                  status: "active",
+                                });
                                 setConfirmDialog({
                                   isOpen: false,
                                   message: "",
@@ -1493,17 +1473,7 @@ const CoachView = (props) => {
                               isOpen: true,
                               message: `警告: ${r.lastName}選手のデータを完全に削除します。元に戻せません。よろしいですか？`,
                               onConfirm: async () => {
-                                await deleteDoc(
-                                  doc(
-                                    db,
-                                    "artifacts",
-                                    appId,
-                                    "public",
-                                    "data",
-                                    "runners",
-                                    r.id,
-                                  ),
-                                );
+                                await deleteDoc(docRef("runners", r.id));
                                 setConfirmDialog({
                                   isOpen: false,
                                   message: "",
@@ -1546,7 +1516,7 @@ const CoachView = (props) => {
               >
                 <ArrowLeft size={20} />
               </button>
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
+              <h3 className="font-black uppercase text-[10px] text-slate-400 text-center tracking-[0.3em]">
                 Athlete Detail
               </h3>
               <div className="w-9" />
@@ -1603,9 +1573,10 @@ const CoachView = (props) => {
               </div>
               <button
                 onClick={handleCoachSaveProfile}
-                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all"
+                disabled={isSubmitting}
+                className={`w-full py-3 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-1.5 ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-blue-600 text-white active:scale-95"}`}
               >
-                プロフィール更新
+                {isSubmitting ? <><Loader2 size={13} className="animate-spin" /> 更新中...</> : "プロフィール更新"}
               </button>
             </div>
             <div className="border-t border-slate-100 pt-6 space-y-4">
@@ -1693,9 +1664,10 @@ const CoachView = (props) => {
                   )}
                 <button
                   onClick={handleCoachSaveGoals}
-                  className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all mt-2"
+                  disabled={isSubmitting}
+                  className={`w-full py-3 rounded-xl font-bold text-xs shadow-lg transition-all mt-2 flex items-center justify-center gap-1.5 ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-emerald-600 text-white active:scale-95"}`}
                 >
-                  目標値を保存
+                  {isSubmitting ? <><Loader2 size={13} className="animate-spin" /> 保存中...</> : "目標値を保存"}
                 </button>
               </div>
             </div>
@@ -1801,9 +1773,10 @@ const CoachView = (props) => {
                 />
                 <button
                   onClick={() => handleSaveCoachFeedback(selectedRunner.id)}
-                  className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold text-xs shadow-md active:scale-95"
+                  disabled={isSubmitting}
+                  className={`w-full py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-slate-800 text-white active:scale-95"}`}
                 >
-                  フィードバック送信
+                  {isSubmitting ? <><Loader2 size={13} className="animate-spin" /> 送信中...</> : "フィードバック送信"}
                 </button>
               </div>
             </div>
@@ -1821,18 +1794,9 @@ const CoachView = (props) => {
                       isOpen: true,
                       message: `${selectedRunner.lastName}選手を引退(アーカイブ)扱いにしますか？\n(現役リストから外れ、引退リストに移動します)`,
                       onConfirm: async () => {
-                        await updateDoc(
-                          doc(
-                            db,
-                            "artifacts",
-                            appId,
-                            "public",
-                            "data",
-                            "runners",
-                            selectedRunner.id,
-                          ),
-                          { status: "retired" },
-                        );
+                        await updateDoc(docRef("runners", selectedRunner.id), {
+                          status: "retired",
+                        });
                         setConfirmDialog({
                           isOpen: false,
                           message: "",
@@ -1871,7 +1835,7 @@ const CoachView = (props) => {
               >
                 <ArrowLeft size={20} />
               </button>
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em] m-0">
+              <h3 className="font-black uppercase text-[10px] text-slate-400 text-center tracking-[0.3em] m-0">
                 Settings
               </h3>
               <div className="w-9" />
@@ -1998,9 +1962,10 @@ const CoachView = (props) => {
                     )}
                     <button
                       onClick={handleSaveCustomPeriod}
-                      className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-md hover:bg-blue-700 transition-colors"
+                      disabled={isPeriodSaving}
+                      className={`flex-1 py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 ${isPeriodSaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-blue-600 text-white hover:bg-blue-700"}`}
                     >
-                      {editingPeriodId ? "更新する" : "追加する"}
+                      {isPeriodSaving ? <><Loader2 size={13} className="animate-spin" /> 保存中...</> : editingPeriodId ? "更新する" : "追加する"}
                     </button>
                   </div>
                 </div>
@@ -2119,8 +2084,8 @@ const CoachView = (props) => {
                     </label>
                     <select
                       className="w-full p-3 rounded-xl border border-rose-200 text-sm font-bold bg-white outline-none focus:border-rose-500"
-                      value={mergeTargetId}
-                      onChange={(e) => setMergeTargetId(e.target.value)}
+                      value={mergeInput.targetId}
+                      onChange={(e) => setMergeInput(p => ({ ...p, targetId: e.target.value }))}
                     >
                       <option value="">選択してください...</option>
                       {allRunners.map((r) => (
@@ -2137,8 +2102,8 @@ const CoachView = (props) => {
                     </label>
                     <select
                       className="w-full p-3 rounded-xl border border-rose-200 text-sm font-bold bg-white outline-none focus:border-rose-500"
-                      value={mergeSourceId}
-                      onChange={(e) => setMergeSourceId(e.target.value)}
+                      value={mergeInput.sourceId}
+                      onChange={(e) => setMergeInput(p => ({ ...p, sourceId: e.target.value }))}
                     >
                       <option value="">選択してください...</option>
                       {allRunners.map((r) => (
@@ -2156,9 +2121,9 @@ const CoachView = (props) => {
                   )}
                   <button
                     onClick={handleMergeRunners}
-                    disabled={!mergeTargetId || !mergeSourceId || isSubmitting}
+                    disabled={!mergeInput.targetId || !mergeInput.sourceId || isSubmitting}
                     className={`w-full py-3 rounded-xl font-bold text-xs shadow-md transition-all ${
-                      !mergeTargetId || !mergeSourceId || isSubmitting
+                      !mergeInput.targetId || !mergeInput.sourceId || isSubmitting
                         ? "bg-rose-200 text-white cursor-not-allowed"
                         : "bg-rose-600 text-white hover:bg-rose-700 active:scale-95"
                     }`}
@@ -2168,25 +2133,21 @@ const CoachView = (props) => {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  setDoc(
-                    doc(
-                      db,
-                      "artifacts",
-                      appId,
-                      "public",
-                      "data",
-                      "settings",
-                      "global",
-                    ),
-                    appSettings,
-                  );
-                  setSuccessMsg("保存しました");
-                  setTimeout(() => setSuccessMsg(""), 2000);
+                onClick={async () => {
+                  setIsSettingsSaving(true);
+                  try {
+                    await setDoc(settingsDocRef(), appSettings);
+                    import("react-hot-toast").then((m) => m.toast.success("設定を保存しました"));
+                  } catch (e) {
+                    import("react-hot-toast").then((m) => m.toast.error("エラー: " + e.message));
+                  } finally {
+                    setIsSettingsSaving(false);
+                  }
                 }}
-                className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black shadow-xl active:scale-95"
+                disabled={isSettingsSaving}
+                className={`w-full py-6 rounded-3xl font-black shadow-xl transition-all flex items-center justify-center gap-2 ${isSettingsSaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-slate-900 text-white active:scale-95"}`}
               >
-                設定保存
+                {isSettingsSaving ? <><Loader2 size={18} className="animate-spin" /> 保存中...</> : "設定保存"}
               </button>
             </div>
           </div>
@@ -2207,9 +2168,9 @@ const CoachView = (props) => {
                     <input
                       type="date"
                       className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm"
-                      value={formData.date}
+                      value={logInput.date}
                       onChange={(e) =>
-                        setFormData({ ...formData, date: e.target.value })
+                        setLogInput({ ...logInput, date: e.target.value })
                       }
                     />
                   </div>
@@ -2221,9 +2182,9 @@ const CoachView = (props) => {
                       type="number"
                       step="0.1"
                       className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm"
-                      value={formData.distance}
+                      value={logInput.distance}
                       onChange={(e) =>
-                        setFormData({ ...formData, distance: e.target.value })
+                        setLogInput({ ...logInput, distance: e.target.value })
                       }
                     />
                   </div>
@@ -2234,9 +2195,9 @@ const CoachView = (props) => {
                   </label>
                   <textarea
                     className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm h-16 resize-none"
-                    value={formData.menuDetail}
+                    value={logInput.menuDetail}
                     onChange={(e) =>
-                      setFormData({ ...formData, menuDetail: e.target.value })
+                      setLogInput({ ...logInput, menuDetail: e.target.value })
                     }
                   />
                 </div>
@@ -2250,10 +2211,10 @@ const CoachView = (props) => {
                       min="1"
                       max="10"
                       className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm"
-                      value={formData.rpe}
+                      value={logInput.rpe}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
+                        setLogInput({
+                          ...logInput,
                           rpe:
                             e.target.value === ""
                               ? ""
@@ -2271,10 +2232,10 @@ const CoachView = (props) => {
                       min="1"
                       max="5"
                       className="w-full p-2 bg-slate-50 rounded-lg font-bold text-sm"
-                      value={formData.pain}
+                      value={logInput.pain}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
+                        setLogInput({
+                          ...logInput,
                           pain:
                             e.target.value === ""
                               ? ""
@@ -2305,9 +2266,10 @@ const CoachView = (props) => {
                 </button>
                 <button
                   onClick={handleCoachUpdateLog}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-lg hover:bg-blue-700 transition-colors"
+                  disabled={isSubmitting}
+                  className={`flex-1 py-3 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-1.5 ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-blue-600 text-white hover:bg-blue-700"}`}
                 >
-                  更新して保存
+                  {isSubmitting ? <><Loader2 size={13} className="animate-spin" /> 更新中...</> : "更新して保存"}
                 </button>
               </div>
             </div>
@@ -2660,7 +2622,6 @@ const CoachView = (props) => {
                           </p>
                         </div>
 
-                        {/* 🌟🌟 修正ポイント：LAP表示をフォーマット適用版に書き換えました！ 🌟🌟 */}
                         {readingCard.lapTimes &&
                           (() => {
                             const analysis = analyzeLaps(
@@ -2822,7 +2783,7 @@ const CoachView = (props) => {
                           </div>
                         </div>
                         <div className="text-right flex items-center">
-                          {/* 🌟 バッジの判定をプロ仕様に強化！DNSやDNFも正しく表示します */}
+                          {/* DNS/DNF も含むバッジ判定 */}
                           {card.resultTime || card.status === "finish" ? (
                             <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
                               Resultあり
@@ -2861,7 +2822,7 @@ const CoachView = (props) => {
         lapInput={lapInput}
         setLapInput={setLapInput}
         onSave={handleSaveLapTime}
-        // 🌟 専用の保管庫(lapResultInput)に同期させる！
+        // lapResultInput に同期させる
         onResultChange={(newResult) => {
           setLapResultInput(newResult);
           // 画面(詳細ビュー)を開いている場合は即座に見た目も反映する

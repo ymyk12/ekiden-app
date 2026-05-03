@@ -1,4 +1,11 @@
-import { useState } from "react";
+/*
+ * RaceCardEntry — 大会振り返りシート入力画面
+ *
+ * 選手が大会ごとに「レースプラン → 当日コンディション → 結果 → 反省 → 次の目標」
+ * を入力する画面。LAPタイムの入力には SmartLapInput を使用する。
+ * 保存処理は App.js の handleSaveRaceCard が担う。
+ */
+import { useState, useMemo } from "react";
 import SmartLapInput from "./SmartLapInput";
 import {
   Calendar,
@@ -27,8 +34,31 @@ const RaceCardEntry = ({
   isSubmitting,
   handleSaveRaceCard,
   handleDeleteRaceCard,
+  raceCards,
+  currentUserId,
 }) => {
   const [isRaceFeedbackOpen, setIsRaceFeedbackOpen] = useState(false);
+  const [isPrevCardOpen, setIsPrevCardOpen] = useState(false);
+
+  // 時系列で1つ前の大会ノートを取得する
+  const prevCard = useMemo(() => {
+    if (!raceCards || !currentUserId || !tournaments) return null;
+
+    const getTournamentDate = (tournamentId) =>
+      tournaments.find((t) => t.id === tournamentId)?.startDate ?? "";
+
+    const currentDate = getTournamentDate(raceCardInput.tournamentId);
+
+    const candidates = raceCards
+      .filter((c) => c.runnerId === currentUserId && c.id !== editingRaceCardId)
+      .map((c) => ({ ...c, _date: getTournamentDate(c.tournamentId) }))
+      .filter((c) => c._date !== "")
+      .sort((a, b) => b._date.localeCompare(a._date));
+
+    // 新規作成中（editingRaceCardId が null）は最新カードを表示
+    if (!currentDate) return candidates[0] ?? null;
+    return candidates.find((c) => c._date < currentDate) ?? null;
+  }, [raceCards, currentUserId, editingRaceCardId, raceCardInput.tournamentId, tournaments]);
 
   const currentTour = tournaments.find(
     (t) => t.id === raceCardInput.tournamentId,
@@ -88,6 +118,102 @@ const RaceCardEntry = ({
               <p className="font-bold text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
                 {raceCardInput.coachFeedback}
               </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 前大会の記録（参考表示） */}
+      {prevCard && (
+        <div className="mb-4">
+          <button
+            onClick={() => setIsPrevCardOpen(!isPrevCardOpen)}
+            className={`w-full flex items-center justify-between px-4 py-3 border active:scale-95 transition-all ${
+              isPrevCardOpen
+                ? "bg-amber-50 border-amber-200 rounded-t-2xl"
+                : "bg-amber-50/50 border-amber-100 rounded-2xl hover:bg-amber-50"
+            }`}
+          >
+            <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
+              <Calendar size={14} /> 前大会の記録を見る
+            </span>
+            <ChevronRight
+              size={16}
+              className={`text-amber-400 transition-transform duration-300 ${
+                isPrevCardOpen ? "rotate-90" : ""
+              }`}
+            />
+          </button>
+
+          {isPrevCardOpen && (
+            <div className="bg-amber-50/30 border border-t-0 border-amber-200 p-5 rounded-b-2xl space-y-3 animate-in slide-in-from-top-2">
+              {/* 大会名・種目 */}
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-black text-xs text-slate-700 truncate">
+                  {tournaments.find((t) => t.id === prevCard.tournamentId)?.name ?? "大会名不明"}
+                </p>
+                <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                  {prevCard.raceType} {prevCard.distance || prevCard.ekidenDistance}
+                </span>
+              </div>
+
+              {/* 結果タイム */}
+              {prevCard.resultTime && (
+                <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2">
+                  <Timer size={12} className="text-blue-500 flex-shrink-0" />
+                  <span className="text-[10px] font-black text-slate-500">結果</span>
+                  <span className="font-black text-sm text-slate-800 ml-auto">
+                    {prevCard.resultTime}
+                  </span>
+                </div>
+              )}
+
+              {/* コンディション */}
+              {prevCard.condition > 0 && (
+                <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2">
+                  <span className="text-[10px] font-black text-slate-500">コンディション</span>
+                  <span className="ml-auto font-black text-base text-amber-400">
+                    {"★".repeat(prevCard.condition)}
+                    <span className="text-slate-200">{"★".repeat(5 - prevCard.condition)}</span>
+                  </span>
+                </div>
+              )}
+
+              {/* 前回の課題 */}
+              {prevCard.issues && (
+                <div className="bg-white rounded-xl px-3 py-2.5 space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    前回の課題
+                  </p>
+                  <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    {prevCard.issues}
+                  </p>
+                </div>
+              )}
+
+              {/* 前回立てた目標 */}
+              {prevCard.nextGoal && (
+                <div className="bg-white rounded-xl px-3 py-2.5 space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    前回立てた目標
+                  </p>
+                  <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    {prevCard.nextGoal}
+                  </p>
+                </div>
+              )}
+
+              {/* 監督コメント（前回分） */}
+              {prevCard.coachFeedback && (
+                <div className="bg-indigo-50 rounded-xl px-3 py-2.5 space-y-1">
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+                    前回の監督コメント
+                  </p>
+                  <p className="text-xs text-indigo-700 leading-relaxed whitespace-pre-wrap">
+                    {prevCard.coachFeedback}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -163,7 +289,6 @@ const RaceCardEntry = ({
           </div>
         </div>
 
-        {/* 🌟🌟 修正ポイント：「駅伝」と「その他」で入力欄のラベルとプレースホルダーを賢く切り替える！ 🌟🌟 */}
         {(raceCardInput.raceType === RACE_TYPES.EKIDEN ||
           raceCardInput.distance === "その他") && (
           <div className="space-y-1 animate-in fade-in">
@@ -543,7 +668,7 @@ const RaceCardEntry = ({
               <Timer size={12} /> Result & Lap Times
             </label>
 
-            {/* 🌟 魔法の分岐：「その他」の時は自由記述に切り替える！ */}
+            {/* 「その他」の場合は自由記述に切り替える */}
             {raceCardInput.distance === "その他" ? (
               <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-4">
                 <p className="text-[10px] font-bold text-slate-400 px-1">

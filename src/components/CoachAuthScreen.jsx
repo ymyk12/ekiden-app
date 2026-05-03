@@ -1,3 +1,9 @@
+/*
+ * CoachAuthScreen — 監督パスワード入力画面
+ *
+ * 監督専用のパスコードを入力して監督モードに切り替える。
+ * パスコードは Firestore の settings/global に保存されている。
+ */
 import React from "react";
 import { ROLES } from "../utils/constants";
 

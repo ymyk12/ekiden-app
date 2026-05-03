@@ -1,10 +1,15 @@
+/*
+ * LoginScreen — 選手ログイン画面
+ *
+ * 5桁の選手番号と4桁の暗証番号を入力してログインする。
+ * 認証処理（照合・UID更新）は App.js の handleLogin が担う。
+ */
 import React from "react";
 import { KeyRound, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
 
-// App.jsから「小包(Props)」として、必要なデータや関数を受け取ります
 const LoginScreen = ({
-  formData,
-  setFormData,
+  authInput,
+  setAuthInput,
   handleLogin,
   errorMsg,
   isSubmitting,
@@ -12,8 +17,8 @@ const LoginScreen = ({
 }) => {
   // ボタンを押せるかどうかの判定
   const isReady =
-    (formData.memberCode && formData.personalPin.length === 4) ||
-    formData.memberCode === "99999"; // 管理者用
+    (authInput.memberCode && authInput.personalPin.length === 4) ||
+    authInput.memberCode === "99999"; // 管理者用
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -42,10 +47,10 @@ const LoginScreen = ({
                 maxLength={5}
                 placeholder="選手番号 (例: 26001)"
                 className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500 text-lg tracking-wider"
-                value={formData.memberCode}
+                value={authInput.memberCode}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 5);
-                  setFormData({ ...formData, memberCode: val });
+                  setAuthInput({ ...authInput, memberCode: val });
                 }}
               />
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-lg">
@@ -62,15 +67,15 @@ const LoginScreen = ({
             <div className="relative">
               <input
                 type="password"
-                inputMode="numeric" // 🌟 ここを追加！スマホでテンキーが開きます
-                pattern="[0-9]*" // 🌟 ここを追加！iPhone等で確実に数字キーを出すためのおまじない
+                inputMode="numeric"
+                pattern="[0-9]*" // iPhone で確実に数字キーを出す属性
                 maxLength={4}
                 placeholder="0000"
                 className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-emerald-500 text-lg tracking-widest"
-                value={formData.personalPin}
+                value={authInput.personalPin}
                 onChange={(e) =>
-                  setFormData({
-                    ...formData,
+                  setAuthInput({
+                    ...authInput,
                     personalPin: e.target.value.replace(/[^0-9]/g, ""),
                   })
                 }

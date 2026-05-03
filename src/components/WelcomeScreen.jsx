@@ -1,3 +1,9 @@
+/*
+ * WelcomeScreen — アプリ起動直後のトップ画面
+ *
+ * 「新規登録」「ログイン」「監督ログイン」の3つのボタンを表示する。
+ * ロールを選ぶだけでよく、認証処理は行わない。
+ */
 import React from "react";
 import { UserPlus, LogIn, Lock, Trophy } from "lucide-react";
 import { ROLES } from "../utils/constants";

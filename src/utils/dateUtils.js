@@ -44,16 +44,13 @@ export const calculateAutoQuarters = (startStr, endStr) => {
   return quarters;
 };
 
-export const calculateAutoQuartersFixed = (startStr, endStr) =>
-  calculateAutoQuarters(startStr, endStr);
-
 export const getDatesInRange = (startDate, endDate) => {
   if (!startDate || !endDate) return [];
   const start = new Date(startDate);
   const end = new Date(endDate);
   if (isNaN(start) || isNaN(end) || start > end) return [];
 
-  // ★安全装置: 期間が長すぎる場合（370日を超える場合）は空配列を返してフリーズを防ぐ
+  // 370日超の期間は日別展開せずに空配列を返す（フリーズ防止）
   const diffTime = Math.abs(end - start);
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   if (diffDays > 370) {
@@ -80,14 +77,13 @@ export const getMonthRange = (dateStr) => {
 };
 
 export const getYearRange = (year) => {
-  // ★年度対応: その年の4月1日 〜 翌年の3月31日
+  // 年度: 4月1日〜翌年3月31日
   return {
     start: `${year}-04-01`,
     end: `${year + 1}-03-31`,
     name: `${year}年度`,
   };
 };
-// カスタム期間設定
 export const getGoalValue = (runner, periodId, periodType, key) => {
   if (!runner) return 0;
   if (periodType === "global") return runner[key] || 0;
@@ -104,3 +100,12 @@ export const getGoalValue = (runner, periodId, periodType, key) => {
   }
   return 0;
 };
+
+export const extractGoalInputs = (runner, periodId, periodType) => ({
+  monthly: getGoalValue(runner, periodId, periodType, "goalMonthly") || "",
+  period:  getGoalValue(runner, periodId, periodType, "goalPeriod")  || "",
+  q1:      getGoalValue(runner, periodId, periodType, "goalQ1")      || "",
+  q2:      getGoalValue(runner, periodId, periodType, "goalQ2")      || "",
+  q3:      getGoalValue(runner, periodId, periodType, "goalQ3")      || "",
+  q4:      getGoalValue(runner, periodId, periodType, "goalQ4")      || "",
+});

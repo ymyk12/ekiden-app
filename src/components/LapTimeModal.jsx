@@ -1,3 +1,10 @@
+/*
+ * LapTimeModal — LAPタイム入力モーダル
+ *
+ * 監督が選手の大会振り返りシートに
+ * LAPタイムを後から入力・修正するためのポップアップ画面。
+ * 内部で SmartLapInput を使用する。
+ */
 import React from "react";
 import { X, Save, Timer } from "lucide-react";
 import SmartLapInput from "./SmartLapInput";
@@ -44,7 +51,7 @@ const LapTimeModal = ({
           </p>
         </div>
 
-        {/* 🌟 魔法の分岐：監督モーダルでも「その他」なら自由記述に！ */}
+        {/* 「その他」の場合は自由記述に切り替える */}
         {editingCard.distance === "その他" ? (
           <div className="flex-1 space-y-4">
             <div className="space-y-1">

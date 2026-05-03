@@ -1,3 +1,10 @@
+/*
+ * RegisterScreen — 選手新規登録画面
+ *
+ * 名前・選手番号・チームパスコード・個人暗証番号を入力して
+ * アカウントを作成する。
+ * 保存処理は App.js の handleRegister が担う。
+ */
 import React from "react";
 import {
   Lock,
@@ -9,19 +16,19 @@ import {
 } from "lucide-react";
 
 const RegisterScreen = ({
-  formData,
-  setFormData,
+  authInput,
+  setAuthInput,
   handleRegister,
   errorMsg,
   isSubmitting,
   setRole,
 }) => {
   const isReady =
-    formData.lastName &&
-    formData.firstName &&
-    formData.memberCode &&
-    formData.teamPass &&
-    formData.personalPin.length === 4;
+    authInput.lastName &&
+    authInput.firstName &&
+    authInput.memberCode &&
+    authInput.teamPass &&
+    authInput.personalPin.length === 4;
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -44,17 +51,17 @@ const RegisterScreen = ({
               <input
                 placeholder="苗字 (例: 佐藤)"
                 className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500"
-                value={formData.lastName}
+                value={authInput.lastName}
                 onChange={(e) =>
-                  setFormData({ ...formData, lastName: e.target.value })
+                  setAuthInput({ ...authInput, lastName: e.target.value })
                 }
               />
               <input
                 placeholder="名前 (例: 太郎)"
                 className="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500"
-                value={formData.firstName}
+                value={authInput.firstName}
                 onChange={(e) =>
-                  setFormData({ ...formData, firstName: e.target.value })
+                  setAuthInput({ ...authInput, firstName: e.target.value })
                 }
               />
             </div>
@@ -64,17 +71,17 @@ const RegisterScreen = ({
           <div
             className="flex items-center gap-3 bg-slate-100 p-4 rounded-2xl cursor-pointer"
             onClick={() =>
-              setFormData({ ...formData, isManager: !formData.isManager })
+              setAuthInput({ ...authInput, isManager: !authInput.isManager })
             }
           >
             <div
               className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${
-                formData.isManager
+                authInput.isManager
                   ? "bg-blue-600 border-blue-600"
                   : "border-slate-300 bg-white"
               }`}
             >
-              {formData.isManager && <Check size={16} className="text-white" />}
+              {authInput.isManager && <Check size={16} className="text-white" />}
             </div>
             <div>
               <p className="font-bold text-slate-700 text-sm">
@@ -94,10 +101,10 @@ const RegisterScreen = ({
                 maxLength={5}
                 placeholder="例:26001"
                 className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500 text-lg tracking-wider"
-                value={formData.memberCode}
+                value={authInput.memberCode}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 5);
-                  setFormData({ ...formData, memberCode: val });
+                  setAuthInput({ ...authInput, memberCode: val });
                 }}
               />
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-lg">
@@ -118,9 +125,9 @@ const RegisterScreen = ({
                 className={`w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 text-sm ${
                   errorMsg ? "ring-rose-500" : "ring-blue-500"
                 }`}
-                value={formData.teamPass}
+                value={authInput.teamPass}
                 onChange={(e) =>
-                  setFormData({ ...formData, teamPass: e.target.value })
+                  setAuthInput({ ...authInput, teamPass: e.target.value })
                 }
               />
               <Lock
@@ -143,10 +150,10 @@ const RegisterScreen = ({
                 maxLength={4}
                 placeholder="0000"
                 className="w-full p-4 pl-12 bg-slate-100 rounded-2xl outline-none font-bold focus:ring-2 ring-blue-500 text-lg tracking-widest"
-                value={formData.personalPin}
+                value={authInput.personalPin}
                 onChange={(e) =>
-                  setFormData({
-                    ...formData,
+                  setAuthInput({
+                    ...authInput,
                     personalPin: e.target.value.replace(/[^0-9]/g, ""),
                   })
                 }

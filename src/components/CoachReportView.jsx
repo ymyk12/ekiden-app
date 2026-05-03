@@ -1,4 +1,10 @@
-// src/components/CoachReportView.jsx
+/*
+ * CoachReportView — チーム期間レポート画面
+ *
+ * 選択した期間のチームデータをレポート形式で表示する。
+ * 走行距離グラフ・MVPランキング・日別マトリックスを含み、
+ * 印刷・PDF出力にも対応している。
+ */
 import React, { useState } from "react";
 import { Printer, FileText, Users, BarChart2 } from "lucide-react";
 import {
@@ -10,9 +16,6 @@ import {
   Tooltip,
   Legend,
   Line,
-  BarChart,
-  Bar,
-  LabelList,
 } from "recharts";
 
 import { ROLES } from "../utils/constants";
@@ -36,7 +39,6 @@ const COLORS = [
 
 const CoachReportView = ({
   handleExportMatrixCSV,
-  printStyles,
   activeRunners,
   targetPeriod,
   reportMatrix,
@@ -48,10 +50,9 @@ const CoachReportView = ({
   const { handlePrint } = usePrint();
   // 今マウスが乗っている人のIDを記憶する「箱」
   const [hoveredLine, setHoveredLine] = useState(null);
-  // ▼▼ マネージャーを除外した選手のみのリストを作成 ▼▼
   const runnersOnly = activeRunners.filter((r) => r.role !== ROLES.MANAGER);
 
-  // 🌟 新機能：年次レポートの場合のみ、日々のデータを「月ごと」に圧縮する変換装置！
+  // 年次レポートの場合のみ、日次データを月次に集計する
   let displayMatrix = reportMatrix.matrix;
   if (targetPeriod?.type === "year") {
     const monthlyMap = {};
@@ -86,7 +87,6 @@ const CoachReportView = ({
       .sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  // 🌟🌟🌟 ここからグラフ用データの準備 🌟🌟🌟
   const isYearly = targetPeriod?.type === "year";
 
   // 1. 選手の総合距離を計算し、降順にソートする（凡例の順番と色を固定するため）
@@ -100,7 +100,7 @@ const CoachReportView = ({
       return (a.memberCode || a.id).localeCompare(b.memberCode || b.id);
     });
 
-  const isMonth = targetPeriod?.type === "month"; // 🌟 月次判定を追加！
+  const isMonth = targetPeriod?.type === "month";
 
   // 2. グラフ共通の文字フォーマッター（年次・月次なら「4月」）
   const formatAxisLabel = (val) => {
@@ -171,7 +171,7 @@ const CoachReportView = ({
     chartDataTrends = displayMatrix;
     trendsTitle = "Monthly Distance Trends (Yearly)";
   } else if (isMonth) {
-    // 🌟 親(App.js)で全データから計算してくれた過去12ヶ月分のデータをそのまま使う！
+    // App.js が計算済みの過去12ヶ月分データをそのまま使う
     chartDataTrends = monthlyTrendData || [];
     trendsTitle = "Past 12 Months Trends";
   } else {
@@ -228,7 +228,7 @@ const CoachReportView = ({
   const cumulativeTicks = calculateTicks(chartDataCumulative);
   const trendsTicks = calculateTicks(chartDataTrends);
 
-  // 🌟🌟🌟 ここから「MVPランキングボード」用のデータ計算 🌟🌟🌟
+  // MVPランキングボード用データ計算
   // ① 期間タイプの判定
   const isCustom = targetPeriod?.type === "custom";
 
@@ -305,7 +305,6 @@ const CoachReportView = ({
       )
       .slice(0, 5);
   }
-  // 🌟🌟🌟 ランキングデータ計算ここまで 🌟🌟🌟
 
   return (
     <div className="animate-in fade-in">
@@ -338,8 +337,6 @@ const CoachReportView = ({
       </div>
 
       <div>
-        <style>{printStyles}</style>
-
         {/* レポート本編 */}
         <div id="printable-report">
           {/* 1. 学年ごとのテーブルエリア */}
@@ -410,14 +407,13 @@ const CoachReportView = ({
                           </tr>
                         </thead>
                         <tbody>
-                          {/* 🌟 修正: reportMatrix.matrix ではなく、さっき作った displayMatrix を使う！ */}
                           {displayMatrix.map((row) => (
                             <tr
                               key={row.date}
                               className="hover:bg-slate-50 transition-colors"
                             >
                               <td className="p-3 border-b border-slate-100 font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-white">
-                                {/* 🌟 修正: 年次レポートの時は「2026-04」を「4月」に変換して表示 */}
+                                {/* 年次レポート時は "2026-04" を "4月" に変換して表示 */}
                                 {targetPeriod?.type === "year"
                                   ? `${parseInt(row.date.slice(5), 10)}月`
                                   : row.date.slice(5).replace("-", "/")}
@@ -596,7 +592,7 @@ const CoachReportView = ({
               </div>
             </div>
 
-            {/* 🌟🌟 ② 期間タイプによる動的出し分けエリア 🌟🌟 */}
+            {/* 期間タイプによる動的出し分け */}
             {isCustom ? (
               /* パターンA：指定期間(custom)の場合は「MVPランキングボード」を表示 */
               <div className="grid grid-cols-2 gap-4 print:gap-4 mt-2">
@@ -776,7 +772,6 @@ const CoachReportView = ({
                             strokeOpacity={
                               hoveredLine ? (hoveredLine === r.id ? 1 : 0.1) : 1
                             }
-                            // 🌟 月次(isMonth)の時もドットを表示するよう追加！
                             dot={isYearly || isMonth ? { r: 3 } : false}
                             activeDot={{ r: hoveredLine === r.id ? 8 : 6 }}
                           />
@@ -787,7 +782,6 @@ const CoachReportView = ({
                 </div>
               </div>
             )}
-            {/* 🌟🌟 動的出し分けエリアここまで 🌟🌟 */}
           </div>
         </div>
       </div>

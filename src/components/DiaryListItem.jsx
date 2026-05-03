@@ -1,4 +1,9 @@
-// src/components/DiaryListItem.jsx
+/*
+ * DiaryListItem — 練習日誌の1件分を表示するリストアイテム
+ *
+ * タップすると詳細（距離・強度・痛み・メモ）が展開される。
+ * 監督からの追記コメントがある場合はそのエリアも表示する。
+ */
 import React from "react";
 import {
   MapPin,

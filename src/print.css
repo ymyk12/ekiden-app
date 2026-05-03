@@ -1,0 +1,178 @@
+/* 通常画面のカードスタイル */
+.report-card-base {
+  background: white;
+  padding: 20px;
+  border-radius: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  width: 100%;
+}
+.report-chart-container {
+  height: 400px;
+  width: 100%;
+  overflow-x: auto;
+  display: block;
+}
+
+/* プレビュー画面のラッパー */
+.preview-mode-wrapper {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #525659;
+  z-index: 9999;
+  overflow-y: auto;
+  padding: 40px 0;
+  display: block;
+}
+
+/* プレビュー画面での「紙」 */
+.preview-mode-wrapper .report-card-base {
+  width: 297mm; /* A4横幅 */
+  min-height: 210mm;
+  height: auto;
+  padding: 10mm;
+  margin: 0 auto 30px auto;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border-radius: 0;
+  box-sizing: border-box;
+  position: relative;
+  display: block;
+  background-color: white;
+  overflow: visible;
+}
+
+/* テーブル共通設定 */
+.preview-mode-wrapper table,
+@media print table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-size: 9px !important;
+  font-family: 'Helvetica Neue', Arial, sans-serif !important;
+  margin-bottom: 20px;
+}
+
+.preview-mode-wrapper thead,
+@media print thead {
+  display: table-header-group !important;
+}
+
+.preview-mode-wrapper tr,
+@media print tr {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.preview-mode-wrapper th,
+.preview-mode-wrapper td,
+@media print th,
+@media print td {
+  padding: 3px 4px !important;
+  border: 1px solid #94a3b8 !important;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  color: #000 !important; /* 印刷時は文字色を黒に強制 */
+}
+
+.preview-mode-wrapper th:first-child,
+.preview-mode-wrapper td:first-child,
+@media print th:first-child,
+@media print td:first-child {
+  width: 60px !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  background-color: #f8fafc !important;
+}
+
+/* 強制改ページクラス */
+.page-break {
+  page-break-before: always !important;
+  break-before: page !important;
+  display: block !important;
+  clear: both !important;
+}
+
+/* 印刷時の設定（白紙・消滅対策） */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: white !important;
+  }
+  .no-print { display: none !important; }
+  .page-break {
+    page-break-before: always;
+  }
+  .report-card-base {
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    margin-bottom: 0 !important;
+    padding: 10px !important;
+    width: 100% !important;
+  }
+  table {
+    font-size: 9px !important;
+  }
+  th, td {
+    padding: 4px 2px !important;
+  }
+  /* 折れ線グラフ（上）: A4タテ上半分ほどの面積 */
+  .print-chart-line {
+    height: 140mm !important;
+    width: 100% !important;
+    margin-bottom: 15mm !important;
+  }
+  /* 棒グラフ（下）: 項目が多いので高さを確保 */
+  .print-chart-bar {
+    height: 130mm !important;
+    width: 100% !important;
+  }
+  .no-print, header, nav, .fixed-ui, .coach-menu-bar { display: none !important; }
+  .preview-mode-wrapper {
+    position: static !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    height: auto !important;
+    background: white !important;
+  }
+  /* Sticky解除（白紙の主原因） */
+  th, td {
+    position: static !important;
+    left: auto !important;
+  }
+  /* スクロール解除 */
+  div {
+    overflow: visible !important;
+  }
+  .report-card-base,
+  .preview-mode-wrapper .report-card-base {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+  /* 最初の要素の余白を消して1ページ目に入れる */
+  .report-card-base:first-child,
+  .page-break:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    page-break-before: avoid !important;
+  }
+  .report-chart-container {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-top: 20px;
+    margin-bottom: 20px;
+  }
+}
