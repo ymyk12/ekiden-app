@@ -32,6 +32,7 @@ import {
   Timer,
   Home,
   Users,
+  CalendarDays,
 } from "lucide-react";
 
 // Utilsから読み込む
@@ -44,6 +45,8 @@ import DiaryListItem from "./DiaryListItem";
 import LapTimeModal from "./LapTimeModal";
 // 大会チームレポート
 import TeamRaceReport from "./TeamRaceReport";
+// カレンダービュー
+import CalendarView from "./CalendarView";
 
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "react-hot-toast";
@@ -519,10 +522,10 @@ const ManagerDashboard = ({
 
   // --- Render ---
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
-      <header className="bg-indigo-600 text-white pt-12 pb-8 px-6 rounded-b-[2.5rem] shadow-lg mb-6 relative overflow-hidden">
+    <div className="h-[100dvh] flex flex-col bg-slate-50 overflow-hidden">
+      <header className="sticky top-0 z-50 bg-indigo-600 text-white pt-12 px-6 rounded-b-[2.5rem] shadow-lg relative overflow-hidden">
         <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-        <div className="relative z-10 flex justify-between items-end">
+        <div className="relative z-10 flex justify-between items-end pb-4">
           <div>
             <p className="text-indigo-200 text-[10px] font-bold uppercase tracking-widest mb-1">
               Manager Dashboard
@@ -538,42 +541,47 @@ const ManagerDashboard = ({
             <LogOut size={14} className="inline mr-1" /> ログアウト
           </button>
         </div>
-      </header>
-
-      <main className="px-5 max-w-md mx-auto space-y-6">
-        <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 flex overflow-x-auto no-scrollbar">
-          {["check", "status", "diary", "race"].map((view) => (
+        {/* タブバーをヘッダー内に統合して一緒にstickyにする */}
+        <div className="relative z-10 flex gap-1 pb-3">
+          {["check", "status", "diary", "race", "calendar"].map((view) => (
             <button
               key={view}
               onClick={() => {
                 setCurrentView(view);
                 if (view === "diary") setDiaryMode("list");
               }}
-              className={`flex-1 min-w-[70px] py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+              className={`flex-1 min-w-[48px] py-2 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
                 currentView === view
-                  ? "bg-indigo-600 text-white shadow-md"
-                  : "text-slate-400 hover:bg-slate-50"
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-indigo-200 hover:text-white hover:bg-white/10"
               }`}
             >
-              {view === "check" && <ClipboardList size={14} />}
-              {view === "status" && <BarChart2 size={14} />}
-              {view === "diary" && <BookOpen size={14} />}
-              {view === "race" && <Flag size={14} />}
+              {view === "check" && <ClipboardList size={13} />}
+              {view === "status" && <BarChart2 size={13} />}
+              {view === "diary" && <BookOpen size={13} />}
+              {view === "race" && <Flag size={13} />}
+              {view === "calendar" && <CalendarDays size={13} />}
               {view === "check"
                 ? "提出"
                 : view === "status"
                   ? "状況"
                   : view === "diary"
                     ? "日誌"
-                    : "大会"}
+                    : view === "race"
+                      ? "大会"
+                      : "Cal"}
             </button>
           ))}
         </div>
+      </header>
+
+      <main className="flex-1 overflow-hidden px-5 w-full max-w-md mx-auto mt-6 pb-6 flex flex-col">
 
         {/* --- 1. 提出チェック --- */}
         {currentView === "check" && (
-          <div className="bg-white p-5 rounded-[2rem] shadow-sm animate-in fade-in">
-            <div className="mb-6 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+          <div className="h-full flex flex-col gap-4 animate-in fade-in">
+            <div className="bg-white px-5 py-4 rounded-[2rem] shadow-sm flex-shrink-0">
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
               <div className="flex justify-between items-center mb-2 px-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Select Date
@@ -603,7 +611,12 @@ const ManagerDashboard = ({
                 </button>
               </div>
             </div>
-            <div className="space-y-3">
+            </div>
+            <div className="bg-white rounded-[2rem] shadow-sm flex-1 overflow-hidden flex flex-col">
+              <div className="px-5 pt-5 pb-3 flex-shrink-0 border-b border-slate-100">
+                <h3 className="font-black text-sm text-slate-700">提出状況</h3>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1 pb-4">
               {submissionStatusList.map((r) => {
                 const targetLog = allLogs.find(
                   (l) => l.runnerId === r.id && l.date === checkDate,
@@ -657,14 +670,15 @@ const ManagerDashboard = ({
                   </div>
                 );
               })}
+              </div>
             </div>
           </div>
         )}
 
         {/* --- 2. チーム状況 --- */}
         {currentView === "status" && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white p-6 rounded-[2rem] shadow-sm">
+          <div className="h-full flex flex-col gap-4 animate-in fade-in">
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm flex-shrink-0">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-black text-sm text-slate-700 flex items-center gap-2">
                   <Trophy size={18} className="text-amber-400" /> 月間ランキング
@@ -673,7 +687,7 @@ const ManagerDashboard = ({
                   {new Date(checkDate).getMonth() + 1}月度
                 </span>
               </div>
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-3 max-h-[268px] overflow-y-auto pr-2 custom-scrollbar">
                 {rankingData.map((runner, idx) => (
                   <div
                     key={runner.id}
@@ -700,11 +714,13 @@ const ManagerDashboard = ({
                 ))}
               </div>
             </div>
-            <div className="bg-white p-6 rounded-[2rem] shadow-sm">
-              <h3 className="font-black text-sm text-slate-700 mb-4 flex items-center gap-2">
-                <Activity size={18} className="text-indigo-500" /> Team Activity
-              </h3>
-              <div className="space-y-4 pl-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="bg-white rounded-[2rem] shadow-sm flex-1 overflow-hidden flex flex-col">
+              <div className="px-6 pt-6 pb-3 flex-shrink-0 border-b border-slate-100">
+                <h3 className="font-black text-sm text-slate-700 flex items-center gap-2">
+                  <Activity size={18} className="text-indigo-500" /> Team Activity
+                </h3>
+              </div>
+              <div className="flex-1 overflow-y-auto pl-8 pr-6 py-4 space-y-4 custom-scrollbar">
                 {teamActivityLogs.map((log) => (
                   <div
                     key={log.id}
@@ -750,10 +766,10 @@ const ManagerDashboard = ({
 
         {/* --- 3. 練習日誌 (AIアシスタント機能入り) --- */}
         {currentView === "diary" && (
-          <div className="space-y-6">
+          <div className="h-full flex flex-col">
             {diaryMode === "list" && (
-              <div className="animate-in fade-in space-y-4">
-                <div className="flex justify-between items-center bg-white p-4 rounded-[2rem] shadow-sm">
+              <div className="h-full flex flex-col gap-4 animate-in fade-in">
+                <div className="flex justify-between items-center bg-white p-4 rounded-[2rem] shadow-sm flex-shrink-0">
                   <button
                     onClick={() => shiftMonth(-1)}
                     className="p-2 bg-slate-100 rounded-full hover:bg-indigo-50 text-slate-500"
@@ -781,12 +797,12 @@ const ManagerDashboard = ({
                     setCheckDate(getTodayStr());
                     setDiaryMode("edit");
                   }}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2 flex-shrink-0"
                 >
                   <Plus size={20} /> 本日の練習を記録する
                 </button>
 
-                <div className="space-y-3">
+                <div className="flex-1 overflow-y-auto space-y-3 pb-4">
                   {monthlyLogs.length > 0 ? (
                     monthlyLogs.map((log) => (
                       <DiaryListItem
@@ -810,7 +826,9 @@ const ManagerDashboard = ({
             )}
 
             {diaryMode === "edit" && (
-              <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-5 animate-in slide-in-from-right-10 relative">
+              <div className="h-full flex flex-col animate-in slide-in-from-right-10">
+              <div className="bg-white rounded-[2rem] shadow-sm flex-1 overflow-hidden flex flex-col relative">
+              <div className="flex-1 overflow-y-auto p-6 space-y-5">
                 <div className="flex justify-between items-center mb-2">
                   <button
                     onClick={() => setDiaryMode("list")}
@@ -1092,6 +1110,8 @@ const ManagerDashboard = ({
                   />
                 </div>
 
+                </div>
+                <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t border-slate-100">
                 <button
                   onClick={saveDiary}
                   disabled={isSaving}
@@ -1103,6 +1123,8 @@ const ManagerDashboard = ({
                     <><Save size={18} /> {existingLog ? "日誌を更新" : "日誌を保存・公開"}</>
                   )}
                 </button>
+                </div>
+              </div>
               </div>
             )}
           </div>
@@ -1110,12 +1132,14 @@ const ManagerDashboard = ({
 
         {/* --- 4. 大会記録管理 --- */}
         {currentView === "race" && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white p-6 rounded-[2rem] shadow-sm">
-              <h3 className="font-black text-sm text-slate-700 mb-4 flex items-center gap-2">
-                <Flag size={18} className="text-indigo-500" /> Race Management
-              </h3>
-
+          <div className="h-full flex flex-col animate-in fade-in">
+            <div className="bg-white rounded-[2rem] shadow-sm flex-1 overflow-hidden flex flex-col">
+              <div className="px-6 pt-6 pb-3 flex-shrink-0 border-b border-slate-100">
+                <h3 className="font-black text-sm text-slate-700 flex items-center gap-2">
+                  <Flag size={18} className="text-indigo-500" /> Race Management
+                </h3>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-4">
               {!selectedTourId ? (
                 <div className="space-y-3">
                   {tournaments.length === 0 ? (
@@ -1200,7 +1224,21 @@ const ManagerDashboard = ({
                   </div>
                 </div>
               )}
+              </div>
             </div>
+          </div>
+        )}
+
+        {/* --- 5. カレンダー --- */}
+        {currentView === "calendar" && (
+          <div className="h-full animate-in fade-in">
+            <CalendarView
+              allLogs={allLogs}
+              teamLogs={teamLogs}
+              tournaments={tournaments}
+              role="manager"
+              currentUserId={null}
+            />
           </div>
         )}
       </main>

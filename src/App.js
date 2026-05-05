@@ -41,7 +41,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.3.0";
+const APP_LAST_UPDATED = "6.4.0";
 
 const App = () => {
   // ─── 認証・ユーザー情報 ───
@@ -85,7 +85,7 @@ const App = () => {
   const [demoMode, setDemoMode] = useState(null); // "manager" か "admin" か null
   const handleExitDemo = () => {
     setDemoMode(null);
-    setView("coach-admin");
+    setView("coach-settings");
     // 画面切り替え後のレンダリングを待ってからスクロール
     setTimeout(() => {
       const target = document.getElementById("demo-buttons-section");
@@ -115,6 +115,7 @@ const App = () => {
     memberCode: "",
     teamPass: "",
     personalPin: "",
+    gender: "",
     isManager: false,
   });
 
@@ -380,6 +381,7 @@ const App = () => {
         lastName: authInput.lastName.trim(),
         firstName: authInput.firstName.trim(),
         role: authInput.isManager ? ROLES.MANAGER : "athlete",
+        gender: authInput.gender || "",
         goalMonthly: 0,
         goalPeriod: 0,
         status: "active",
@@ -626,6 +628,7 @@ const App = () => {
       lastName: runner.lastName,
       firstName: runner.firstName,
       pin: runner.pin || "",
+      gender: runner.gender || "",
     });
     setCoachFeedbackComment("");
     setView("coach-runner-detail");
@@ -641,6 +644,7 @@ const App = () => {
         lastName: coachEditFormData.lastName,
         firstName: coachEditFormData.firstName,
         pin: coachEditFormData.pin,
+        gender: coachEditFormData.gender || "",
       });
       toast.success("プロフィールを更新しました");
     } catch (e) {
@@ -648,6 +652,26 @@ const App = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // 監督が選手/マネージャーのロールを切り替える
+  const handleCoachChangeRole = (runner, newRole) => {
+    const roleLabel = newRole === ROLES.MANAGER ? "マネージャー" : "選手";
+    setConfirmDialog({
+      isOpen: true,
+      message: `${runner.lastName} ${runner.firstName} のロールを「${roleLabel}」に変更しますか？\n次回ログイン時から適用されます。`,
+      onConfirm: async () => {
+        try {
+          await updateDoc(docRef("runners", runner.id), { role: newRole });
+          toast.success(`ロールを「${roleLabel}」に変更しました`);
+          setView("coach-roster");
+        } catch (e) {
+          toast.error("エラー: " + e.message);
+        } finally {
+          setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+        }
+      },
+    });
   };
 
   // 監督が選手の目標距離・目標タイムを設定する
@@ -729,7 +753,7 @@ const App = () => {
         toast.success("記録を保存しました！");
       }
       resetForm();
-      setView("menu");
+      setView("diary");
     } catch (e) {
       console.error(e);
       toast.error("エラー: " + e.message);
@@ -1314,6 +1338,7 @@ const App = () => {
     coachEditFormData,
     setCoachEditFormData,
     handleCoachSaveProfile,
+    handleCoachChangeRole,
     coachGoalInput,
     setCoachGoalInput,
     handleCoachSaveGoals,
@@ -1370,6 +1395,8 @@ const App = () => {
             allRunners={activeRunners}
             allLogs={allLogs}
             teamLogs={teamLogs}
+            tournaments={tournaments}
+            raceCards={raceCards}
             practiceMenus={practiceMenus}
             handleLogout={handleExitDemo} // デモ終了をログアウト代わりに使用
             appId={appId}

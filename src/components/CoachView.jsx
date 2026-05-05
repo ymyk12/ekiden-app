@@ -5,13 +5,13 @@
  * チーム全体の練習状況確認、選手個別管理、大会・振り返り管理、
  * レポート表示、期間設定、データエクスポートなどを担当する。
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Users,
-  LayoutDashboard,
   FileText,
   ClipboardList,
   Calendar,
+  CalendarDays,
   Settings,
   LogOut,
   ChevronRight,
@@ -48,6 +48,8 @@ import {
   Bell,
   BellRing,
   Loader2,
+  Sparkles,
+  Home,
 } from "lucide-react";
 
 import {
@@ -62,12 +64,14 @@ import {
   LabelList,
 } from "recharts";
 import { setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { docRef, settingsDocRef } from "../utils/firestore";
 import { ROLES } from "../utils/constants";
 import { getTodayStr } from "../utils/dateUtils";
 
 import DiaryListItem from "./DiaryListItem";
 import CoachReportView from "./CoachReportView";
+import CalendarView from "./CalendarView";
 import { usePrint } from "../hooks/usePrint";
 import LapTimeModal from "./LapTimeModal";
 import TeamRaceReport from "./TeamRaceReport";
@@ -234,6 +238,7 @@ const CoachView = (props) => {
     coachEditFormData,
     setCoachEditFormData,
     handleCoachSaveProfile,
+    handleCoachChangeRole,
     coachGoalInput,
     setCoachGoalInput,
     handleCoachSaveGoals,
@@ -362,44 +367,288 @@ const CoachView = (props) => {
   const [coachFeedbackInput, setCoachFeedbackInput] = useState("");
   const [showTeamReportId, setShowTeamReportId] = useState(null);
 
+  const [statsSubTab, setStatsSubTab] = useState("ranking");
   const [diaryMode, setDiaryMode] = useState("list");
   const [listMonth, setListMonth] = useState(new Date());
   const [isDiarySaving, setIsDiarySaving] = useState(false);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
 
+  // 日誌フルフォーム用 state
+  const [diaryInput, setDiaryInput] = useState({
+    isRestDay: false,
+    weather: "晴れ",
+    temp: "",
+    wind: 1,
+    humidity: "",
+    startTime: "15:50",
+    endTime: "18:30",
+    location: "1.53kmコース",
+    locationDetail: "",
+    reinforcements: [],
+    reinforcementDetail: "",
+    menu: "",
+    result: "",
+  });
+
+  const reinforcementOptions = [
+    "コア", "腹筋", "脚部", "フォーム", "ウェイト",
+    "DM腹背", "DM投げ", "スタビライゼーション", "その他",
+  ];
+
+  const getDefaultTimes = (dateString) => {
+    const d = new Date(dateString);
+    const day = d.getDay();
+    const month = d.getMonth() + 1;
+    if (day === 0 || day === 6) return { startTime: "09:00", endTime: "12:00" };
+    if (month === 7 || month === 8 || month === 9) return { startTime: "07:00", endTime: "10:00" };
+    if (month === 12 || month === 3) return { startTime: "09:00", endTime: "10:00" };
+    return { startTime: "15:50", endTime: "18:30" };
+  };
+
+  const coachExistingLog = useMemo(
+    () => teamLogs?.find((l) => l.date === menuInput.date),
+    [teamLogs, menuInput.date],
+  );
+
+  useEffect(() => {
+    const defaultTimes = getDefaultTimes(menuInput.date);
+    if (coachExistingLog) {
+      setDiaryInput({
+        isRestDay: coachExistingLog.isRestDay || false,
+        weather: coachExistingLog.weather || "晴れ",
+        temp: coachExistingLog.temp || "",
+        wind: coachExistingLog.wind || 1,
+        humidity: coachExistingLog.humidity || "",
+        startTime: coachExistingLog.startTime || defaultTimes.startTime,
+        endTime: coachExistingLog.endTime || defaultTimes.endTime,
+        location: coachExistingLog.location || "1.53kmコース",
+        locationDetail: coachExistingLog.locationDetail || "",
+        reinforcements: coachExistingLog.reinforcements || [],
+        reinforcementDetail: coachExistingLog.reinforcementDetail || "",
+        menu: coachExistingLog.menu || "",
+        result: coachExistingLog.result || "",
+      });
+    } else {
+      setDiaryInput({
+        isRestDay: false,
+        weather: "晴れ",
+        temp: "",
+        wind: 1,
+        humidity: "",
+        startTime: defaultTimes.startTime,
+        endTime: defaultTimes.endTime,
+        location: "1.53kmコース",
+        locationDetail: "",
+        reinforcements: [],
+        reinforcementDetail: "",
+        menu: "",
+        result: "",
+      });
+    }
+  }, [menuInput.date, coachExistingLog]);
+
+  const toggleCoachReinforcement = (item) => {
+    setDiaryInput((prev) => {
+      const current = prev.reinforcements;
+      return current.includes(item)
+        ? { ...prev, reinforcements: current.filter((i) => i !== item) }
+        : { ...prev, reinforcements: [...current, item] };
+    });
+  };
+
+  const saveCoachDiary = async () => {
+    if (!diaryInput.menu) {
+      const { toast } = await import("react-hot-toast");
+      return toast.error("メニュー内容は必須です");
+    }
+    setIsDiarySaving(true);
+    try {
+      await setDoc(docRef("team_logs", menuInput.date), {
+        ...diaryInput,
+        date: menuInput.date,
+        updatedBy: "監督",
+        updatedAt: new Date().toISOString(),
+      });
+      await setDoc(docRef("menus", menuInput.date), {
+        date: menuInput.date,
+        text: diaryInput.menu,
+      });
+      const { toast } = await import("react-hot-toast");
+      toast.success(coachExistingLog ? "日誌を更新しました！" : "日誌を保存しました！");
+    } catch (e) {
+      const { toast } = await import("react-hot-toast");
+      toast.error("エラー: " + e.message);
+    } finally {
+      setIsDiarySaving(false);
+    }
+  };
+
+  const handleCoachRestRegister = async () => {
+    const restData = {
+      ...diaryInput,
+      isRestDay: true,
+      menu: "【完全休養】本日はオフです。",
+      startTime: "",
+      endTime: "",
+      location: "なし",
+      result: "",
+    };
+    setIsDiarySaving(true);
+    try {
+      await setDoc(docRef("team_logs", menuInput.date), {
+        ...restData,
+        date: menuInput.date,
+        updatedBy: "監督",
+        updatedAt: new Date().toISOString(),
+      });
+      await setDoc(docRef("menus", menuInput.date), {
+        date: menuInput.date,
+        text: restData.menu,
+      });
+      const { toast } = await import("react-hot-toast");
+      toast.success(`${menuInput.date} を休養日として保存しました！`);
+      setDiaryMode("list");
+    } catch (e) {
+      const { toast } = await import("react-hot-toast");
+      toast.error("エラー: " + e.message);
+    } finally {
+      setIsDiarySaving(false);
+    }
+  };
+
+  const deleteCoachDiary = async () => {
+    if (!window.confirm(`${menuInput.date} の日誌を削除しますか？`)) return;
+    try {
+      await deleteDoc(docRef("team_logs", menuInput.date));
+      await deleteDoc(docRef("menus", menuInput.date));
+      const { toast } = await import("react-hot-toast");
+      toast.success("日誌を削除しました");
+      setDiaryMode("list");
+    } catch (e) {
+      const { toast } = await import("react-hot-toast");
+      toast.error("削除エラー: " + e.message);
+    }
+  };
+
+  // AI アシスタント
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiImage, setAiImage] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const generateCoachDiaryWithAI = async () => {
+    if (!aiImage) {
+      const { toast } = await import("react-hot-toast");
+      return toast.error("練習記録表の画像を選択してください");
+    }
+    setIsGenerating(true);
+    try {
+      const prompt = `添付された画像（陸上競技の練習記録表）から情報を読み取り、以下の【ルール】と【出力フォーマット】に厳密に従ってテキストデータとして出力してください。
+
+【読み取りのルール】
+1. **練習メニューの展開**:
+- 画像中段の「チーム」と「練習メニュー」の対応を読み取ってください。
+- 「〃」などの省略記号は、直上または該当する内容を補完し、完全な文字列として出力してください。
+
+2. **メンバーの抽出と振り分け（重要）**:
+- 画像右側の「メンバー」欄からメンバーの名前を抽出しますが、以下の例外ルールを必ず適用してください。
+- **グループ変更**: 名前の付近（上など）に左記とは違うグループ名が示唆されている場合は、推察されるグループのメンバーとして含めてください。
+- **別メニュー組**: 名前に「（ ）」がついている者は「別メニュー組」としてまとめてください。
+- **欠席者**: 名前の付近に「欠」とある者は「欠席者」としてまとめてください。
+
+3. **記録データの抽出**:
+- 画像下段の「記録」セクションから、各グループの「LAP」、「PACE」（または「LAP(1000)」）、および「TOTAL」の数値を抽出してください。
+- 「TOTAL」の列に記載がある場合は抽出し、記録の末尾に単純な丸括弧書きで \`(XX'XX"XX)\` のように追記してください（Totalという文字は不要）。
+- 「LAP(1000)」や「PACE」の列に記載がある場合は、角括弧書きで \`[1km: XX'XX"XX]\` や \`[pace: XX'XX"XX]\` のように明記して追記してください。
+- 記録表内にリカバリータイムがある場合は抽出し、記録の末尾に \`(r: XX"XX)\` のように追記してください。
+- 各メンバー名の下にある丸印や矢印などは出力から除外してください。
+
+【出力フォーマット】
+「練習メニュー」と「練習記録」をそれぞれワンクリックでコピーできるように、別々のテキストコードブロック（\`\`\`text と \`\`\` で囲む形式）に分けて出力してください。
+
+### 練習メニュー
+\`\`\`text
+快調走（またはその日のメインメニュー名）
+■男子A・B ([メンバー名]・[メンバー名]...)
+[距離] [メニュー名] ([設定ペース])...
+■別メニュー組：[メンバー名]・[メンバー名]...
+■欠席者：[メンバー名]・[メンバー名]...
+\`\`\`
+
+### 練習記録
+\`\`\`text
+■[記録のグループ名]
+• [周回数または距離]：[LAPタイム] ([TOTALタイム]) [1km:[タイム] または pace:[タイム]]
+\`\`\``;
+
+      const base64Data = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(",")[1]);
+        reader.readAsDataURL(aiImage);
+      });
+
+      const functions = getFunctions();
+      const analyzeDiaryImage = httpsCallable(functions, "analyzeDiaryImage");
+      const result = await analyzeDiaryImage({ prompt, base64Image: base64Data, mimeType: aiImage.type });
+
+      const generatedText = result.data.candidates[0].content.parts[0].text;
+      let extractedMenu = "";
+      let extractedResult = "";
+
+      try {
+        const parts = generatedText.split("### 練習記録");
+        if (parts.length === 2) {
+          extractedMenu = parts[0].replace(/### 練習メニュー/g, "").replace(/```text/g, "").replace(/```/g, "").trim();
+          extractedResult = parts[1].replace(/```text/g, "").replace(/```/g, "").trim();
+        } else {
+          extractedResult = generatedText.replace(/```text/g, "").replace(/```/g, "").trim();
+        }
+      } catch {
+        extractedResult = generatedText;
+      }
+
+      setDiaryInput((prev) => ({
+        ...prev,
+        menu: extractedMenu || prev.menu,
+        result: extractedResult,
+      }));
+
+      const { toast } = await import("react-hot-toast");
+      toast.success("✨ メニューと記録の自動振り分けが完了しました！");
+      setShowAIModal(false);
+      setAiImage(null);
+    } catch (error) {
+      const { toast } = await import("react-hot-toast");
+      toast.error("生成に失敗しました: " + error.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 print:bg-white print:pb-0 print:h-auto md:flex">
+    <div className="h-[100dvh] bg-slate-50 overflow-hidden print:bg-white print:h-auto flex flex-col md:flex-row">
       <header className="bg-slate-950 text-white p-5 sticky top-0 z-50 md:h-screen md:w-64 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
         <div>
-          <h1 className="font-black italic text-xl flex items-center gap-2 tracking-tighter mb-8 md:mb-10">
+          <h1 className="font-black italic text-xl flex items-center gap-2 tracking-tighter mb-6 md:mb-7">
             <Users size={20} className="text-blue-400" /> COACH TERMINAL
           </h1>
 
-          <nav className="hidden md:flex flex-col gap-2">
+          <nav className="hidden md:flex flex-col gap-1">
             {[
-              "stats",
-              "report",
-              "check",
-              "menu",
-              "race",
-              "roster",
-              "settings",
-              "admin",
-            ].map((t) => (
+              { id: "home",     icon: Home,        label: "Home" },
+              { id: "diary",    icon: BookOpen,     label: "Diary" },
+              { id: "stats",    icon: BarChart2,    label: "Stats" },
+              { id: "race",     icon: Flag,         label: "Race" },
+              { id: "calendar", icon: CalendarDays, label: "Calendar" },
+              { id: "roster",   icon: Users,        label: "Roster" },
+              { id: "settings", icon: Settings,     label: "Settings" },
+            ].map(({ id, icon: Icon, label }) => (
               <button
-                key={t}
-                onClick={() => setView(`coach-${t}`)}
-                className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold uppercase tracking-widest transition-all ${view === `coach-${t}` ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800"}`}
+                key={id}
+                onClick={() => setView(`coach-${id}`)}
+                className={`flex items-center gap-3 py-2 px-4 rounded-xl font-bold uppercase tracking-widest transition-all text-[11px] ${view === `coach-${id}` ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800"}`}
               >
-                {t === "stats" && <LayoutDashboard size={18} />}
-                {t === "report" && <FileText size={18} />}
-                {t === "check" && <ClipboardList size={18} />}
-                {t === "menu" && <Calendar size={18} />}
-                {t === "race" && <Flag size={18} />}
-                {t === "roster" && <Users size={18} />}
-                {t === "settings" && <Settings size={18} />}
-                {t === "admin" && <Eye size={18} />}
-                {t}
+                <Icon size={18} />
+                {label}
               </button>
             ))}
           </nav>
@@ -439,18 +688,16 @@ const CoachView = (props) => {
           </button>
         </div>
       </header>
-
-      <main className="flex-1 p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none md:overflow-y-auto md:h-screen print:max-w-none print:p-0 print:w-full print:overflow-visible">
-        <div className="md:hidden flex bg-white p-1.5 rounded-[1.8rem] shadow-sm border border-slate-100 overflow-x-auto no-scrollbar print:hidden mb-6 gap-2">
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="md:hidden flex-shrink-0 flex bg-slate-950 px-3 py-2 overflow-x-auto no-scrollbar print:hidden gap-1">
           {[
-            { id: "stats", icon: LayoutDashboard },
-            { id: "report", icon: FileText },
-            { id: "check", icon: ClipboardList },
-            { id: "menu", icon: Calendar },
-            { id: "race", icon: Flag },
-            { id: "roster", icon: Users },
-            { id: "settings", icon: Settings },
-            { id: "admin", icon: Eye },
+            { id: "home",     icon: Home,        label: "Home" },
+            { id: "diary",    icon: BookOpen,     label: "Diary" },
+            { id: "stats",    icon: BarChart2,    label: "Stats" },
+            { id: "race",     icon: Flag,         label: "Race" },
+            { id: "calendar", icon: CalendarDays, label: "Cal" },
+            { id: "roster",   icon: Users,        label: "Roster" },
+            { id: "settings", icon: Settings,     label: "Settings" },
           ].map((item) => {
             const Icon = item.icon;
             const isActive = view === `coach-${item.id}`;
@@ -458,17 +705,19 @@ const CoachView = (props) => {
               <button
                 key={item.id}
                 onClick={() => setView(`coach-${item.id}`)}
-                className={`flex-none w-12 h-12 flex items-center justify-center rounded-2xl transition-all active:scale-95 ${
+                className={`flex-none flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95 ${
                   isActive
-                    ? "bg-slate-950 text-white shadow-lg scale-105"
-                    : "text-slate-400 hover:bg-slate-50"
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-slate-400 hover:text-white hover:bg-white/10"
                 }`}
               >
-                <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+                <span className="text-[9px] font-black uppercase tracking-wide">{item.label}</span>
               </button>
             );
           })}
         </div>
+        <main className="flex-1 overflow-y-auto p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none print:max-w-none print:p-0 print:w-full print:overflow-visible">
 
         <div className="mb-6 flex justify-end items-center gap-3 no-print">
           <span className="text-xs font-bold text-slate-400">Target:</span>
@@ -524,366 +773,165 @@ const CoachView = (props) => {
           )}
         </div>
 
-        {(view === "coach-stats" || !view.startsWith("coach-")) && (
+        {view === "coach-home" && (
           <div className="space-y-6 animate-in fade-in">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-slate-500">
-                <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                  Total Members
-                </p>
-                <p className="text-3xl md:text-4xl font-black text-slate-800">
-                  {activeRunners.length}
-                  <span className="text-xs ml-1">名</span>
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-[2rem] shadow-sm border-l-8 border-blue-500">
-                <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                  Today's Report
-                </p>
-                <div className="flex items-baseline gap-1">
-                  <p className="text-3xl md:text-4xl font-black text-blue-600">
-                    {coachStats.reportRate}
-                  </p>
-                  <span className="text-sm font-black text-slate-400">%</span>
-                </div>
-              </div>
-              <div
-                className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 ${
-                  coachStats.avgRpe >= 8
-                    ? "border-rose-500"
-                    : coachStats.avgRpe >= 6
-                      ? "border-orange-500"
-                      : "border-emerald-500"
-                }`}
-              >
-                <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                  Today's Avg RPE
-                </p>
-                <div className="flex items-baseline gap-1">
-                  <p
-                    className={`text-3xl md:text-4xl font-black ${
-                      coachStats.avgRpe >= 8
-                        ? "text-rose-600"
-                        : coachStats.avgRpe >= 6
-                          ? "text-orange-600"
-                          : "text-emerald-600"
-                    }`}
+
+            {/* 提出状況 */}
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row items-center gap-4">
+                <input
+                  type="date"
+                  className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
+                  value={checkDate}
+                  onChange={(e) => setCheckDate(e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
+                  <div
+                    onClick={() => { if (coachStats.alertList?.length > 0) setIsPainAlertModalOpen(true); }}
+                    className={`p-4 rounded-2xl flex flex-col items-center justify-center px-8 transition-all ${coachStats.alertList?.length > 0 ? "bg-rose-50 cursor-pointer active:scale-95" : "bg-slate-100"}`}
                   >
-                    {coachStats.avgRpe > 0 ? coachStats.avgRpe.toFixed(1) : "-"}
-                  </p>
-                  <span className="text-xs font-black text-slate-400">
-                    / 10
-                  </span>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${coachStats.alertList?.length > 0 ? "text-rose-500" : "text-slate-400"}`}>
+                      <AlertTriangle size={10} /> Alert
+                    </span>
+                    <div className="flex items-end gap-1">
+                      <span className={`text-3xl font-black ${coachStats.alertList?.length > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                        {coachStats.alertList?.length || 0}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400 mb-1">名</span>
+                    </div>
+                  </div>
+                  <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span>
+                    <div className="flex items-end gap-1">
+                      <span className="text-3xl font-black text-emerald-600">
+                        {checkListData.filter((r) => r.status !== "unsubmitted").length}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div
-                onClick={() => {
-                  if (coachStats.alertList?.length > 0) {
-                    setIsPainAlertModalOpen(true);
-                  }
-                }}
-                className={`bg-white p-6 rounded-[2rem] shadow-sm border-l-8 transition-transform ${
-                  coachStats.alertList?.length > 0
-                    ? "border-rose-500 bg-rose-50 cursor-pointer active:scale-95 hover:shadow-md"
-                    : "border-emerald-500"
-                }`}
-              >
-                <div className="flex justify-between items-center mb-1">
-                  <p className="text-[10px] md:text-xs font-black text-rose-500 uppercase tracking-widest">
-                    Condition Alert
-                  </p>
-                  {coachStats.alertList?.length > 0 && (
-                    <ChevronRight size={14} className="text-rose-400" />
-                  )}
-                </div>
-                <p
-                  className={`text-3xl md:text-4xl font-black ${coachStats.alertList?.length > 0 ? "text-rose-600" : "text-emerald-600"}`}
-                >
-                  {coachStats.alertList?.length || 0}
-                  <span className="text-xs ml-1 text-slate-400">名</span>
-                </p>
+              <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2">
+                {checkListData.map((r) => (
+                  <div key={r.id} className="py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-white text-sm ${r.status === "active" ? "bg-blue-500" : r.status === "rest" ? "bg-emerald-400" : "bg-rose-400"}`}>
+                        {r.lastName.charAt(0)}
+                      </div>
+                      <p className="font-bold text-slate-800 text-sm">{r.lastName} {r.firstName}</p>
+                    </div>
+                    <div>
+                      {r.status === "active" && <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Check size={12} /> {r.detail}</span>}
+                      {r.status === "rest" && <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black">{r.detail}</span>}
+                      {r.status === "unsubmitted" && <span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><AlertTriangle size={12} /> 未提出</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Recent Activity */}
+            <div className="bg-white rounded-[2rem] shadow-sm overflow-hidden border border-slate-100 h-[28rem] flex flex-col">
+              <div className="p-5 bg-slate-50 border-b flex items-center gap-2">
+                <Activity size={16} className="text-slate-400" />
+                <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Recent Activity</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                {allLogs
+                  .filter((l) => activeRunners.some((r) => r.id === l.runnerId))
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .slice(0, 50)
+                  .map((l) => (
+                    <div key={l.id} className="p-4 mb-2 bg-white rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors relative group">
+                      <div className="absolute right-4 top-4 hidden group-hover:block">
+                        <button onClick={() => openCoachEditModal(l)} className="bg-white border border-slate-200 p-2 rounded-lg text-slate-400 hover:text-blue-600 shadow-sm transition-colors" title="監督修正">
+                          <Edit size={16} />
+                        </button>
+                      </div>
+                      <div className="flex justify-between items-start mb-1 pr-10">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full ${l.pain > 3 ? "bg-rose-500 animate-pulse" : "bg-emerald-400"}`}></div>
+                          <span className="font-bold text-slate-700 text-sm">{l.runnerName}</span>
+                        </div>
+                        <span className="font-black text-blue-600">{l.distance}km</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-5 mb-2">
+                        {l.date.slice(5).replace("-", "/")} · {l.category}
+                      </div>
+                      <div className="flex gap-2 ml-5 mb-1">
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-black ${l.rpe >= 8 ? "bg-rose-100 text-rose-600 border border-rose-200" : l.rpe >= 5 ? "bg-orange-100 text-orange-600 border border-orange-200" : "bg-blue-50 text-blue-600 border border-blue-100"}`}>RPE {l.rpe}</span>
+                        {l.pain > 1 && (
+                          <span className={`px-2 py-1 rounded-md text-[10px] font-black flex items-center gap-1 ${l.pain >= 4 ? "bg-purple-100 text-purple-600 border border-purple-200 animate-pulse" : l.pain === 3 ? "bg-rose-100 text-rose-600 border border-rose-200" : "bg-yellow-100 text-yellow-700 border border-yellow-200"}`}>
+                            <HeartPulse size={12} /> Pain {l.pain}
+                          </span>
+                        )}
+                      </div>
+                      {l.menuDetail && <p className="mt-2 ml-5 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg italic">"{l.menuDetail}"</p>}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === "coach-stats" && (
+          <div className="space-y-4 animate-in fade-in">
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
+              {["ranking", "report"].map((sub) => (
+                <button key={sub} onClick={() => setStatsSubTab(sub)}
+                  className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${statsSubTab === sub ? "bg-white text-blue-600 shadow-sm" : "text-slate-400"}`}
+                >
+                  {sub === "ranking" ? "ランキング" : "レポート"}
+                </button>
+              ))}
+            </div>
+            {statsSubTab === "ranking" && (
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] flex flex-col">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                    <Trophy size={18} className="text-orange-500" /> Team
-                    Ranking
+                    <Trophy size={18} className="text-orange-500" /> Team Ranking
                   </h3>
-                  <button
-                    onClick={exportCSV}
-                    className="text-blue-600 p-2 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
-                  >
+                  <button onClick={exportCSV} className="text-blue-600 p-2 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors">
                     <Download size={20} />
                   </button>
                 </div>
                 <div className="flex-1 w-full min-h-0 overflow-y-auto pr-2">
-                  <div
-                    style={{ height: Math.max(300, rankingData.length * 50) }}
-                  >
+                  <div style={{ height: Math.max(300, rankingData.length * 50) }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={rankingData}
-                        layout="vertical"
-                        margin={{ left: -10, right: 60 }}
-                      >
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          horizontal={false}
-                          stroke="#f1f5f9"
-                        />
+                      <BarChart data={rankingData} layout="vertical" margin={{ left: -10, right: 60 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                         <XAxis type="number" hide />
-                        <YAxis
-                          dataKey="name"
-                          type="category"
-                          width={110}
-                          tick={{
-                            fontSize: 12,
-                            fontWeight: "bold",
-                            fill: "#1e293b",
-                            interval: 0,
-                          }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <Tooltip
-                          cursor={{ fill: "#f8fafc" }}
-                          contentStyle={{
-                            borderRadius: "12px",
-                            border: "none",
-                            boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                            fontWeight: "bold",
-                          }}
-                        />
-                        <Bar
-                          dataKey="total"
-                          radius={[0, 10, 10, 0]}
-                          barSize={24}
-                        >
+                        <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 12, fontWeight: "bold", fill: "#1e293b", interval: 0 }} axisLine={false} tickLine={false} />
+                        <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", fontWeight: "bold" }} />
+                        <Bar dataKey="total" radius={[0, 10, 10, 0]} barSize={24}>
                           {rankingData.map((_, i) => (
-                            <Cell
-                              key={i}
-                              fill={
-                                i === 0
-                                  ? "#0f172a"
-                                  : i < 3
-                                    ? "#3b82f6"
-                                    : "#cbd5e1"
-                              }
-                            />
+                            <Cell key={i} fill={i === 0 ? "#0f172a" : i < 3 ? "#3b82f6" : "#cbd5e1"} />
                           ))}
-                          <LabelList
-                            dataKey="total"
-                            position="right"
-                            formatter={(v) => `${v}km`}
-                            style={{
-                              fontSize: "11px",
-                              fontWeight: "black",
-                              fill: "#475569",
-                            }}
-                            offset={10}
-                          />
+                          <LabelList dataKey="total" position="right" formatter={(v) => `${v}km`} style={{ fontSize: "11px", fontWeight: "black", fill: "#475569" }} offset={10} />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 h-[28rem] flex flex-col">
-                <div className="p-6 bg-slate-50 border-b flex items-center gap-2">
-                  <Activity size={16} className="text-slate-400" />
-                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                    Recent Activity
-                  </span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2">
-                  {allLogs
-                    .filter((l) =>
-                      activeRunners.some((r) => r.id === l.runnerId),
-                    )
-                    .sort((a, b) => new Date(b.date) - new Date(a.date))
-                    .slice(0, 50)
-                    .map((l) => (
-                      <div
-                        key={l.id}
-                        className="p-4 mb-2 bg-white rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors relative group"
-                      >
-                        <div className="absolute right-4 top-4 hidden group-hover:block">
-                          <button
-                            onClick={() => openCoachEditModal(l)}
-                            className="bg-white border border-slate-200 p-2 rounded-lg text-slate-400 hover:text-blue-600 shadow-sm transition-colors"
-                            title="監督修正"
-                          >
-                            <Edit size={16} />
-                          </button>
-                        </div>
-                        <div className="flex justify-between items-start mb-1 pr-10">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-2 h-2 rounded-full ${l.pain > 3 ? "bg-rose-500 animate-pulse" : "bg-emerald-400"}`}
-                            ></div>
-                            <span className="font-bold text-slate-700 text-sm">
-                              {l.runnerName}
-                            </span>
-                          </div>
-                          <span className="font-black text-blue-600">
-                            {l.distance}km
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-5 mb-2">
-                          {l.date.slice(5).replace("-", "/")} · {l.category}
-                        </div>
-
-                        <div className="flex gap-2 ml-5 mb-1">
-                          <span
-                            className={`px-2 py-1 rounded-md text-[10px] font-black ${
-                              l.rpe >= 8
-                                ? "bg-rose-100 text-rose-600 border border-rose-200"
-                                : l.rpe >= 5
-                                  ? "bg-orange-100 text-orange-600 border border-orange-200"
-                                  : "bg-blue-50 text-blue-600 border border-blue-100"
-                            }`}
-                          >
-                            RPE {l.rpe}
-                          </span>
-
-                          {l.pain > 1 && (
-                            <span
-                              className={`px-2 py-1 rounded-md text-[10px] font-black flex items-center gap-1 ${
-                                l.pain >= 4
-                                  ? "bg-purple-100 text-purple-600 border border-purple-200 animate-pulse"
-                                  : l.pain === 3
-                                    ? "bg-rose-100 text-rose-600 border border-rose-200"
-                                    : "bg-yellow-100 text-yellow-700 border border-yellow-200"
-                              }`}
-                            >
-                              <HeartPulse size={12} /> Pain {l.pain}
-                            </span>
-                          )}
-                        </div>
-                        {l.menuDetail && (
-                          <p className="mt-2 ml-5 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg italic">
-                            "{l.menuDetail}"
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {view === "coach-report" && (
-          <CoachReportView
-            handleExportMatrixCSV={handleExportMatrixCSV}
-            handlePrint={handlePrint}
-            activeRunners={activeRunners}
-            targetPeriod={targetPeriod}
-            reportMatrix={reportMatrix}
-            monthlyTrendData={monthlyTrendData}
-            cumulativeData={cumulativeData}
-            reportChartData={reportChartData}
-          />
-        )}
-
-        {view === "coach-check" && (
-          <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
-            <h3 className="font-black uppercase text-[10px] text-slate-400 text-center tracking-[0.3em]">
-              Status Check
-            </h3>
-            <div className="flex flex-col md:flex-row items-center justify-center mb-6 gap-6">
-              <input
-                type="date"
-                className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
-                value={checkDate}
-                onChange={(e) => setCheckDate(e.target.value)}
+            )}
+            {statsSubTab === "report" && (
+              <CoachReportView
+                handleExportMatrixCSV={handleExportMatrixCSV}
+                handlePrint={handlePrint}
+                activeRunners={activeRunners}
+                targetPeriod={targetPeriod}
+                reportMatrix={reportMatrix}
+                monthlyTrendData={monthlyTrendData}
+                cumulativeData={cumulativeData}
+                reportChartData={reportChartData}
               />
-              <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
-                <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    提出率
-                  </span>
-                  <div className="flex items-end gap-1">
-                    <span className="text-3xl font-black text-blue-600">
-                      {checkListData.length > 0
-                        ? Math.round(
-                            (checkListData.filter(
-                              (r) => r.status !== "unsubmitted",
-                            ).length /
-                              checkListData.length) *
-                              100,
-                          )
-                        : 0}
-                    </span>
-                    <span className="text-xs font-bold text-slate-400 mb-1">
-                      %
-                    </span>
-                  </div>
-                </div>
-                <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    提出済
-                  </span>
-                  <div className="flex items-end gap-1">
-                    <span className="text-3xl font-black text-emerald-600">
-                      {
-                        checkListData.filter((r) => r.status !== "unsubmitted")
-                          .length
-                      }
-                    </span>
-                    <span className="text-xs font-bold text-slate-400 mb-1">
-                      / {checkListData.length}名
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2">
-              {checkListData.map((r) => (
-                <div
-                  key={r.id}
-                  className="py-4 flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${r.status === "active" ? "bg-blue-500" : r.status === "rest" ? "bg-emerald-400" : "bg-rose-400"}`}
-                    >
-                      {r.lastName.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-800">
-                        {r.lastName} {r.firstName}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    {r.status === "active" && (
-                      <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
-                        <Check size={12} /> {r.detail}
-                      </span>
-                    )}
-                    {r.status === "rest" && (
-                      <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
-                        {r.detail}
-                      </span>
-                    )}
-                    {r.status === "unsubmitted" && (
-                      <span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
-                        <AlertTriangle size={12} /> 未提出
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            )}
           </div>
         )}
 
-        {view === "coach-menu" &&
+
+        {view === "coach-diary" &&
           (() => {
             const year = listMonth.getFullYear();
             const month = listMonth.getMonth() + 1;
@@ -962,7 +1010,7 @@ const CoachView = (props) => {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 max-w-2xl mx-auto relative">
+                  <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-5 max-w-2xl mx-auto animate-in slide-in-from-right-10 relative">
                     <div className="flex justify-between items-center mb-2">
                       <button
                         onClick={() => setDiaryMode("list")}
@@ -970,150 +1018,275 @@ const CoachView = (props) => {
                       >
                         <ArrowLeft size={16} /> 一覧に戻る
                       </button>
-                      <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 flex items-center gap-2">
-                        <BookOpen size={14} /> Team Diary Check & Edit
-                      </h3>
+                      {coachExistingLog && (
+                        <button
+                          onClick={deleteCoachDiary}
+                          className="text-rose-400 hover:text-rose-600 bg-rose-50 p-2 rounded-xl transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                        Date
-                      </span>
+
+                    <div className="flex items-center gap-2 mb-4">
+                      <BookOpen size={18} className="text-blue-500" />
+                      <h2 className="text-sm font-black text-slate-700">練習日誌の記録</h2>
+                    </div>
+
+                    {/* Date + 休養日ボタン */}
+                    <div className="flex items-end gap-3 mb-6">
+                      <div className="flex-1 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">Date</label>
+                        <input
+                          type="date"
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none border-2 border-transparent focus:border-blue-500"
+                          value={menuInput.date}
+                          onChange={(e) => setMenuInput({ ...menuInput, date: e.target.value })}
+                        />
+                      </div>
+                      <button
+                        onClick={handleCoachRestRegister}
+                        disabled={isDiarySaving}
+                        className={`py-3 px-5 rounded-xl font-black shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 ${isDiarySaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-emerald-500 text-white hover:bg-emerald-600"}`}
+                      >
+                        {isDiarySaving ? <Loader2 size={16} className="animate-spin" /> : <BookOpen size={16} />}
+                        休養日
+                      </button>
+                    </div>
+
+                    {/* 天気・気温・湿度 */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">Weather</label>
+                        <select
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
+                          value={diaryInput.weather}
+                          onChange={(e) => setDiaryInput({ ...diaryInput, weather: e.target.value })}
+                        >
+                          <option value="晴れ">☀ 晴</option>
+                          <option value="曇り">☁ 曇</option>
+                          <option value="雨">☂ 雨</option>
+                          <option value="雪">⛄ 雪</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">Temp (℃)</label>
+                        <input
+                          type="number"
+                          placeholder="25"
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
+                          value={diaryInput.temp}
+                          onChange={(e) => setDiaryInput({ ...diaryInput, temp: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">Humid (%)</label>
+                        <input
+                          type="number"
+                          placeholder="60"
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
+                          value={diaryInput.humidity}
+                          onChange={(e) => setDiaryInput({ ...diaryInput, humidity: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 風速 */}
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1 uppercase">Wind Strength</label>
+                        <span className="text-xs font-black text-blue-600">
+                          {diaryInput.wind === 1 ? "1 (無風)" : diaryInput.wind === 5 ? "5 (強風)" : diaryInput.wind}
+                        </span>
+                      </div>
                       <input
-                        type="date"
-                        className="flex-1 bg-transparent font-black text-slate-700 outline-none"
-                        value={menuInput.date}
-                        onChange={(e) =>
-                          setMenuInput({ ...menuInput, date: e.target.value })
-                        }
+                        type="range" min="1" max="5" step="1"
+                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        value={diaryInput.wind}
+                        onChange={(e) => setDiaryInput({ ...diaryInput, wind: parseInt(e.target.value) })}
+                      />
+                      <div className="flex justify-between px-1">
+                        <span className="text-[8px] text-slate-400">弱</span>
+                        <span className="text-[8px] text-slate-400">強</span>
+                      </div>
+                    </div>
+
+                    {/* 開始・終了時刻 */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">Start</label>
+                        <input
+                          type="time"
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
+                          value={diaryInput.startTime}
+                          onChange={(e) => setDiaryInput({ ...diaryInput, startTime: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase">End</label>
+                        <input
+                          type="time"
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
+                          value={diaryInput.endTime}
+                          onChange={(e) => setDiaryInput({ ...diaryInput, endTime: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 場所 */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
+                        <MapPin size={12} /> Location
+                      </label>
+                      <select
+                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
+                        value={diaryInput.location}
+                        onChange={(e) => setDiaryInput({ ...diaryInput, location: e.target.value })}
+                      >
+                        <option value="1.53kmコース">1.53kmコース</option>
+                        <option value="1.1kmコース">1.1kmコース</option>
+                        <option value="河川敷">河川敷</option>
+                        <option value="クロカン・芝">クロカン・芝</option>
+                        <option value="防災公園">防災公園</option>
+                        <option value="競技場">競技場 (詳細記入)</option>
+                        <option value="その他">その他 (詳細記入)</option>
+                      </select>
+                      {(diaryInput.location === "競技場" || diaryInput.location === "その他") && (
+                        <input
+                          type="text"
+                          placeholder="詳細を入力 (例: 市営競技場)"
+                          className="w-full p-3 bg-white border-2 border-blue-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:border-blue-500 mt-2 animate-in fade-in"
+                          value={diaryInput.locationDetail}
+                          onChange={(e) => setDiaryInput({ ...diaryInput, locationDetail: e.target.value })}
+                        />
+                      )}
+                    </div>
+
+                    {/* 補強 */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest flex items-center gap-1">
+                        <Dumbbell size={12} /> Reinforcement
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {reinforcementOptions.map((option) => (
+                          <button
+                            key={option}
+                            onClick={() => toggleCoachReinforcement(option)}
+                            className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all ${diaryInput.reinforcements.includes(option) ? "bg-blue-500 text-white border-blue-500 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                      {diaryInput.reinforcements.includes("その他") && (
+                        <input
+                          type="text"
+                          placeholder="その他の補強内容..."
+                          className="w-full p-3 bg-white border-2 border-blue-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:border-blue-500 mt-2 animate-in fade-in"
+                          value={diaryInput.reinforcementDetail}
+                          onChange={(e) => setDiaryInput({ ...diaryInput, reinforcementDetail: e.target.value })}
+                        />
+                      )}
+                    </div>
+
+                    {/* AI アシスタント */}
+                    <div className="flex justify-end pt-2 pb-1">
+                      <button
+                        onClick={() => setShowAIModal(true)}
+                        className="text-xs bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl font-black flex items-center gap-1.5 active:scale-95 transition-all hover:bg-blue-200 shadow-sm"
+                      >
+                        <Sparkles size={16} /> AIアシスタントで文章を自動作成
+                      </button>
+                    </div>
+
+                    {/* メニュー */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">Menu Plan</label>
+                      <textarea
+                        className="w-full p-4 bg-slate-50 rounded-xl h-32 font-bold text-slate-600 outline-none focus:ring-2 ring-blue-500 text-sm resize-none"
+                        placeholder="本日の練習メニューを入力..."
+                        value={diaryInput.menu}
+                        onChange={(e) => setDiaryInput({ ...diaryInput, menu: e.target.value })}
                       />
                     </div>
-                    {(() => {
-                      const diary = teamLogs?.find(
-                        (l) => l.date === menuInput.date,
-                      );
-                      if (!diary) {
-                        return (
-                          <div className="text-center py-10 bg-slate-50 rounded-[2rem] border border-slate-100 border-dashed mt-4">
-                            <BookOpen
-                              size={32}
-                              className="mx-auto text-slate-300 mb-2"
-                            />
-                            <p className="text-xs font-bold text-slate-400">
-                              この日の日誌はまだ提出されていません
-                            </p>
-                          </div>
-                        );
+
+                    {/* 結果・所感 */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 ml-1 uppercase tracking-widest">Results / Notes</label>
+                      <textarea
+                        className="w-full p-4 bg-blue-50 rounded-xl h-32 font-bold text-blue-900 outline-none focus:ring-2 ring-blue-500 text-sm resize-none"
+                        placeholder="練習の結果、雰囲気、ポイント練習のタイム設定など..."
+                        value={diaryInput.result}
+                        onChange={(e) => setDiaryInput({ ...diaryInput, result: e.target.value })}
+                      />
+                    </div>
+
+                    {/* 保存ボタン */}
+                    <button
+                      onClick={saveCoachDiary}
+                      disabled={isDiarySaving}
+                      className={`w-full py-4 rounded-xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${isDiarySaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-blue-600 text-white shadow-blue-200"}`}
+                    >
+                      {isDiarySaving
+                        ? <><Loader2 size={18} className="animate-spin" /> 保存中...</>
+                        : <><Save size={18} /> {coachExistingLog ? "日誌を更新" : "日誌を保存・公開"}</>
                       }
-                      return (
-                        <div className="space-y-5 mt-2">
-                          <div className="flex flex-wrap gap-2">
-                            <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200">
-                              {diary.weather}{" "}
-                              {diary.temp ? `${diary.temp}℃` : ""}
-                            </span>
-                            {diary.startTime && (
-                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200">
-                                {diary.startTime} - {diary.endTime}
-                              </span>
-                            )}
-                            {diary.location && (
-                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
-                                <MapPin size={10} />
-                                {diary.location === "その他" &&
-                                diary.locationDetail
-                                  ? diary.locationDetail
-                                  : diary.location === "競技場" &&
-                                      diary.locationDetail
-                                    ? `${diary.location} (${diary.locationDetail})`
-                                    : diary.location}
-                              </span>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 ml-1">
-                              <Edit size={12} /> Menu (メニュー)
-                            </p>
-                            <textarea
-                              id="edit-diary-menu"
-                              defaultValue={diary.menu || ""}
-                              className="w-full p-4 bg-white rounded-2xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 min-h-[120px] text-sm resize-none shadow-sm"
-                            />
-                          </div>
-                          {diary.reinforcements &&
-                            diary.reinforcements.length > 0 && (
-                              <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-                                <p className="text-[10px] font-black text-blue-400 mb-2 flex items-center gap-1 uppercase tracking-widest">
-                                  <Dumbbell size={10} /> Reinforcement
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                  {diary.reinforcements.map((item, i) => (
-                                    <span
-                                      key={i}
-                                      className="text-[10px] font-bold bg-white text-slate-600 px-2 py-1 rounded shadow-sm border border-slate-100"
-                                    >
-                                      {item}
-                                    </span>
-                                  ))}
-                                  {diary.reinforcements.includes("その他") &&
-                                    diary.reinforcementDetail && (
-                                      <span className="text-[10px] font-bold text-slate-400 self-center">
-                                        : {diary.reinforcementDetail}
-                                      </span>
-                                    )}
-                                </div>
-                              </div>
-                            )}
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 ml-1">
-                              <Edit size={12} /> Results / Notes (報告・所感)
-                            </p>
-                            <textarea
-                              id="edit-diary-result"
-                              defaultValue={diary.result || ""}
-                              className="w-full p-4 bg-white rounded-2xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 min-h-[100px] text-sm resize-none shadow-sm"
-                            />
-                          </div>
-                          <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold px-1">
-                            <span>
-                              ※書き換えて保存すると選手画面に反映されます
-                            </span>
-                            <span>Written by {diary.updatedBy}</span>
-                          </div>
-                          <button
-                            onClick={async () => {
-                              setIsDiarySaving(true);
-                              try {
-                                const newMenu = document.getElementById("edit-diary-menu").value;
-                                const newResult = document.getElementById("edit-diary-result").value;
-                                await updateDoc(docRef("team_logs", menuInput.date), {
-                                  menu: newMenu,
-                                  result: newResult,
-                                  updatedAt: new Date().toISOString(),
-                                });
-                                import("react-hot-toast").then((module) => {
-                                  module.toast.success("日誌を更新しました！");
-                                });
-                              } catch (e) {
-                                import("react-hot-toast").then((module) => {
-                                  module.toast.error("エラー: " + e.message);
-                                });
-                              } finally {
-                                setIsDiarySaving(false);
-                              }
-                            }}
-                            disabled={isDiarySaving}
-                            className={`w-full py-4 rounded-2xl font-black shadow-md transition-all flex items-center justify-center gap-2 ${isDiarySaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-blue-600 text-white active:scale-95"}`}
-                          >
-                            {isDiarySaving ? <><Loader2 size={16} className="animate-spin" /> 保存中...</> : <><Save size={16} /> 内容を上書き保存する</>}
-                          </button>
-                        </div>
-                      );
-                    })()}
+                    </button>
                   </div>
                 )}
               </div>
             );
           })()}
+
+        {/* AI アシスタント モーダル */}
+        {showAIModal && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+              <div className="bg-blue-600 p-4 flex justify-between items-center text-white">
+                <h3 className="font-black flex items-center gap-2">
+                  <Sparkles size={18} /> AI 記録表読み取り
+                </h3>
+                <button
+                  onClick={() => { setShowAIModal(false); setAiImage(null); }}
+                  className="hover:bg-white/20 p-1 rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-xs font-bold text-slate-500">
+                  練習記録表（ホワイトボードやノート）の写真をアップロードしてください。AIが画像からメニュー、メンバー、タイムを自動で読み取りテキスト化します。
+                </p>
+                <div className="border-2 border-dashed border-blue-200 rounded-xl p-6 text-center bg-slate-50 hover:bg-blue-50 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setAiImage(e.target.files[0])}
+                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => { setShowAIModal(false); setAiImage(null); }}
+                    className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={generateCoachDiaryWithAI}
+                    disabled={isGenerating || !aiImage}
+                    className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-black shadow-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                  >
+                    {isGenerating
+                      ? <><Loader2 size={18} className="animate-spin" /> 読み取り中...</>
+                      : <><Sparkles size={18} /> 文字起こしを実行</>
+                    }
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {view === "coach-race" && (
           <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in max-w-2xl mx-auto">
@@ -1220,15 +1393,26 @@ const CoachView = (props) => {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => setSelectedTourId(tour.id)}
-                          className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 active:scale-95 transition-all hover:bg-indigo-100 cursor-pointer shadow-sm"
+                          className="flex flex-col items-center gap-1 active:scale-95 transition-all cursor-pointer"
                         >
-                          <ClipboardCheck size={12} />
-                          {
-                            raceCards.filter(
-                              (card) => card.tournamentId === tour.id,
-                            ).length
-                          }{" "}
-                          枚提出
+                          <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 hover:bg-indigo-100 shadow-sm">
+                            <ClipboardCheck size={12} />
+                            {raceCards.filter((card) => card.tournamentId === tour.id).length}{" "}枚提出
+                          </span>
+                          {(() => {
+                            const pending = raceCards.filter(
+                              (card) => card.tournamentId === tour.id && !card.coachFeedback
+                            ).length;
+                            return pending > 0 ? (
+                              <span className="text-[10px] font-black bg-amber-500 text-white px-3 py-1 rounded-lg flex items-center gap-1 shadow-sm">
+                                <MessageSquare size={10} /> FB未 {pending}件
+                              </span>
+                            ) : raceCards.filter((card) => card.tournamentId === tour.id).length > 0 ? (
+                              <span className="text-[10px] font-black bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg border border-emerald-100 flex items-center gap-1">
+                                <Check size={10} /> FB完了
+                              </span>
+                            ) : null;
+                          })()}
                         </button>
                         <button
                           onClick={() => handleDeleteTournament(tour.id)}
@@ -1242,49 +1426,6 @@ const CoachView = (props) => {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {view === "coach-admin" && (
-          <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-black uppercase text-[10px] text-slate-400 tracking-[0.3em]">
-                Admin Tools
-              </h3>
-            </div>
-            <div className="bg-purple-50/50 p-6 rounded-3xl border border-purple-100 space-y-4">
-              <h4 className="font-black text-sm text-purple-700 flex items-center gap-2 mb-2">
-                <Eye size={18} /> システム管理者機能
-              </h4>
-              <p className="text-[10px] text-slate-600 font-bold leading-relaxed mb-6">
-                この機能はシステム管理者用です。他のユーザー権限での動作確認や、設定のテストを行うことができます。
-              </p>
-              <div id="demo-buttons-section" className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setDemoMode("manager")}
-                  className="p-5 bg-amber-50 text-amber-700 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-amber-100 border border-amber-200 shadow-sm active:scale-95 transition-all"
-                >
-                  <Users size={24} />
-                  マネージャープレビュー
-                </button>
-                <button
-                  onClick={() => {
-                    setDemoMode("admin");
-                    setView("menu");
-                    window.scrollTo(0, 0);
-                  }}
-                  className="p-5 bg-purple-100 text-purple-800 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-purple-200 border border-purple-300 shadow-sm active:scale-95 transition-all"
-                >
-                  <Eye size={24} />
-                  選手プレビュー
-                </button>
-              </div>
-            </div>
-            <div className="mt-8 pt-8 border-t border-slate-100 text-center">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                KSWC System Control
-              </p>
             </div>
           </div>
         )}
@@ -1308,60 +1449,86 @@ const CoachView = (props) => {
               const managers = activeRunners.filter(
                 (r) => r.role === ROLES.MANAGER,
               );
-              return (
-                <>
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
-                      <UserCheck size={16} /> Athletes ({athletes.length})
-                    </h4>
-                    <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">
-                      {athletes.map((r) => (
-                        <div
-                          key={r.id}
-                          className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2"
-                          onClick={() => handleCoachEditRunner(r)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">
-                              {r.lastName.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-800">
-                                {r.lastName} {r.firstName}
-                              </p>
-                              <div className="flex items-center gap-2 mt-0.5 mb-0.5">
-                                <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                                  ID: {r.memberCode || "-"}
-                                </span>
-                                <span className="text-[10px] text-slate-300 font-mono">
-                                  PIN: {r.pin || "----"}
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 font-bold">
-                                Goal: {r.goalMonthly}km/mo
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStartPreview(r);
-                              }}
-                              className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors"
-                              title="本人視点でプレビュー"
-                            >
-                              <Eye size={18} />
-                            </button>
-                            <ChevronRight
-                              className="text-slate-300"
-                              size={20}
-                            />
-                          </div>
-                        </div>
-                      ))}
+              const entranceYears = [
+                ...new Set(
+                  athletes.map((r) => (r.memberCode || r.id).substring(0, 2)),
+                ),
+              ].sort().reverse();
+              const athleteCard = (r) => (
+                <div
+                  key={r.id}
+                  className="py-4 flex items-center justify-between group cursor-pointer hover:bg-slate-50 transition-colors rounded-xl px-2"
+                  onClick={() => handleCoachEditRunner(r)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center font-black text-blue-600">
+                      {r.lastName.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800">
+                        {r.lastName} {r.firstName}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 mb-0.5">
+                        <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                          ID: {r.memberCode || "-"}
+                        </span>
+                        {r.gender && (
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${r.gender === "男" ? "bg-blue-100 text-blue-600" : "bg-pink-100 text-pink-600"}`}>
+                            {r.gender}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-300 font-mono">
+                          PIN: {r.pin || "----"}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-bold">
+                        Goal: {r.goalMonthly}km/mo
+                      </p>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartPreview(r);
+                      }}
+                      className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors"
+                      title="本人視点でプレビュー"
+                    >
+                      <Eye size={18} />
+                    </button>
+                    <ChevronRight className="text-slate-300" size={20} />
+                  </div>
+                </div>
+              );
+              return (
+                <>
+                  {entranceYears.map((year, idx) => {
+                    const gOrd = { 男: 0, 女: 1 };
+                    const group = athletes
+                      .filter((r) => (r.memberCode || r.id).startsWith(year))
+                      .sort((a, b) => {
+                        const ga = gOrd[a.gender] ?? 2;
+                        const gb = gOrd[b.gender] ?? 2;
+                        if (ga !== gb) return ga - gb;
+                        return (a.memberCode || a.id).localeCompare(b.memberCode || b.id);
+                      });
+                    if (group.length === 0) return null;
+                    return (
+                      <div
+                        key={year}
+                        className={`space-y-2 ${idx > 0 ? "pt-6 border-t border-slate-100" : ""}`}
+                      >
+                        <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
+                          <UserCheck size={16} /> 20{year}年度入学
+                          <span className="text-slate-400 font-bold normal-case">({group.length}名)</span>
+                        </h4>
+                        <div className="divide-y divide-slate-100">
+                          {group.map(athleteCard)}
+                        </div>
+                      </div>
+                    );
+                  })}
                   {managers.length > 0 && (
                     <div className="space-y-4 pt-6 border-t border-slate-100">
                       <h4 className="text-xs font-black uppercase text-indigo-600 flex items-center gap-2">
@@ -1499,7 +1666,7 @@ const CoachView = (props) => {
               </div>
             </div>
             <button
-              onClick={() => setView("coach-stats")}
+              onClick={() => setView("coach-home")}
               className="w-full py-3 text-slate-400 font-bold text-xs uppercase tracking-widest"
             >
               ホームに戻る
@@ -1570,6 +1737,31 @@ const CoachView = (props) => {
                     })
                   }
                 />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-400 ml-2 uppercase">
+                  Gender
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {["男", "女"].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() =>
+                        setCoachEditFormData({ ...coachEditFormData, gender: g })
+                      }
+                      className={`py-2.5 rounded-xl font-black text-sm transition-all active:scale-95 ${
+                        coachEditFormData.gender === g
+                          ? g === "男"
+                            ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                            : "bg-pink-500 text-white shadow-md shadow-pink-200"
+                          : "bg-slate-50 text-slate-400 border border-slate-200"
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
               </div>
               <button
                 onClick={handleCoachSaveProfile}
@@ -1814,6 +2006,34 @@ const CoachView = (props) => {
                   className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs hover:bg-rose-100 transition-colors flex items-center justify-center gap-2"
                 >
                   <UserMinus size={16} /> 引退・登録解除 (アーカイブ)
+                </button>
+              </div>
+            </div>
+            <div className="border-t border-slate-100 pt-6 space-y-3">
+              <h4 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
+                <Users size={16} /> Role
+              </h4>
+              <div className="bg-slate-50 rounded-2xl px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-slate-700 text-sm">
+                    {selectedRunner.role === ROLES.MANAGER ? "マネージャー" : "選手"}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">次回ログイン時に反映されます</p>
+                </div>
+                <button
+                  onClick={() =>
+                    handleCoachChangeRole(
+                      selectedRunner,
+                      selectedRunner.role === ROLES.MANAGER ? "athlete" : ROLES.MANAGER
+                    )
+                  }
+                  className={`px-4 py-2 rounded-xl font-black text-xs transition-all active:scale-95 ${
+                    selectedRunner.role === ROLES.MANAGER
+                      ? "bg-blue-500 text-white"
+                      : "bg-indigo-100 text-indigo-700"
+                  }`}
+                >
+                  {selectedRunner.role === ROLES.MANAGER ? "選手に転向" : "マネージャーに転向"}
                 </button>
               </div>
             </div>
@@ -2428,9 +2648,55 @@ const CoachView = (props) => {
                 )}
               </div>
             </div>
+            <div className="bg-purple-50/50 p-6 rounded-3xl border border-purple-100 space-y-4">
+              <h4 className="font-black text-sm text-purple-700 flex items-center gap-2">
+                <Eye size={18} /> Admin Tools
+              </h4>
+              <p className="text-[10px] text-slate-600 font-bold leading-relaxed">
+                この機能はシステム管理者用です。他のユーザー権限での動作確認や、設定のテストを行うことができます。
+              </p>
+              <div id="demo-buttons-section" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => setDemoMode("manager")}
+                  className="p-5 bg-amber-50 text-amber-700 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-amber-100 border border-amber-200 shadow-sm active:scale-95 transition-all"
+                >
+                  <Users size={24} />
+                  マネージャープレビュー
+                </button>
+                <button
+                  onClick={() => {
+                    setDemoMode("admin");
+                    setView("menu");
+                    window.scrollTo(0, 0);
+                  }}
+                  className="p-5 bg-purple-100 text-purple-800 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-purple-200 border border-purple-300 shadow-sm active:scale-95 transition-all"
+                >
+                  <Eye size={24} />
+                  選手プレビュー
+                </button>
+              </div>
+            </div>
           </div>
         )}
-      </main>
+
+        {view === "coach-calendar" && (
+          <div className="animate-in fade-in max-w-md mx-auto">
+            {selectedRunner && (
+              <p className="text-xs font-bold text-slate-400 mb-3 px-1">
+                {selectedRunner.lastName} {selectedRunner.firstName} の記録を表示中
+              </p>
+            )}
+            <CalendarView
+              allLogs={allLogs}
+              teamLogs={teamLogs}
+              tournaments={tournaments}
+              role="coach"
+              currentUserId={selectedRunner?.id || null}
+            />
+          </div>
+        )}
+        </main>
+      </div>
 
       {showTeamReportId && (
         <TeamRaceReport
@@ -2711,10 +2977,16 @@ const CoachView = (props) => {
                           </p>
                         </div>
                       </div>
-                      <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-200 space-y-3 mt-4">
-                        <h4 className="font-black text-sm text-indigo-700 flex items-center gap-2 border-b border-indigo-200/50 pb-2">
-                          <MessageSquare size={16} /> Coach Feedback
-                          (フィードバック)
+                      <div className={`p-5 rounded-2xl border space-y-3 mt-4 ${readingCard.coachFeedback ? "bg-indigo-600 border-indigo-700" : "bg-indigo-50 border-indigo-200"}`}>
+                        <h4 className={`font-black text-sm flex items-center justify-between border-b pb-2 ${readingCard.coachFeedback ? "text-white border-indigo-500" : "text-indigo-700 border-indigo-200/50"}`}>
+                          <span className="flex items-center gap-2">
+                            <MessageSquare size={16} /> Coach Feedback
+                          </span>
+                          {readingCard.coachFeedback && (
+                            <span className="text-[9px] font-black bg-white/20 text-white px-2 py-1 rounded-lg">
+                              送信済み
+                            </span>
+                          )}
                         </h4>
                         <textarea
                           value={coachFeedbackInput}
@@ -2722,7 +2994,7 @@ const CoachView = (props) => {
                             setCoachFeedbackInput(e.target.value)
                           }
                           placeholder="選手へのアドバイスや労いの言葉を入力..."
-                          className="w-full p-4 bg-white rounded-xl font-bold text-sm outline-none border border-indigo-200 focus:border-indigo-400 h-24 resize-none"
+                          className={`w-full p-4 rounded-xl font-bold text-sm outline-none border h-24 resize-none ${readingCard.coachFeedback ? "bg-white/10 border-indigo-400 text-white placeholder:text-indigo-300 focus:border-white" : "bg-white border-indigo-200 focus:border-indigo-400"}`}
                         />
                         <button
                           onClick={() => {
@@ -2736,9 +3008,9 @@ const CoachView = (props) => {
                             });
                           }}
                           disabled={isSubmitting}
-                          className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:bg-slate-300"
+                          className={`w-full py-3 rounded-xl font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:bg-slate-300 ${readingCard.coachFeedback ? "bg-white text-indigo-600 hover:bg-indigo-50" : "bg-indigo-600 text-white"}`}
                         >
-                          <Save size={16} /> フィードバックを送信
+                          <Save size={16} /> {readingCard.coachFeedback ? "フィードバックを更新" : "フィードバックを送信"}
                         </button>
                       </div>
                     </div>
@@ -2782,28 +3054,40 @@ const CoachView = (props) => {
                             </p>
                           </div>
                         </div>
-                        <div className="text-right flex items-center">
-                          {/* DNS/DNF も含むバッジ判定 */}
-                          {card.resultTime || card.status === "finish" ? (
-                            <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                              Resultあり
-                            </span>
-                          ) : card.status === "dns" ? (
-                            <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">
-                              DNS
-                            </span>
-                          ) : card.status === "dnf" ? (
-                            <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
-                              DNF
-                            </span>
-                          ) : (
-                            <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
-                              レース前
-                            </span>
-                          )}
+                        <div className="flex items-center gap-2">
+                          <div className="flex flex-col items-end gap-1">
+                            {/* Result バッジ */}
+                            {card.resultTime || card.status === "finish" ? (
+                              <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                                Resultあり
+                              </span>
+                            ) : card.status === "dns" ? (
+                              <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">
+                                DNS
+                              </span>
+                            ) : card.status === "dnf" ? (
+                              <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+                                DNF
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                                レース前
+                              </span>
+                            )}
+                            {/* フィードバック有無バッジ */}
+                            {card.coachFeedback ? (
+                              <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200 flex items-center gap-1">
+                                <MessageSquare size={9} /> FB済
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex items-center gap-1">
+                                <MessageSquare size={9} /> FB未
+                              </span>
+                            )}
+                          </div>
                           <ChevronRight
                             size={16}
-                            className="text-slate-300 ml-2 group-hover:text-indigo-500 transition-colors"
+                            className="text-slate-300 group-hover:text-indigo-500 transition-colors"
                           />
                         </div>
                       </div>

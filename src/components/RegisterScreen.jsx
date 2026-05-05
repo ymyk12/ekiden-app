@@ -67,6 +67,29 @@ const RegisterScreen = ({
             </div>
           </div>
 
+          {/* 性別 */}
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-slate-400 ml-1">性別</p>
+            <div className="grid grid-cols-2 gap-3">
+              {["男", "女"].map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setAuthInput({ ...authInput, gender: g })}
+                  className={`py-3 rounded-2xl font-black text-sm transition-all active:scale-95 ${
+                    authInput.gender === g
+                      ? g === "男"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                        : "bg-pink-500 text-white shadow-md shadow-pink-200"
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* マネージャー選択チェックボックス */}
           <div
             className="flex items-center gap-3 bg-slate-100 p-4 rounded-2xl cursor-pointer"

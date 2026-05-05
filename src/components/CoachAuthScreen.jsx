@@ -21,7 +21,7 @@ const CoachAuthScreen = ({ appSettings, setRole, setView }) => {
           onChange={(e) => {
             if (e.target.value === appSettings.coachPass) {
               setRole(ROLES.COACH);
-              setView("coach-stats");
+              setView("coach-home");
             }
           }}
         />
