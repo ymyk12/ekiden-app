@@ -98,6 +98,7 @@ const ManagerDashboard = ({
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   const [selectedTourId, setSelectedTourId] = useState(null);
+  const [raceMonthFilter, setRaceMonthFilter] = useState("all");
   const [editingCard, setEditingCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
   const [showTeamReportId, setShowTeamReportId] = useState(null);
@@ -1142,12 +1143,28 @@ const ManagerDashboard = ({
               <div className="flex-1 overflow-y-auto px-6 py-4">
               {!selectedTourId ? (
                 <div className="space-y-3">
+                  {tournaments.length > 0 && (() => {
+                    const months = [...new Set(tournaments.map(t => t.startDate?.slice(0, 7)).filter(Boolean))].sort().reverse();
+                    return (
+                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                        {["all", ...months].map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => setRaceMonthFilter(m)}
+                            className={`flex-none px-3 py-1 rounded-full text-[10px] font-black transition-all ${raceMonthFilter === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                          >
+                            {m === "all" ? "すべて" : m.replace("-", "/")}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   {tournaments.length === 0 ? (
                     <p className="text-center text-xs text-slate-300 py-10">
                       大会が登録されていません
                     </p>
                   ) : (
-                    tournaments.map((tour) => (
+                    tournaments.filter(t => raceMonthFilter === "all" || t.startDate?.slice(0, 7) === raceMonthFilter).map((tour) => (
                       <div key={tour.id} className="flex flex-col gap-2 mb-3">
                         {/* 👇 これが元々あった「選手のエントリー一覧を見る」ボタンです */}
                         <button

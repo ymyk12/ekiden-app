@@ -31,7 +31,7 @@ export const useTeamData = (user, role, fetchCutoff) => {
     endDate: "",
     quarters: [],
     customPeriods: [],
-    defaultPeriodId: "global_period",
+    defaultPeriodId: "dynamic_current",
     loaded: false,
   });
 
@@ -62,7 +62,7 @@ export const useTeamData = (user, role, fetchCutoff) => {
             endDate: endStr,
             quarters: [],
             customPeriods: [],
-            defaultPeriodId: "global_period",
+            defaultPeriodId: "dynamic_current",
           });
         }
       })

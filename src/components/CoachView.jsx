@@ -368,6 +368,8 @@ const CoachView = (props) => {
   const [showTeamReportId, setShowTeamReportId] = useState(null);
 
   const [statsSubTab, setStatsSubTab] = useState("ranking");
+  const [isSubmitListOpen, setIsSubmitListOpen] = useState(false);
+  const [raceMonthFilter, setRaceMonthFilter] = useState("all");
   const [diaryMode, setDiaryMode] = useState("list");
   const [listMonth, setListMonth] = useState(new Date());
   const [isDiarySaving, setIsDiarySaving] = useState(false);
@@ -626,11 +628,37 @@ const CoachView = (props) => {
 
   return (
     <div className="h-[100dvh] bg-slate-50 overflow-hidden print:bg-white print:h-auto flex flex-col md:flex-row">
-      <header className="bg-slate-950 text-white p-5 sticky top-0 z-50 md:h-screen md:w-64 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
-        <div>
-          <h1 className="font-black italic text-xl flex items-center gap-2 tracking-tighter mb-6 md:mb-7">
-            <Users size={20} className="text-blue-400" /> COACH TERMINAL
+      <header className="bg-slate-950 text-white px-4 py-2.5 sticky top-0 z-50 md:p-5 md:h-screen md:w-64 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
+        <div className="flex items-center justify-between md:block">
+          <h1 className="font-black italic text-lg flex items-center gap-2 tracking-tighter md:text-xl md:mb-7">
+            <Users size={18} className="text-blue-400 md:w-5 md:h-5" /> COACH TERMINAL
           </h1>
+
+          {/* モバイル用アイコン（右端） */}
+          <div className="md:hidden flex items-center gap-1">
+            <button
+              onClick={handleOpenNotif}
+              className={`relative p-1.5 rounded-lg transition-all ${unreadCount > 0 ? "text-rose-400" : "text-slate-400"}`}
+            >
+              {unreadCount > 0 ? (
+                <>
+                  <BellRing size={20} className="animate-pulse" />
+                  <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                  </span>
+                </>
+              ) : (
+                <Bell size={20} />
+              )}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-white transition-all"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
 
           <nav className="hidden md:flex flex-col gap-1">
             {[
@@ -653,7 +681,7 @@ const CoachView = (props) => {
             ))}
           </nav>
         </div>
-        <div className="space-y-4 mt-8 md:mt-auto">
+        <div className="hidden md:block space-y-4 mt-auto">
           <button
             onClick={handleOpenNotif}
             className={`flex items-center gap-2 font-bold text-sm transition-all relative ${
@@ -717,9 +745,7 @@ const CoachView = (props) => {
             );
           })}
         </div>
-        <main className="flex-1 overflow-y-auto p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none print:max-w-none print:p-0 print:w-full print:overflow-visible">
-
-        <div className="mb-6 flex justify-end items-center gap-3 no-print">
+        <div className="flex-shrink-0 flex justify-end items-center gap-3 px-5 py-2 bg-slate-50 border-b border-slate-100 no-print print:hidden">
           <span className="text-xs font-bold text-slate-400">Target:</span>
           {availablePeriods.length > 0 && selectedPeriod && (
             <select
@@ -772,62 +798,66 @@ const CoachView = (props) => {
             </select>
           )}
         </div>
+        <main className="flex-1 overflow-y-auto p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none print:max-w-none print:p-0 print:w-full print:overflow-visible">
 
         {view === "coach-home" && (
           <div className="space-y-6 animate-in fade-in">
 
             {/* 提出状況 */}
-            <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-4">
-              <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="bg-white p-4 rounded-[2rem] shadow-sm space-y-3">
+              <div className="flex items-center gap-2">
                 <input
                   type="date"
-                  className="p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500"
+                  className="flex-1 p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
                   value={checkDate}
                   onChange={(e) => setCheckDate(e.target.value)}
                 />
-                <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
-                  <div
-                    onClick={() => { if (coachStats.alertList?.length > 0) setIsPainAlertModalOpen(true); }}
-                    className={`p-4 rounded-2xl flex flex-col items-center justify-center px-8 transition-all ${coachStats.alertList?.length > 0 ? "bg-rose-50 cursor-pointer active:scale-95" : "bg-slate-100"}`}
-                  >
-                    <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${coachStats.alertList?.length > 0 ? "text-rose-500" : "text-slate-400"}`}>
-                      <AlertTriangle size={10} /> Alert
+                <div
+                  onClick={() => { if (coachStats.alertList?.length > 0) setIsPainAlertModalOpen(true); }}
+                  className={`px-5 py-2.5 rounded-2xl flex flex-col items-center transition-all ${coachStats.alertList?.length > 0 ? "bg-rose-50 cursor-pointer active:scale-95" : "bg-slate-100"}`}
+                >
+                  <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-0.5 ${coachStats.alertList?.length > 0 ? "text-rose-500" : "text-slate-400"}`}>
+                    <AlertTriangle size={9} /> Alert
+                  </span>
+                  <div className="flex items-end gap-0.5">
+                    <span className={`text-2xl font-black leading-tight ${coachStats.alertList?.length > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                      {coachStats.alertList?.length || 0}
                     </span>
-                    <div className="flex items-end gap-1">
-                      <span className={`text-3xl font-black ${coachStats.alertList?.length > 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                        {coachStats.alertList?.length || 0}
-                      </span>
-                      <span className="text-xs font-bold text-slate-400 mb-1">名</span>
-                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 mb-0.5">名</span>
                   </div>
-                  <div className="bg-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center px-8">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">提出済</span>
-                    <div className="flex items-end gap-1">
-                      <span className="text-3xl font-black text-emerald-600">
-                        {checkListData.filter((r) => r.status !== "unsubmitted").length}
-                      </span>
-                      <span className="text-xs font-bold text-slate-400 mb-1">/ {checkListData.length}名</span>
-                    </div>
+                </div>
+                <div
+                  onClick={() => setIsSubmitListOpen((v) => !v)}
+                  className="px-5 py-2.5 rounded-2xl flex flex-col items-center bg-slate-100 cursor-pointer active:scale-95 transition-all hover:bg-slate-200"
+                >
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">提出済</span>
+                  <div className="flex items-end gap-0.5">
+                    <span className="text-2xl font-black text-emerald-600 leading-tight">
+                      {checkListData.filter((r) => r.status !== "unsubmitted").length}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 mb-0.5">/ {checkListData.length}名</span>
                   </div>
                 </div>
               </div>
-              <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2">
-                {checkListData.map((r) => (
-                  <div key={r.id} className="py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-white text-sm ${r.status === "active" ? "bg-blue-500" : r.status === "rest" ? "bg-emerald-400" : "bg-rose-400"}`}>
-                        {r.lastName.charAt(0)}
+              {isSubmitListOpen && (
+                <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2 animate-in fade-in slide-in-from-top-2">
+                  {checkListData.map((r) => (
+                    <div key={r.id} className="py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-white text-sm ${r.status === "active" ? "bg-blue-500" : r.status === "rest" ? "bg-emerald-400" : "bg-rose-400"}`}>
+                          {r.lastName.charAt(0)}
+                        </div>
+                        <p className="font-bold text-slate-800 text-sm">{r.lastName} {r.firstName}</p>
                       </div>
-                      <p className="font-bold text-slate-800 text-sm">{r.lastName} {r.firstName}</p>
+                      <div>
+                        {r.status === "active" && <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Check size={12} /> {r.detail}</span>}
+                        {r.status === "rest" && <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black">{r.detail}</span>}
+                        {r.status === "unsubmitted" && <span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><AlertTriangle size={12} /> 未提出</span>}
+                      </div>
                     </div>
-                    <div>
-                      {r.status === "active" && <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Check size={12} /> {r.detail}</span>}
-                      {r.status === "rest" && <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black">{r.detail}</span>}
-                      {r.status === "unsubmitted" && <span className="bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><AlertTriangle size={12} /> 未提出</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Recent Activity */}
@@ -1295,81 +1325,66 @@ const CoachView = (props) => {
                 Race & Tournament
               </h3>
             </div>
-            <div className="bg-blue-50 p-6 rounded-3xl space-y-4 border border-blue-100">
-              <h4 className="font-black text-blue-600 text-sm flex items-center gap-2">
-                <Flag size={18} /> 新しい大会を登録する
+            <div className="bg-slate-50 p-4 rounded-2xl space-y-2 border border-slate-100">
+              <h4 className="font-black text-slate-500 text-xs flex items-center gap-1.5 uppercase tracking-widest">
+                <Flag size={13} /> 新しい大会を登録する
               </h4>
-              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
-                ここで大会を登録すると、選手たちの画面に「振り返りシート（Race
-                Card）」の入力ボタンが表示されるようになります。
-              </p>
-              <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="大会名 (例: 秋季県大会)"
+                className="w-full p-2.5 bg-white rounded-xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 text-sm"
+                value={newTournamentInput.name}
+                onChange={(e) => setNewTournamentInput({ ...newTournamentInput, name: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-2">
                 <input
-                  type="text"
-                  placeholder="大会名 (例: 秋季県大会)"
-                  className="w-full p-4 bg-white rounded-xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 text-sm shadow-sm"
-                  value={newTournamentInput.name}
-                  onChange={(e) =>
-                    setNewTournamentInput({
-                      ...newTournamentInput,
-                      name: e.target.value,
-                    })
-                  }
+                  type="date"
+                  className="w-full p-2.5 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-sm"
+                  value={newTournamentInput.startDate}
+                  onChange={(e) => setNewTournamentInput({ ...newTournamentInput, startDate: e.target.value })}
                 />
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-400 ml-1">
-                      開始日
-                    </label>
-                    <input
-                      type="date"
-                      className="w-full p-4 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-xs shadow-sm"
-                      value={newTournamentInput.startDate}
-                      onChange={(e) =>
-                        setNewTournamentInput({
-                          ...newTournamentInput,
-                          startDate: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-400 ml-1">
-                      終了日
-                    </label>
-                    <input
-                      type="date"
-                      className="w-full p-4 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-xs shadow-sm"
-                      value={newTournamentInput.endDate}
-                      onChange={(e) =>
-                        setNewTournamentInput({
-                          ...newTournamentInput,
-                          endDate: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={handleSaveTournament}
-                  disabled={isSubmitting}
-                  className={`w-full py-4 rounded-xl font-black text-sm shadow-md transition-all mt-2 ${isSubmitting ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"}`}
-                >
-                  {isSubmitting ? "登録中..." : "大会を登録して選手に通知する"}
-                </button>
+                <input
+                  type="date"
+                  className="w-full p-2.5 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-sm"
+                  value={newTournamentInput.endDate}
+                  onChange={(e) => setNewTournamentInput({ ...newTournamentInput, endDate: e.target.value })}
+                />
               </div>
+              <button
+                onClick={handleSaveTournament}
+                disabled={isSubmitting}
+                className={`w-full py-2.5 rounded-xl font-black text-sm transition-all ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"}`}
+              >
+                {isSubmitting ? "登録中..." : "登録・通知"}
+              </button>
             </div>
             <div className="space-y-3 pt-6 border-t border-slate-100">
               <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
                 Registered Races
               </h4>
+              {tournaments.length > 0 && (() => {
+                const months = [...new Set(tournaments.map(t => t.startDate?.slice(0, 7)).filter(Boolean))].sort().reverse();
+                return (
+                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                    {["all", ...months].map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setRaceMonthFilter(m)}
+                        className={`flex-none px-3 py-1 rounded-full text-[10px] font-black transition-all ${raceMonthFilter === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                      >
+                        {m === "all" ? "すべて" : m.replace("-", "/")}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
               {tournaments.length === 0 ? (
                 <p className="text-center text-xs text-slate-400 font-bold py-8 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                   大会はまだ登録されていません
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {tournaments.map((tour) => (
+                  {tournaments.filter(t => raceMonthFilter === "all" || t.startDate?.slice(0, 7) === raceMonthFilter).map((tour) => (
                     <div
                       key={tour.id}
                       className="bg-white border border-slate-200 p-4 rounded-2xl flex justify-between items-center shadow-sm"
@@ -1435,13 +1450,6 @@ const CoachView = (props) => {
             <h3 className="font-black uppercase text-[10px] text-slate-400 text-center tracking-[0.3em]">
               Team Roster
             </h3>
-            {/* マネージャー画面の確認ショートカット */}
-            <button
-              onClick={() => setDemoMode("manager")}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 text-amber-700 rounded-2xl font-black text-xs border border-amber-100 active:scale-95 transition-all hover:bg-amber-100"
-            >
-              <Users size={14} /> マネージャー画面を確認する
-            </button>
             {(() => {
               const athletes = activeRunners.filter(
                 (r) => r.role !== ROLES.MANAGER,
@@ -1453,7 +1461,7 @@ const CoachView = (props) => {
                 ...new Set(
                   athletes.map((r) => (r.memberCode || r.id).substring(0, 2)),
                 ),
-              ].sort().reverse();
+              ].sort();
               const athleteCard = (r) => (
                 <div
                   key={r.id}
@@ -2047,124 +2055,78 @@ const CoachView = (props) => {
         )}
 
         {view === "coach-settings" && (
-          <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setView("menu")}
-                className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors"
-              >
-                <ArrowLeft size={20} />
-              </button>
-              <h3 className="font-black uppercase text-[10px] text-slate-400 text-center tracking-[0.3em] m-0">
-                Settings
-              </h3>
-              <div className="w-9" />
-            </div>
-            <div className="bg-slate-50 p-6 rounded-3xl space-y-4 border border-slate-100">
+          <div className="bg-white p-5 rounded-[2rem] shadow-sm space-y-4 animate-in slide-in-from-right-5 max-w-2xl mx-auto">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 text-center tracking-[0.3em]">
+              Settings
+            </h3>
+
+            <div className="bg-slate-50 p-4 rounded-2xl space-y-3 border border-slate-100">
               <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
-                <RotateCcw size={16} /> Default Display Period
+                <RotateCcw size={14} /> Default Display Period
               </h4>
-              <div className="space-y-2">
-                <p className="text-[10px] text-slate-400 font-bold">
-                  ログイン後に最初に表示される期間を選択してください。
-                </p>
-                <select
-                  className="w-full p-3 rounded-xl border border-slate-200 text-sm font-bold bg-white"
-                  value={appSettings.defaultPeriodId || "dynamic_current"}
-                  onChange={handleSaveDefaultPeriod}
-                >
-                  <option value="dynamic_current">
-                    常に「今月」を表示 (Auto Current Month)
+              <select
+                className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-bold bg-white"
+                value={appSettings.defaultPeriodId || "dynamic_current"}
+                onChange={handleSaveDefaultPeriod}
+              >
+                <option value="dynamic_current">常に「今月」を表示 (Auto Current Month)</option>
+                {availablePeriods.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.start && p.end ? ` (${p.start.slice(5).replace("-", "/")}～${p.end.slice(5).replace("-", "/")})` : ""}
                   </option>
-                  {availablePeriods.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.start && p.end
-                        ? ` (${p.start.slice(5).replace("-", "/")}～${p.end.slice(5).replace("-", "/")})`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                ))}
+              </select>
             </div>
-            <div className="space-y-6">
-              <div className="bg-slate-50 p-6 rounded-3xl space-y-4 border border-slate-100">
+
+            <div className="space-y-4">
+              <div className="bg-slate-50 p-4 rounded-2xl space-y-3 border border-slate-100">
                 <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
-                  <Calendar size={16} />{" "}
-                  {editingPeriodId ? "Edit Period" : "Add Custom Period"}
+                  <Calendar size={14} /> {editingPeriodId ? "Edit Period" : "Add Custom Period"}
                 </h4>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input
-                      type="text"
-                      placeholder="期間名 (例: 夏合宿)"
-                      className="p-3 rounded-xl border border-slate-200 text-sm font-bold w-full"
-                      value={newPeriodInput.name}
-                      onChange={(e) =>
-                        updateNewPeriodInputWithAutoQuarters(
-                          "name",
-                          e.target.value,
-                        )
-                      }
-                    />
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="期間名 (例: 夏合宿)"
+                    className="p-2.5 rounded-xl border border-slate-200 text-sm font-bold w-full"
+                    value={newPeriodInput.name}
+                    onChange={(e) => updateNewPeriodInputWithAutoQuarters("name", e.target.value)}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
                     <input
                       type="date"
-                      className="p-3 rounded-xl border border-slate-200 text-sm font-bold w-full"
+                      className="p-2.5 rounded-xl border border-slate-200 text-sm font-bold w-full"
                       value={newPeriodInput.start}
-                      onChange={(e) =>
-                        updateNewPeriodInputWithAutoQuarters(
-                          "start",
-                          e.target.value,
-                        )
-                      }
+                      onChange={(e) => updateNewPeriodInputWithAutoQuarters("start", e.target.value)}
                     />
                     <input
                       type="date"
-                      className="p-3 rounded-xl border border-slate-200 text-sm font-bold w-full"
+                      className="p-2.5 rounded-xl border border-slate-200 text-sm font-bold w-full"
                       value={newPeriodInput.end}
-                      onChange={(e) =>
-                        updateNewPeriodInputWithAutoQuarters(
-                          "end",
-                          e.target.value,
-                        )
-                      }
+                      onChange={(e) => updateNewPeriodInputWithAutoQuarters("end", e.target.value)}
                     />
                   </div>
                   {newPeriodInput.start && newPeriodInput.end && (
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200 mt-2 animate-in fade-in">
+                    <div className="bg-white p-3 rounded-xl border border-slate-200 animate-in fade-in">
                       <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">
                         Quarter Details (Auto-calculated, Edit if needed)
                       </p>
-                      <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-1 gap-1.5">
                         {newPeriodInput.quarters.map((q, idx) => (
                           <div key={idx} className="flex items-center gap-2">
-                            <span className="text-xs font-black w-8 text-slate-500">
-                              Q{idx + 1}
-                            </span>
+                            <span className="text-xs font-black w-8 text-slate-500">Q{idx + 1}</span>
                             <input
                               type="date"
-                              className="p-2 rounded-lg border border-slate-100 text-xs font-bold w-full"
+                              className="p-1.5 rounded-lg border border-slate-100 text-xs font-bold w-full"
                               value={q.start}
-                              onChange={(e) =>
-                                handleNewPeriodQuarterChange(
-                                  idx,
-                                  "start",
-                                  e.target.value,
-                                )
-                              }
+                              onChange={(e) => handleNewPeriodQuarterChange(idx, "start", e.target.value)}
                             />
                             <span className="text-slate-300">-</span>
                             <input
                               type="date"
-                              className="p-2 rounded-lg border border-slate-100 text-xs font-bold w-full"
+                              className="p-1.5 rounded-lg border border-slate-100 text-xs font-bold w-full"
                               value={q.end}
-                              onChange={(e) =>
-                                handleNewPeriodQuarterChange(
-                                  idx,
-                                  "end",
-                                  e.target.value,
-                                )
-                              }
+                              onChange={(e) => handleNewPeriodQuarterChange(idx, "end", e.target.value)}
                             />
                           </div>
                         ))}
@@ -2175,7 +2137,7 @@ const CoachView = (props) => {
                     {editingPeriodId && (
                       <button
                         onClick={handleCancelEdit}
-                        className="w-1/3 py-3 bg-slate-200 text-slate-500 rounded-xl font-bold text-xs hover:bg-slate-300 transition-colors"
+                        className="w-1/3 py-2.5 bg-slate-200 text-slate-500 rounded-xl font-bold text-xs hover:bg-slate-300 transition-colors"
                       >
                         キャンセル
                       </button>
@@ -2183,175 +2145,58 @@ const CoachView = (props) => {
                     <button
                       onClick={handleSaveCustomPeriod}
                       disabled={isPeriodSaving}
-                      className={`flex-1 py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 ${isPeriodSaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                      className={`flex-1 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 ${isPeriodSaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-blue-600 text-white hover:bg-blue-700"}`}
                     >
                       {isPeriodSaving ? <><Loader2 size={13} className="animate-spin" /> 保存中...</> : editingPeriodId ? "更新する" : "追加する"}
                     </button>
                   </div>
                 </div>
-                <div className="space-y-2 mt-6 pt-4 border-t border-slate-200">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Existing Periods
-                  </p>
-                  {appSettings.customPeriods &&
-                    appSettings.customPeriods.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-slate-100"
-                      >
-                        <div>
-                          <p className="font-bold text-sm text-slate-700">
-                            {p.name}
-                          </p>
-                          <p className="text-[10px] text-slate-400 font-mono">
-                            {p.start} ~ {p.end}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEditCustomPeriod(p)}
-                            className="p-2 bg-slate-100 rounded-lg text-slate-500 hover:text-blue-600 transition-colors"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCustomPeriod(p.id)}
-                            className="p-2 bg-rose-50 rounded-lg text-rose-400 hover:text-rose-600 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                <div className="space-y-1.5 pt-3 border-t border-slate-200">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Existing Periods</p>
+                  {appSettings.customPeriods && appSettings.customPeriods.map((p) => (
+                    <div key={p.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl shadow-sm border border-slate-100">
+                      <div>
+                        <p className="font-bold text-sm text-slate-700">{p.name}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">{p.start} ~ {p.end}</p>
                       </div>
-                    ))}
-                  {(!appSettings.customPeriods ||
-                    appSettings.customPeriods.length === 0) && (
-                    <p className="text-center text-xs text-slate-300 py-2">
-                      期間はまだありません
-                    </p>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => handleEditCustomPeriod(p)} className="p-1.5 bg-slate-100 rounded-lg text-slate-500 hover:text-blue-600 transition-colors">
+                          <Edit size={13} />
+                        </button>
+                        <button onClick={() => handleDeleteCustomPeriod(p.id)} className="p-1.5 bg-rose-50 rounded-lg text-rose-400 hover:text-rose-600 transition-colors">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {(!appSettings.customPeriods || appSettings.customPeriods.length === 0) && (
+                    <p className="text-center text-xs text-slate-300 py-1">期間はまだありません</p>
                   )}
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">
-                  Passcode
-                </label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  className="w-full p-5 bg-slate-50 rounded-2xl font-black text-4xl text-center outline-none border-2 border-transparent focus:border-blue-500 font-mono tracking-[0.5em]"
-                  value={appSettings.coachPass}
-                  onChange={(e) =>
-                    setAppSettings({
-                      ...appSettings,
-                      coachPass: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-emerald-500 uppercase ml-3 tracking-widest">
-                  Team Join Passcode
-                </label>
-                <input
-                  type="text"
-                  className="w-full p-5 bg-slate-50 rounded-2xl font-black text-2xl text-center outline-none border-2 border-transparent focus:border-emerald-500 tracking-widest text-emerald-600"
-                  value={appSettings.teamPass}
-                  onChange={(e) =>
-                    setAppSettings({ ...appSettings, teamPass: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2 opacity-50 hover:opacity-100 transition-opacity">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-3 tracking-widest">
-                  Global Default Period (Legacy)
-                </label>
-                <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Passcode</label>
                   <input
-                    type="date"
-                    className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black"
-                    value={appSettings.startDate}
-                    onChange={(e) =>
-                      setAppSettings({
-                        ...appSettings,
-                        startDate: e.target.value,
-                      })
-                    }
+                    type="text"
+                    maxLength={4}
+                    className="w-full p-3 bg-slate-50 rounded-2xl font-black text-2xl text-center outline-none border-2 border-transparent focus:border-blue-500 font-mono tracking-[0.4em]"
+                    value={appSettings.coachPass}
+                    onChange={(e) => setAppSettings({ ...appSettings, coachPass: e.target.value })}
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-emerald-500 uppercase ml-2 tracking-widest">Team Join</label>
                   <input
-                    type="date"
-                    className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black"
-                    value={appSettings.endDate}
-                    onChange={(e) =>
-                      setAppSettings({
-                        ...appSettings,
-                        endDate: e.target.value,
-                      })
-                    }
+                    type="text"
+                    className="w-full p-3 bg-slate-50 rounded-2xl font-black text-2xl text-center outline-none border-2 border-transparent focus:border-emerald-500 tracking-[0.4em] text-emerald-600"
+                    value={appSettings.teamPass}
+                    onChange={(e) => setAppSettings({ ...appSettings, teamPass: e.target.value })}
                   />
                 </div>
               </div>
-              <div className="bg-rose-50 p-6 rounded-3xl space-y-4 border border-rose-100 mt-8">
-                <h4 className="text-xs font-black uppercase text-rose-600 flex items-center gap-2">
-                  <AlertTriangle size={16} /> Data Merge (選手データの統合)
-                </h4>
-                <p className="text-[10px] text-slate-600 font-bold leading-relaxed">
-                  重複して登録された選手データを1つにまとめます。統合元の練習記録はすべて統合先に移動し、統合元のプロフィールは削除されます。
-                </p>
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-rose-500 uppercase">
-                      1. 残す選手 (統合先: データを受け取る側)
-                    </label>
-                    <select
-                      className="w-full p-3 rounded-xl border border-rose-200 text-sm font-bold bg-white outline-none focus:border-rose-500"
-                      value={mergeInput.targetId}
-                      onChange={(e) => setMergeInput(p => ({ ...p, targetId: e.target.value }))}
-                    >
-                      <option value="">選択してください...</option>
-                      {allRunners.map((r) => (
-                        <option key={`target-${r.id}`} value={r.id}>
-                          {r.lastName} {r.firstName} (ID: {r.memberCode || r.id}
-                          )
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-rose-500 uppercase">
-                      2. 消す選手 (統合元: データ移動後に削除される側)
-                    </label>
-                    <select
-                      className="w-full p-3 rounded-xl border border-rose-200 text-sm font-bold bg-white outline-none focus:border-rose-500"
-                      value={mergeInput.sourceId}
-                      onChange={(e) => setMergeInput(p => ({ ...p, sourceId: e.target.value }))}
-                    >
-                      <option value="">選択してください...</option>
-                      {allRunners.map((r) => (
-                        <option key={`source-${r.id}`} value={r.id}>
-                          {r.lastName} {r.firstName} (ID: {r.memberCode || r.id}
-                          )
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {errorMsg && view === "coach-settings" && (
-                    <p className="text-xs text-rose-500 font-bold">
-                      {errorMsg}
-                    </p>
-                  )}
-                  <button
-                    onClick={handleMergeRunners}
-                    disabled={!mergeInput.targetId || !mergeInput.sourceId || isSubmitting}
-                    className={`w-full py-3 rounded-xl font-bold text-xs shadow-md transition-all ${
-                      !mergeInput.targetId || !mergeInput.sourceId || isSubmitting
-                        ? "bg-rose-200 text-white cursor-not-allowed"
-                        : "bg-rose-600 text-white hover:bg-rose-700 active:scale-95"
-                    }`}
-                  >
-                    {isSubmitting ? "統合処理中..." : "データを統合する"}
-                  </button>
-                </div>
-              </div>
+
               <button
                 onClick={async () => {
                   setIsSettingsSaving(true);
@@ -2365,7 +2210,7 @@ const CoachView = (props) => {
                   }
                 }}
                 disabled={isSettingsSaving}
-                className={`w-full py-6 rounded-3xl font-black shadow-xl transition-all flex items-center justify-center gap-2 ${isSettingsSaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-slate-900 text-white active:scale-95"}`}
+                className={`w-full py-4 rounded-2xl font-black shadow-lg transition-all flex items-center justify-center gap-2 ${isSettingsSaving ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-slate-900 text-white active:scale-95"}`}
               >
                 {isSettingsSaving ? <><Loader2 size={18} className="animate-spin" /> 保存中...</> : "設定保存"}
               </button>
@@ -2546,9 +2391,6 @@ const CoachView = (props) => {
                           >
                             {a.type === "pain" && <HeartPulse size={12} />}
                             {a.type === "fatigue" && <Activity size={12} />}
-                            {a.type === "missing" && (
-                              <AlertTriangle size={12} />
-                            )}
                             {a.label}
                           </span>
                         ))}

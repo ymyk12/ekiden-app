@@ -206,6 +206,7 @@ const AthleteView = (props) => {
     n.id.startsWith("fb_period_"),
   );
   const [showTeamReportId, setShowTeamReportId] = useState(null);
+  const [raceMonthFilter, setRaceMonthFilter] = useState("all");
   const [isQuarterExpanded, setIsQuarterExpanded] = useState(false);
   const [isDiaryExpanded, setIsDiaryExpanded] = useState(true);
   const [teamSubView, setTeamSubView] = useState("ranking");
@@ -1705,7 +1706,24 @@ const AthleteView = (props) => {
               <div className="w-9" />
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
+              {tournaments.length > 0 && (() => {
+                const months = [...new Set(tournaments.map(t => t.startDate?.slice(0, 7)).filter(Boolean))].sort().reverse();
+                return (
+                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                    {["all", ...months].map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setRaceMonthFilter(m)}
+                        className={`flex-none px-3 py-1 rounded-full text-[10px] font-black transition-all ${raceMonthFilter === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                      >
+                        {m === "all" ? "すべて" : m.replace("-", "/")}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+              <div className="space-y-6">
               {tournaments.length === 0 ? (
                 <div className="text-center py-10">
                   <Flag size={40} className="mx-auto text-slate-200 mb-3" />
@@ -1714,7 +1732,7 @@ const AthleteView = (props) => {
                   </p>
                 </div>
               ) : (
-                tournaments.map((tour) => {
+                tournaments.filter(t => raceMonthFilter === "all" || t.startDate?.slice(0, 7) === raceMonthFilter).map((tour) => {
                   const myCards = raceCards.filter(
                     (c) =>
                       c.tournamentId === tour.id &&
@@ -1855,6 +1873,7 @@ const AthleteView = (props) => {
                   );
                 })
               )}
+              </div>
             </div>
           </div>
         )}

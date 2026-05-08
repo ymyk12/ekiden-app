@@ -425,14 +425,21 @@ export const useStats = ({
           ) / 10
         : 0;
 
+    const twoWeeksAgo = new Date(todayStr);
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
     const alertList = athletes
       .map((runner) => {
         const runnerLogs = allLogs.filter((l) => l.runnerId === runner.id);
         runnerLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+        if (runnerLogs.length === 0 || new Date(runnerLogs[0].date) < twoWeeksAgo) {
+          return null;
+        }
+
         const alerts = [];
 
-        if (runnerLogs.length > 0 && runnerLogs[0].pain >= 3) {
+        if (runnerLogs[0].pain >= 3) {
           alerts.push({
             type: "pain",
             label: `Pain ${runnerLogs[0].pain}`,
@@ -453,29 +460,13 @@ export const useStats = ({
           });
         }
 
-        const lastLogDate =
-          runnerLogs.length > 0
-            ? new Date(runnerLogs[0].date)
-            : new Date("2000-01-01");
-        const today = new Date(todayStr);
-        const diffDays = Math.floor(
-          (today - lastLogDate) / (1000 * 60 * 60 * 24),
-        );
-
-        if (diffDays >= 3) {
-          alerts.push({
-            type: "missing",
-            label: `${diffDays}日間 未提出`,
-            color: "bg-slate-500 text-white",
-          });
-        }
-
         if (alerts.length > 0) {
           return { runner, latestLog: runnerLogs[0], alerts };
         }
         return null;
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.latestLog.date) - new Date(a.latestLog.date));
 
     return { reportRate, reportedCount, alertList, avgRpe };
   }, [activeRunners, allLogs]);

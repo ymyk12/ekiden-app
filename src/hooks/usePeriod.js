@@ -51,20 +51,6 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
   const availablePeriods = useMemo(() => {
     const periods = [];
 
-    const globalStart = appSettings.startDate;
-    const globalEnd = appSettings.endDate;
-
-    if (globalStart && globalEnd) {
-      periods.push({
-        id: "global_period",
-        name: "チーム指定期間 (シーズン)",
-        start: globalStart,
-        end: globalEnd,
-        quarters: appSettings.quarters || [],
-        type: "global",
-      });
-    }
-
     if (appSettings.customPeriods && appSettings.customPeriods.length > 0) {
       appSettings.customPeriods.forEach((p) => {
         periods.push({ ...p, type: "custom" });
@@ -106,7 +92,7 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
       appSettings.loaded &&
       availablePeriods.length > 0
     ) {
-      const defaultId = appSettings.defaultPeriodId || "global_period";
+      const defaultId = appSettings.defaultPeriodId || "dynamic_current";
       let target = null;
       if (defaultId === "dynamic_current") {
         const today = new Date();
