@@ -4,7 +4,7 @@
  * チーム全員の大会振り返りシートを一覧で表示する画面。
  * 日付ごとにグループ化して並べ、印刷・PDF出力にも対応している。
  */
-import React from "react";
+import React, { useState } from "react";
 import {
   ArrowLeft,
   Printer,
@@ -12,9 +12,19 @@ import {
   Droplets,
   Timer,
   Calendar,
+  Edit,
 } from "lucide-react";
+import LapTimeModal from "./LapTimeModal";
 
-const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
+const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit, onSaveCard }) => {
+  const [editingCard, setEditingCard] = useState(null);
+  const [lapInput, setLapInput] = useState("");
+
+  const openEdit = (card) => {
+    setEditingCard({ ...card });
+    setLapInput(card.lapTimes || "");
+  };
+
   if (!reportTour) return null;
 
   // コンディション表示用のグループ化
@@ -180,7 +190,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
     return { formattedLines };
   };
 
-  return (
+  return (<>
     <div className="fixed inset-0 z-[120] bg-slate-50 flex flex-col animate-in fade-in print:absolute print:inset-auto print:top-0 print:left-0 print:w-full print:h-auto print:bg-white print:overflow-visible">
       <div className="bg-slate-900 text-white p-4 flex items-center justify-between shadow-md pt-12 pb-6 print:hidden">
         <button
@@ -346,9 +356,17 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
                                     : card.distance}
                               </p>
                             </div>
-                            <div className="text-right bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 print:bg-transparent print:border-none print:p-0">
-                              <p className="text-[10px] font-black text-slate-400 mb-0.5">
+                            <div className="text-right bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 print:bg-transparent print:border-none print:p-0 relative">
+                              <p className="text-[10px] font-black text-slate-400 mb-0.5 flex items-center justify-end gap-1">
                                 RESULT
+                                {canEdit && (
+                                  <button
+                                    onClick={() => openEdit(card)}
+                                    className="ml-1 text-slate-300 hover:text-blue-500 transition-colors print:hidden"
+                                  >
+                                    <Edit size={11} />
+                                  </button>
+                                )}
                               </p>
                               <p
                                 className={`text-xl font-black tracking-tighter whitespace-nowrap print:text-slate-800 ${
@@ -417,7 +435,29 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint }) => {
         </div>
       </div>
     </div>
-  );
+    {/* 監督用 Result / LAP 編集モーダル */}
+    {canEdit && editingCard && (
+      <LapTimeModal
+        key={editingCard.id}
+        editingCard={editingCard}
+        onClose={() => setEditingCard(null)}
+        lapInput={lapInput}
+        setLapInput={setLapInput}
+        onSave={async () => {
+          if (onSaveCard) {
+            await onSaveCard(editingCard.id, {
+              resultTime: editingCard.resultTime || "",
+              lapTimes: lapInput,
+            });
+          }
+          setEditingCard(null);
+        }}
+        onResultChange={(newResult) =>
+          setEditingCard({ ...editingCard, resultTime: newResult })
+        }
+      />
+    )}
+  </>);
 };
 
 export default TeamRaceReport;

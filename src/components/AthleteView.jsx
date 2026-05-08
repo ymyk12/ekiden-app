@@ -113,7 +113,6 @@ const AthleteView = (props) => {
     window.scrollTo(0, 0);
     if (view === "menu") {
       setIsQuarterExpanded(false);
-      setIsDiaryExpanded(false);
     }
   }, [view]);
 
@@ -208,7 +207,6 @@ const AthleteView = (props) => {
   const [showTeamReportId, setShowTeamReportId] = useState(null);
   const [raceMonthFilter, setRaceMonthFilter] = useState("all");
   const [isQuarterExpanded, setIsQuarterExpanded] = useState(false);
-  const [isDiaryExpanded, setIsDiaryExpanded] = useState(true);
   const [teamSubView, setTeamSubView] = useState("ranking");
 
   // 日誌の赤バッジ判定を独立させる（一覧やプッシュ通知には出ない）

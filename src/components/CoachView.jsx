@@ -222,11 +222,7 @@ const CoachView = (props) => {
     handleEditCustomPeriod,
     handleDeleteCustomPeriod,
     isPeriodSaving,
-    mergeInput,
-    setMergeInput,
-    errorMsg,
     isSubmitting,
-    handleMergeRunners,
     isCoachEditModalOpen,
     setIsCoachEditModalOpen,
     logInput,
@@ -2547,6 +2543,15 @@ const CoachView = (props) => {
             (c) => c.tournamentId === showTeamReportId,
           )}
           onClose={() => setShowTeamReportId(null)}
+          canEdit
+          onSaveCard={async (cardId, { resultTime, lapTimes }) => {
+            await updateDoc(docRef("raceCards", cardId), {
+              resultTime,
+              lapTimes,
+              updatedAt: new Date().toISOString(),
+              updatedBy: "coach",
+            });
+          }}
         />
       )}
 
