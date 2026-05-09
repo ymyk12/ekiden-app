@@ -11,7 +11,7 @@ exports.analyzeDiaryImage = onCall({ cors: true }, async (request) => {
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -31,7 +31,10 @@ exports.analyzeDiaryImage = onCall({ cors: true }, async (request) => {
     const data = await response.json();
     if (data.error) throw new Error(data.error.message);
 
-    return data;
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const textPart = parts.find((p) => !p.thought && p.text);
+    if (!textPart) throw new Error("テキストの抽出に失敗しました");
+    return { text: textPart.text };
   } catch (error) {
     throw new HttpsError(
       "internal",
