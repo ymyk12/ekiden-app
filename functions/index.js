@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
-exports.analyzeDiaryImage = onCall({ cors: true }, async (request) => {
+exports.analyzeDiaryImage = onCall({ cors: true, invoker: "public" }, async (request) => {
   const { prompt, base64Image, mimeType } = request.data;
 
   const API_KEY = process.env.GEMINI_API_KEY;

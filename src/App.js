@@ -41,7 +41,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.5.2";
+const APP_LAST_UPDATED = "6.5.3";
 
 const App = () => {
   // ─── 認証・ユーザー情報 ───
