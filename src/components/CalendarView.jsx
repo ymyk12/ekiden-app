@@ -104,9 +104,9 @@ function CalendarView({
   };
 
   return (
-    <div className="space-y-4">
-      {/* ヘッダー: 月ナビ */}
-      <div className="bg-white rounded-[2rem] shadow-sm p-5">
+    <div className="flex flex-col h-[calc(100dvh-290px)]">
+      {/* ヘッダー: 月ナビ（固定） */}
+      <div className="bg-white rounded-[2rem] shadow-sm p-5 flex-shrink-0">
         <div className="flex items-center justify-between mb-5">
           <button
             onClick={prevMonth}
@@ -215,14 +215,24 @@ function CalendarView({
         </div>
       </div>
 
-      {/* 詳細ポップアップ */}
+      {/* 詳細（スクロール領域） */}
+      <div className="flex-1 overflow-y-auto mt-4 pb-4">
       {selectedDate && (
         <div className="bg-white rounded-[2rem] shadow-sm p-5 space-y-4 animate-in fade-in slide-in-from-bottom-2">
           {/* ヘッダー */}
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-slate-800">
-              {formatDateLabel(selectedDate)}
-            </h3>
+            <div>
+              <h3 className="text-sm font-black text-slate-800">
+                {formatDateLabel(selectedDate)}
+              </h3>
+              {selectedTeamLog && (selectedTeamLog.weather || selectedTeamLog.temp || selectedTeamLog.humidity) && (
+                <p className="text-[10px] font-bold text-slate-400 mt-0.5 flex items-center gap-1.5">
+                  {selectedTeamLog.weather && <span>{selectedTeamLog.weather}</span>}
+                  {selectedTeamLog.temp && <span>{selectedTeamLog.temp}℃</span>}
+                  {selectedTeamLog.humidity && <span>{selectedTeamLog.humidity}%</span>}
+                </p>
+              )}
+            </div>
             <button
               onClick={() => setSelectedDate(null)}
               className="p-1.5 rounded-xl hover:bg-slate-100 transition-colors text-slate-400"
@@ -332,11 +342,11 @@ function CalendarView({
                       {selectedTeamLog.menu}
                     </p>
                   )}
-                  {selectedTeamLog.weather && (
-                    <p className="text-[10px] text-slate-400">
-                      {selectedTeamLog.weather}
-                      {selectedTeamLog.temp ? ` · ${selectedTeamLog.temp}℃` : ""}
-                    </p>
+                  {selectedTeamLog.result && (
+                    <div className="bg-white rounded-xl px-3 py-2 border border-slate-200">
+                      <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">Results / Notes</p>
+                      <p className="text-xs font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedTeamLog.result}</p>
+                    </div>
                   )}
                 </>
               )}
@@ -365,6 +375,7 @@ function CalendarView({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

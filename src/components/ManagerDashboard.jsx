@@ -1135,30 +1135,30 @@ const ManagerDashboard = ({
         {currentView === "race" && (
           <div className="h-full flex flex-col animate-in fade-in">
             <div className="bg-white rounded-[2rem] shadow-sm flex-1 overflow-hidden flex flex-col">
-              <div className="px-6 pt-6 pb-3 flex-shrink-0 border-b border-slate-100">
+              <div className="px-6 pt-6 pb-3 flex-shrink-0 border-b border-slate-100 space-y-3">
                 <h3 className="font-black text-sm text-slate-700 flex items-center gap-2">
                   <Flag size={18} className="text-indigo-500" /> Race Management
                 </h3>
+                {tournaments.length > 0 && (() => {
+                  const months = [...new Set(tournaments.map(t => t.startDate?.slice(0, 7)).filter(Boolean))].sort().reverse();
+                  return (
+                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                      {["all", ...months].map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => setRaceMonthFilter(m)}
+                          className={`flex-none px-3 py-1 rounded-full text-[10px] font-black transition-all ${raceMonthFilter === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                        >
+                          {m === "all" ? "すべて" : m.replace("-", "/")}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-4">
               {!selectedTourId ? (
                 <div className="space-y-3">
-                  {tournaments.length > 0 && (() => {
-                    const months = [...new Set(tournaments.map(t => t.startDate?.slice(0, 7)).filter(Boolean))].sort().reverse();
-                    return (
-                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                        {["all", ...months].map((m) => (
-                          <button
-                            key={m}
-                            onClick={() => setRaceMonthFilter(m)}
-                            className={`flex-none px-3 py-1 rounded-full text-[10px] font-black transition-all ${raceMonthFilter === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                          >
-                            {m === "all" ? "すべて" : m.replace("-", "/")}
-                          </button>
-                        ))}
-                      </div>
-                    );
-                  })()}
                   {tournaments.length === 0 ? (
                     <p className="text-center text-xs text-slate-300 py-10">
                       大会が登録されていません

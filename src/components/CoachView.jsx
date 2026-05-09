@@ -50,6 +50,7 @@ import {
   Loader2,
   Sparkles,
   Home,
+  ChevronDown,
 } from "lucide-react";
 
 import {
@@ -365,6 +366,8 @@ const CoachView = (props) => {
 
   const [statsSubTab, setStatsSubTab] = useState("ranking");
   const [isSubmitListOpen, setIsSubmitListOpen] = useState(false);
+  const [isExistingPeriodsOpen, setIsExistingPeriodsOpen] = useState(false);
+  const [isNewTournamentModalOpen, setIsNewTournamentModalOpen] = useState(false);
   const [raceMonthFilter, setRaceMonthFilter] = useState("all");
   const [diaryMode, setDiaryMode] = useState("list");
   const [listMonth, setListMonth] = useState(new Date());
@@ -1321,39 +1324,68 @@ const CoachView = (props) => {
                 Race & Tournament
               </h3>
             </div>
-            <div className="bg-slate-50 p-4 rounded-2xl space-y-2 border border-slate-100">
-              <h4 className="font-black text-slate-500 text-xs flex items-center gap-1.5 uppercase tracking-widest">
-                <Flag size={13} /> 新しい大会を登録する
-              </h4>
-              <input
-                type="text"
-                placeholder="大会名 (例: 秋季県大会)"
-                className="w-full p-2.5 bg-white rounded-xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 text-sm"
-                value={newTournamentInput.name}
-                onChange={(e) => setNewTournamentInput({ ...newTournamentInput, name: e.target.value })}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="date"
-                  className="w-full p-2.5 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-sm"
-                  value={newTournamentInput.startDate}
-                  onChange={(e) => setNewTournamentInput({ ...newTournamentInput, startDate: e.target.value })}
-                />
-                <input
-                  type="date"
-                  className="w-full p-2.5 bg-white rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-sm"
-                  value={newTournamentInput.endDate}
-                  onChange={(e) => setNewTournamentInput({ ...newTournamentInput, endDate: e.target.value })}
-                />
-              </div>
-              <button
-                onClick={handleSaveTournament}
-                disabled={isSubmitting}
-                className={`w-full py-2.5 rounded-xl font-black text-sm transition-all ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"}`}
+            <button
+              onClick={() => setIsNewTournamentModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl font-black text-sm hover:bg-blue-700 active:scale-95 transition-all shadow-sm shadow-blue-200"
+            >
+              <Plus size={15} strokeWidth={3} /> 新しい大会を登録する
+            </button>
+
+            {/* 大会登録モーダル */}
+            {isNewTournamentModalOpen && (
+              <div
+                className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
+                onClick={() => setIsNewTournamentModalOpen(false)}
               >
-                {isSubmitting ? "登録中..." : "登録・通知"}
-              </button>
-            </div>
+                <div
+                  className="bg-white w-full max-w-sm rounded-[2rem] p-6 space-y-4 shadow-2xl animate-in zoom-in-95"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-black text-slate-700 text-sm flex items-center gap-1.5">
+                      <Flag size={14} /> 新しい大会を登録する
+                    </h4>
+                    <button
+                      onClick={() => setIsNewTournamentModalOpen(false)}
+                      className="p-1.5 rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="大会名 (例: 秋季県大会)"
+                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 text-sm"
+                    value={newTournamentInput.name}
+                    onChange={(e) => setNewTournamentInput({ ...newTournamentInput, name: e.target.value })}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-sm"
+                      value={newTournamentInput.startDate}
+                      onChange={(e) => setNewTournamentInput({ ...newTournamentInput, startDate: e.target.value })}
+                    />
+                    <input
+                      type="date"
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400 text-sm"
+                      value={newTournamentInput.endDate}
+                      onChange={(e) => setNewTournamentInput({ ...newTournamentInput, endDate: e.target.value })}
+                    />
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await handleSaveTournament();
+                      setIsNewTournamentModalOpen(false);
+                    }}
+                    disabled={isSubmitting}
+                    className={`w-full py-3 rounded-xl font-black text-sm transition-all ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"}`}
+                  >
+                    {isSubmitting ? "登録中..." : "登録・通知"}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="space-y-3 pt-6 border-t border-slate-100">
               <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
                 Registered Races
@@ -1374,6 +1406,7 @@ const CoachView = (props) => {
                   </div>
                 );
               })()}
+              <div className="overflow-y-auto max-h-[calc(100dvh-380px)] space-y-3 pr-1">
               {tournaments.length === 0 ? (
                 <p className="text-center text-xs text-slate-400 font-bold py-8 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                   大会はまだ登録されていません
@@ -1437,6 +1470,7 @@ const CoachView = (props) => {
                   ))}
                 </div>
               )}
+              </div>
             </div>
           </div>
         )}
@@ -2088,7 +2122,7 @@ const CoachView = (props) => {
                     value={newPeriodInput.name}
                     onChange={(e) => updateNewPeriodInputWithAutoQuarters("name", e.target.value)}
                   />
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <input
                       type="date"
                       className="p-2.5 rounded-xl border border-slate-200 text-sm font-bold w-full"
@@ -2147,26 +2181,36 @@ const CoachView = (props) => {
                     </button>
                   </div>
                 </div>
-                <div className="space-y-1.5 pt-3 border-t border-slate-200">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Existing Periods</p>
-                  {appSettings.customPeriods && appSettings.customPeriods.map((p) => (
-                    <div key={p.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl shadow-sm border border-slate-100">
-                      <div>
-                        <p className="font-bold text-sm text-slate-700">{p.name}</p>
-                        <p className="text-[10px] text-slate-400 font-mono">{p.start} ~ {p.end}</p>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => handleEditCustomPeriod(p)} className="p-1.5 bg-slate-100 rounded-lg text-slate-500 hover:text-blue-600 transition-colors">
-                          <Edit size={13} />
-                        </button>
-                        <button onClick={() => handleDeleteCustomPeriod(p.id)} className="p-1.5 bg-rose-50 rounded-lg text-rose-400 hover:text-rose-600 transition-colors">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                <div className="pt-3 border-t border-slate-200">
+                  <button
+                    onClick={() => setIsExistingPeriodsOpen((v) => !v)}
+                    className="w-full flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+                  >
+                    <span>Existing Periods {appSettings.customPeriods?.length > 0 ? `(${appSettings.customPeriods.length})` : ""}</span>
+                    <ChevronDown size={13} className={`transition-transform ${isExistingPeriodsOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isExistingPeriodsOpen && (
+                    <div className="space-y-1.5 mt-2">
+                      {appSettings.customPeriods && appSettings.customPeriods.map((p) => (
+                        <div key={p.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl shadow-sm border border-slate-100">
+                          <div>
+                            <p className="font-bold text-sm text-slate-700">{p.name}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{p.start} ~ {p.end}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => handleEditCustomPeriod(p)} className="p-1.5 bg-slate-100 rounded-lg text-slate-500 hover:text-blue-600 transition-colors">
+                              <Edit size={13} />
+                            </button>
+                            <button onClick={() => handleDeleteCustomPeriod(p.id)} className="p-1.5 bg-rose-50 rounded-lg text-rose-400 hover:text-rose-600 transition-colors">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {(!appSettings.customPeriods || appSettings.customPeriods.length === 0) && (
+                        <p className="text-center text-xs text-slate-300 py-1">期間はまだありません</p>
+                      )}
                     </div>
-                  ))}
-                  {(!appSettings.customPeriods || appSettings.customPeriods.length === 0) && (
-                    <p className="text-center text-xs text-slate-300 py-1">期間はまだありません</p>
                   )}
                 </div>
               </div>
