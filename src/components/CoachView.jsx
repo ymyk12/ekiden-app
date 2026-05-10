@@ -68,7 +68,7 @@ import { setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { docRef, settingsDocRef } from "../utils/firestore";
 import { ROLES } from "../utils/constants";
-import { getTodayStr } from "../utils/dateUtils";
+import { getTodayStr, getDatesInRange } from "../utils/dateUtils";
 
 import DiaryListItem from "./DiaryListItem";
 import CoachReportView from "./CoachReportView";
@@ -366,6 +366,12 @@ const CoachView = (props) => {
 
   const [statsSubTab, setStatsSubTab] = useState("ranking");
   const [isSubmitListOpen, setIsSubmitListOpen] = useState(false);
+  const [missingStart, setMissingStart] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString("sv-SE");
+  });
+  const [missingEnd, setMissingEnd] = useState(getTodayStr);
+  const [missingCopied, setMissingCopied] = useState(false);
   const [isExistingPeriodsOpen, setIsExistingPeriodsOpen] = useState(false);
   const [isNewTournamentModalOpen, setIsNewTournamentModalOpen] =
     useState(false);
@@ -420,6 +426,27 @@ const CoachView = (props) => {
     () => teamLogs?.find((l) => l.date === menuInput.date),
     [teamLogs, menuInput.date],
   );
+
+  const missingListText = useMemo(() => {
+    const dates = getDatesInRange(missingStart, missingEnd);
+    if (dates.length === 0) return "";
+    const logSet = new Set(allLogs.map((l) => `${l.runnerId}_${l.date}`));
+    const lines = activeRunners
+      .filter((r) => r.role !== ROLES.MANAGER)
+      .map((r) => {
+        const missing = dates.filter((d) => !logSet.has(`${r.id}_${d}`));
+        if (missing.length === 0) return null;
+        const datesStr = missing
+          .map((d) => d.slice(5).replace("-", "/"))
+          .join("、");
+        return `${r.lastName}${r.firstName}：${datesStr}`;
+      })
+      .filter(Boolean);
+    if (lines.length === 0) return "全員提出済みです";
+    const startLabel = missingStart.slice(5).replace("-", "/");
+    const endLabel = missingEnd.slice(5).replace("-", "/");
+    return `【${startLabel}〜${endLabel} 未入力選手リスト】\n${lines.join("\n")}`;
+  }, [missingStart, missingEnd, allLogs, activeRunners]);
 
   useEffect(() => {
     const defaultTimes = getDefaultTimes(menuInput.date);
@@ -918,6 +945,55 @@ const CoachView = (props) => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 未入力リスト */}
+              <div className="bg-white p-4 rounded-[2rem] shadow-sm space-y-3">
+                <div className="flex items-center gap-2">
+                  <ClipboardList size={14} className="text-slate-400" />
+                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                    未入力リスト
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
+                    value={missingStart}
+                    onChange={(e) => setMissingStart(e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
+                    value={missingEnd}
+                    onChange={(e) => setMissingEnd(e.target.value)}
+                  />
+                </div>
+                {missingListText && (
+                  <div className="space-y-2">
+                    <pre className="bg-slate-50 rounded-2xl p-3 text-xs font-bold text-slate-700 whitespace-pre-wrap leading-relaxed border border-slate-100">
+                      {missingListText}
+                    </pre>
+                    <button
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(missingListText);
+                        setMissingCopied(true);
+                        setTimeout(() => setMissingCopied(false), 2000);
+                      }}
+                      className="w-full py-2.5 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 bg-slate-800 text-white"
+                    >
+                      {missingCopied ? (
+                        <>
+                          <Check size={14} /> コピーしました
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardList size={14} /> テキストをコピー
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
               </div>
