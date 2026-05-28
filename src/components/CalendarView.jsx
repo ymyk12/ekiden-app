@@ -104,9 +104,9 @@ function CalendarView({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-290px)]">
+    <div className="flex flex-col lg:flex-row lg:gap-6 h-[calc(100dvh-290px)] lg:h-[calc(100dvh-160px)]">
       {/* ヘッダー: 月ナビ（固定） */}
-      <div className="bg-white rounded-[2rem] shadow-sm p-5 flex-shrink-0">
+      <div className="bg-white rounded-[2rem] shadow-sm p-5 flex-shrink-0 lg:w-[400px]">
         <div className="flex items-center justify-between mb-5">
           <button
             onClick={prevMonth}
@@ -216,7 +216,13 @@ function CalendarView({
       </div>
 
       {/* 詳細（スクロール領域） */}
-      <div className="flex-1 overflow-y-auto mt-4 pb-4">
+      <div className="flex-1 overflow-y-auto mt-4 lg:mt-0 pb-4">
+      {!selectedDate && (
+        <div className="hidden lg:flex h-full items-center justify-center flex-col gap-3 text-slate-300">
+          <span className="text-5xl">📅</span>
+          <p className="text-sm font-bold">日付を選択してください</p>
+        </div>
+      )}
       {selectedDate && (
         <div className="bg-white rounded-[2rem] shadow-sm p-5 space-y-4 animate-in fade-in slide-in-from-bottom-2">
           {/* ヘッダー */}
@@ -345,7 +351,7 @@ function CalendarView({
                   {selectedTeamLog.result && (
                     <div className="bg-white rounded-xl px-3 py-2 border border-slate-200">
                       <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">Results / Notes</p>
-                      <p className="text-xs font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedTeamLog.result}</p>
+                      <pre className="text-xs font-mono text-slate-700 whitespace-pre overflow-x-auto">{selectedTeamLog.result}</pre>
                     </div>
                   )}
                 </>

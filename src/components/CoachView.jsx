@@ -1,4 +1,4 @@
-/*
+﻿/*
  * CoachView — 監督ダッシュボード（メイン画面）
  *
  * 監督がログイン後に使うすべての機能を含む大型コンポーネント。
@@ -366,6 +366,7 @@ const CoachView = (props) => {
 
   const [statsSubTab, setStatsSubTab] = useState("ranking");
   const [isSubmitListOpen, setIsSubmitListOpen] = useState(false);
+  const [isMissingListOpen, setIsMissingListOpen] = useState(false);
   const [missingStart, setMissingStart] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString("sv-SE");
@@ -596,11 +597,10 @@ const CoachView = (props) => {
 - **欠席者**: 名前の付近に「欠」とある者は「欠席者」としてまとめてください。
 
 3. **記録データの抽出**:
-- 画像下段の「記録」セクションから、各グループの「LAP」、「PACE」（または「LAP(1000)」）、および「TOTAL」の数値を抽出してください。
-- 「TOTAL」の列に記載がある場合は抽出し、記録の末尾に単純な丸括弧書きで \`(XX'XX"XX)\` のように追記してください（Totalという文字は不要）。
-- 「LAP(1000)」や「PACE」の列に記載がある場合は、角括弧書きで \`[1km: XX'XX"XX]\` や \`[pace: XX'XX"XX]\` のように明記して追記してください。
-- 記録表内にリカバリータイムがある場合は抽出し、記録の末尾に \`(r: XX"XX)\` のように追記してください。
-- 各メンバー名の下にある丸印や矢印などは出力から除外してください。
+- 画像下段の「記録」セクションから、各グループの「LAP」「TOTAL」「PACE」（または「LAP(1000)」）の数値を抽出してください。
+- 各グループの記録表に個人名の列がある場合、各行の個人ごとのマーク（○・↓・△・X）やタイムなどの注記もすべて抽出してください。
+- 記録表が左右に分割されている場合（同じグループの追加周回が右側に続けて記載されている場合）は、一つの表として周回を連続させてまとめてください。
+- 記録表内にリカバリータイムがある場合は抽出し、該当行の末尾に \`(r: XX"XX)\` のように追記してください。
 
 【出力フォーマット】
 「練習メニュー」と「練習記録」をそれぞれワンクリックでコピーできるように、別々のテキストコードブロック（\`\`\`text と \`\`\` で囲む形式）に分けて出力してください。
@@ -615,9 +615,22 @@ const CoachView = (props) => {
 \`\`\`
 
 ### 練習記録
+手書き表の構造をパイプ（|）区切りの表形式で再現してください。各グループを以下のルールで出力してください。
+
+- 各セルを | で区切る。1行目はヘッダー行（周回|LAP|TOTAL|PACE|個人名...）
+- 各周の行: 「1周目」「2〃」「3〃」... の形式
+- TOTALが記載されていない行はその欄を空欄（||）にする
+- 個人列のマーク: ○（参加確認）・↓（継続）・△（部分参加）・X（欠走/失敗）を各行に記入。↓は継続する各行すべてに記入する
+- 個人列に通常のマーク以外の注記（タイムや距離など）がある場合はそのまま記載する
+- 最終行に400m（またはその他の距離）の計測がある場合、「400m|」行として各個人列にタイムを記入する
+
 \`\`\`text
-■[記録のグループ名]
-• [周回数または距離]：[LAPタイム] ([TOTALタイム]) [1km:[タイム] または pace:[タイム]]
+■[グループ名]
+周回|LAP|TOTAL|PACE|[名前1]|[名前2]|[名前3]
+1周目|X'XX"XX||X'XX"XX|○|○|○
+2〃|X'XX"XX|XX'XX"XX|X'XX"XX|↓|↓|↓
+3〃|X'XX"XX|XX'XX"XX|X'XX"XX|↓|↓|↓
+400m|||XX"XX|XX"XX|XX"XX
 \`\`\``;
 
       const base64Data = await new Promise((resolve) => {
@@ -680,7 +693,7 @@ const CoachView = (props) => {
 
   return (
     <div className="h-[100dvh] bg-slate-50 overflow-hidden print:bg-white print:h-auto flex flex-col md:flex-row">
-      <header className="bg-slate-950 text-white px-4 py-2.5 sticky top-0 z-50 md:p-5 md:h-screen md:w-64 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
+      <header className="bg-slate-950 text-white px-4 py-2.5 sticky top-0 z-50 md:p-5 md:h-screen md:w-64 lg:w-72 md:flex md:flex-col md:justify-between shadow-xl print:hidden">
         <div className="flex items-center justify-between md:block">
           <h1 className="font-black italic text-lg flex items-center gap-2 tracking-tighter md:text-xl md:mb-7">
             <Users size={18} className="text-blue-400 md:w-5 md:h-5" /> COACH
@@ -853,9 +866,9 @@ const CoachView = (props) => {
             </select>
           )}
         </div>
-        <main className="flex-1 overflow-y-auto p-5 md:p-8 w-full max-w-md mx-auto md:max-w-none print:max-w-none print:p-0 print:w-full print:overflow-visible">
+        <main className="flex-1 overflow-y-auto p-5 md:p-8 w-full max-w-md mx-auto md:max-w-3xl lg:max-w-5xl xl:max-w-6xl print:max-w-none print:p-0 print:w-full print:overflow-visible">
           {view === "coach-home" && (
-            <div className="space-y-6 animate-in fade-in">
+            <div className="space-y-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0 animate-in fade-in">
               {/* 提出状況 */}
               <div className="bg-white p-4 rounded-[2rem] shadow-sm space-y-3">
                 <div className="flex items-center gap-2">
@@ -910,7 +923,7 @@ const CoachView = (props) => {
                   </div>
                 </div>
                 {isSubmitListOpen && (
-                  <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-2 animate-in fade-in slide-in-from-top-2">
+                  <div className="divide-y divide-slate-100 grid md:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-2 animate-in fade-in slide-in-from-top-2">
                     {checkListData.map((r) => (
                       <div
                         key={r.id}
@@ -951,49 +964,62 @@ const CoachView = (props) => {
 
               {/* 未入力リスト */}
               <div className="bg-white p-4 rounded-[2rem] shadow-sm space-y-3">
-                <div className="flex items-center gap-2">
-                  <ClipboardList size={14} className="text-slate-400" />
-                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                    未入力リスト
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
-                    className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
-                    value={missingStart}
-                    onChange={(e) => setMissingStart(e.target.value)}
-                  />
-                  <input
-                    type="date"
-                    className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
-                    value={missingEnd}
-                    onChange={(e) => setMissingEnd(e.target.value)}
+                <div
+                  className="flex items-center justify-between cursor-pointer active:scale-95 transition-all"
+                  onClick={() => setIsMissingListOpen((v) => !v)}
+                >
+                  <div className="flex items-center gap-2">
+                    <ClipboardList size={14} className="text-slate-400" />
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                      未入力リスト
+                    </span>
+                  </div>
+                  <ChevronDown
+                    size={16}
+                    className={`text-slate-400 transition-transform duration-200 ${isMissingListOpen ? "rotate-180" : ""}`}
                   />
                 </div>
-                {missingListText && (
-                  <div className="space-y-2">
-                    <pre className="bg-slate-50 rounded-2xl p-3 text-xs font-bold text-slate-700 whitespace-pre-wrap leading-relaxed border border-slate-100">
-                      {missingListText}
-                    </pre>
-                    <button
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(missingListText);
-                        setMissingCopied(true);
-                        setTimeout(() => setMissingCopied(false), 2000);
-                      }}
-                      className="w-full py-2.5 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 bg-slate-800 text-white"
-                    >
-                      {missingCopied ? (
-                        <>
-                          <Check size={14} /> コピーしました
-                        </>
-                      ) : (
-                        <>
-                          <ClipboardList size={14} /> テキストをコピー
-                        </>
-                      )}
-                    </button>
+                {isMissingListOpen && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
+                        value={missingStart}
+                        onChange={(e) => setMissingStart(e.target.value)}
+                      />
+                      <input
+                        type="date"
+                        className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
+                        value={missingEnd}
+                        onChange={(e) => setMissingEnd(e.target.value)}
+                      />
+                    </div>
+                    {missingListText && (
+                      <div className="space-y-2">
+                        <pre className="bg-slate-50 rounded-2xl p-3 text-xs font-bold text-slate-700 whitespace-pre-wrap leading-relaxed border border-slate-100">
+                          {missingListText}
+                        </pre>
+                        <button
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(missingListText);
+                            setMissingCopied(true);
+                            setTimeout(() => setMissingCopied(false), 2000);
+                          }}
+                          className="w-full py-2.5 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 bg-slate-800 text-white"
+                        >
+                          {missingCopied ? (
+                            <>
+                              <Check size={14} /> コピーしました
+                            </>
+                          ) : (
+                            <>
+                              <ClipboardList size={14} /> テキストをコピー
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1071,7 +1097,7 @@ const CoachView = (props) => {
 
           {view === "coach-stats" && (
             <div className="space-y-4 animate-in fade-in">
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl lg:hidden">
                 {["ranking", "report"].map((sub) => (
                   <button
                     key={sub}
@@ -1082,8 +1108,9 @@ const CoachView = (props) => {
                   </button>
                 ))}
               </div>
-              {statsSubTab === "ranking" && (
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] flex flex-col">
+              <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0">
+              <div className={statsSubTab === "ranking" ? "" : "hidden lg:block"}>
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-auto lg:min-h-[28rem] flex flex-col">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2">
                       <Trophy size={18} className="text-orange-500" /> Team
@@ -1168,8 +1195,8 @@ const CoachView = (props) => {
                     </div>
                   </div>
                 </div>
-              )}
-              {statsSubTab === "report" && (
+              </div>
+              <div className={statsSubTab === "report" ? "" : "hidden lg:block"}>
                 <CoachReportView
                   handleExportMatrixCSV={handleExportMatrixCSV}
                   handlePrint={handlePrint}
@@ -1180,7 +1207,8 @@ const CoachView = (props) => {
                   cumulativeData={cumulativeData}
                   reportChartData={reportChartData}
                 />
-              )}
+              </div>
+              </div>
             </div>
           )}
 
@@ -1194,9 +1222,10 @@ const CoachView = (props) => {
                 .sort((a, b) => (a.date < b.date ? 1 : -1));
 
               return (
-                <div className="space-y-6 animate-in fade-in">
-                  {diaryMode === "list" ? (
-                    <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 max-w-2xl mx-auto">
+                <div className="animate-in fade-in lg:grid lg:grid-cols-2 lg:gap-6">
+                  {/* LEFT: 一覧 */}
+                  <div className={diaryMode === "edit" ? "hidden lg:block" : ""}>
+                  <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6">
                       <div className="flex justify-between items-center mb-2">
                         <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 flex items-center gap-2">
                           <BookOpen size={14} /> Team Diary Check & Edit
@@ -1262,12 +1291,19 @@ const CoachView = (props) => {
                         )}
                       </div>
                     </div>
+                  </div>
+                  {/* RIGHT: 編集フォーム or プレースホルダー */}
+                  {diaryMode === "list" ? (
+                    <div className="hidden lg:flex items-center justify-center bg-white rounded-[3rem] shadow-sm flex-col gap-3 text-slate-300 min-h-[400px]">
+                      <BookOpen size={48} />
+                      <p className="text-sm font-bold">日誌を選択してください</p>
+                    </div>
                   ) : (
-                    <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-5 max-w-2xl mx-auto animate-in slide-in-from-right-10 relative">
+                    <div className={`bg-white p-8 rounded-[3rem] shadow-sm space-y-5 animate-in slide-in-from-right-10 relative ${diaryMode === "edit" ? "" : "hidden lg:block"}`}>
                       <div className="flex justify-between items-center mb-2">
                         <button
                           onClick={() => setDiaryMode("list")}
-                          className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-blue-600 transition-colors"
+                          className="lg:hidden flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-blue-600 transition-colors"
                         >
                           <ArrowLeft size={16} /> 一覧に戻る
                         </button>
@@ -1554,9 +1590,10 @@ const CoachView = (props) => {
                           Results / Notes
                         </label>
                         <textarea
-                          className="w-full p-4 bg-blue-50 rounded-xl h-32 font-bold text-blue-900 outline-none focus:ring-2 ring-blue-500 text-sm resize-none"
+                          className="w-full p-4 bg-blue-50 rounded-xl h-52 font-mono text-blue-900 outline-none focus:ring-2 ring-blue-500 text-xs resize-y overflow-x-auto"
                           placeholder="練習の結果、雰囲気、ポイント練習のタイム設定など..."
                           value={diaryInput.result}
+                          wrap="off"
                           onChange={(e) =>
                             setDiaryInput({
                               ...diaryInput,
@@ -1655,7 +1692,7 @@ const CoachView = (props) => {
           )}
 
           {view === "coach-race" && (
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in max-w-2xl mx-auto">
+            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-black uppercase text-[10px] text-slate-400 tracking-[0.3em]">
                   Race & Tournament
@@ -1773,7 +1810,7 @@ const CoachView = (props) => {
                       大会はまだ登録されていません
                     </p>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
                       {tournaments
                         .filter(
                           (t) =>
@@ -1944,7 +1981,7 @@ const CoachView = (props) => {
                               ({group.length}名)
                             </span>
                           </h4>
-                          <div className="divide-y divide-slate-100">
+                          <div className="divide-y divide-slate-100 lg:grid lg:grid-cols-2 lg:gap-x-12 lg:divide-y-0">
                             {group.map(athleteCard)}
                           </div>
                         </div>
@@ -1956,7 +1993,7 @@ const CoachView = (props) => {
                           <ClipboardList size={16} /> Managers (
                           {managers.length})
                         </h4>
-                        <div className="divide-y divide-slate-100 grid md:grid-cols-2 gap-x-12 gap-y-0">
+                        <div className="divide-y divide-slate-100 lg:grid lg:grid-cols-2 lg:gap-x-12 lg:divide-y-0">
                           {managers.map((r) => (
                             <div
                               key={r.id}
@@ -3081,7 +3118,7 @@ const CoachView = (props) => {
           )}
 
           {view === "coach-calendar" && (
-            <div className="animate-in fade-in max-w-md mx-auto">
+            <div className="animate-in fade-in">
               {selectedRunner && (
                 <p className="text-xs font-bold text-slate-400 mb-3 px-1">
                   {selectedRunner.lastName} {selectedRunner.firstName}{" "}
