@@ -135,12 +135,13 @@ const AthleteView = (props) => {
     );
     myCards.forEach((c) => {
       const tour = tournaments.find((t) => t.id === c.tournamentId);
+      const feedbackTime = c.coachFeedbackAt || c.updatedAt || "2024-01-01T00:00:00.000Z";
       list.push({
-        id: `fb_race_${c.id}_${c.updatedAt || ""}`,
+        id: `fb_race_${c.id}_${feedbackTime}`,
         type: "Feedback",
         title: "大会ノートにコメントが届きました",
         message: `「${tour?.name || "大会"}」のシートに監督からフィードバックがあります！`,
-        time: c.updatedAt || "2024-01-01T00:00:00.000Z",
+        time: feedbackTime,
         onClick: () => {
           setIsNotifOpen(false);
           setRaceCardInput(c);

@@ -15,6 +15,7 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  ChevronLeft,
   Trophy,
   Download,
   X,
@@ -271,6 +272,7 @@ const CoachView = (props) => {
     const list = [];
     if (raceCards && raceCards.length > 0) {
       raceCards.forEach((c) => {
+        if (c.updatedBy === "coach" || c.createdBy === "coach") return;
         const timeStr = c.updatedAt || c.createdAt;
         if (timeStr) {
           const tour = tournaments.find((t) => t.id === c.tournamentId);
@@ -360,6 +362,7 @@ const CoachView = (props) => {
   };
 
   const [selectedTourId, setSelectedTourId] = useState(null);
+  const [onlyPendingFeedback, setOnlyPendingFeedback] = useState(false);
   const [readingCard, setReadingCard] = useState(null);
   const [coachFeedbackInput, setCoachFeedbackInput] = useState("");
   const [showTeamReportId, setShowTeamReportId] = useState(null);
@@ -376,6 +379,12 @@ const CoachView = (props) => {
   const [isExistingPeriodsOpen, setIsExistingPeriodsOpen] = useState(false);
   const [isNewTournamentModalOpen, setIsNewTournamentModalOpen] =
     useState(false);
+  const [editingTourId, setEditingTourId] = useState(null);
+  const [editingTourInput, setEditingTourInput] = useState({ name: "", startDate: "", endDate: "" });
+  const [isReassigningCard, setIsReassigningCard] = useState(false);
+  const [reassignTourId, setReassignTourId] = useState("");
+  const [isEditingReadingCard, setIsEditingReadingCard] = useState(false);
+  const [readingCardEditInput, setReadingCardEditInput] = useState({});
   const [raceMonthFilter, setRaceMonthFilter] = useState("all");
   const [diaryMode, setDiaryMode] = useState("list");
   const [listMonth, setListMonth] = useState(new Date());
@@ -868,7 +877,9 @@ const CoachView = (props) => {
         </div>
         <main className="flex-1 overflow-y-auto p-5 md:p-8 w-full max-w-md mx-auto md:max-w-3xl lg:max-w-5xl xl:max-w-6xl print:max-w-none print:p-0 print:w-full print:overflow-visible">
           {view === "coach-home" && (
-            <div className="space-y-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0 animate-in fade-in">
+            <div className="space-y-6 lg:flex lg:items-start lg:gap-6 lg:space-y-0 animate-in fade-in">
+              {/* 左カラム */}
+              <div className="lg:flex-1 space-y-6">
               {/* 提出状況 */}
               <div className="bg-white p-4 rounded-[2rem] shadow-sm space-y-3">
                 <div className="flex items-center gap-2">
@@ -962,68 +973,6 @@ const CoachView = (props) => {
                 )}
               </div>
 
-              {/* 未入力リスト */}
-              <div className="bg-white p-4 rounded-[2rem] shadow-sm space-y-3">
-                <div
-                  className="flex items-center justify-between cursor-pointer active:scale-95 transition-all"
-                  onClick={() => setIsMissingListOpen((v) => !v)}
-                >
-                  <div className="flex items-center gap-2">
-                    <ClipboardList size={14} className="text-slate-400" />
-                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                      未入力リスト
-                    </span>
-                  </div>
-                  <ChevronDown
-                    size={16}
-                    className={`text-slate-400 transition-transform duration-200 ${isMissingListOpen ? "rotate-180" : ""}`}
-                  />
-                </div>
-                {isMissingListOpen && (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="date"
-                        className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
-                        value={missingStart}
-                        onChange={(e) => setMissingStart(e.target.value)}
-                      />
-                      <input
-                        type="date"
-                        className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
-                        value={missingEnd}
-                        onChange={(e) => setMissingEnd(e.target.value)}
-                      />
-                    </div>
-                    {missingListText && (
-                      <div className="space-y-2">
-                        <pre className="bg-slate-50 rounded-2xl p-3 text-xs font-bold text-slate-700 whitespace-pre-wrap leading-relaxed border border-slate-100">
-                          {missingListText}
-                        </pre>
-                        <button
-                          onClick={async () => {
-                            await navigator.clipboard.writeText(missingListText);
-                            setMissingCopied(true);
-                            setTimeout(() => setMissingCopied(false), 2000);
-                          }}
-                          className="w-full py-2.5 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 bg-slate-800 text-white"
-                        >
-                          {missingCopied ? (
-                            <>
-                              <Check size={14} /> コピーしました
-                            </>
-                          ) : (
-                            <>
-                              <ClipboardList size={14} /> テキストをコピー
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* Recent Activity */}
               <div className="bg-white rounded-[2rem] shadow-sm overflow-hidden border border-slate-100 h-[28rem] flex flex-col">
                 <div className="p-5 bg-slate-50 border-b flex items-center gap-2">
@@ -1092,12 +1041,77 @@ const CoachView = (props) => {
                     ))}
                 </div>
               </div>
-            </div>
+            </div>{/* /左カラム */}
+            {/* 右カラム */}
+            <div className="lg:flex-1 space-y-6">
+              {/* 未入力リスト */}
+              <div className="bg-white p-4 rounded-[2rem] shadow-sm space-y-3">
+                <div
+                  className="flex items-center justify-between cursor-pointer active:scale-95 transition-all"
+                  onClick={() => setIsMissingListOpen((v) => !v)}
+                >
+                  <div className="flex items-center gap-2">
+                    <ClipboardList size={14} className="text-slate-400" />
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                      未入力リスト
+                    </span>
+                  </div>
+                  <ChevronDown
+                    size={16}
+                    className={`text-slate-400 transition-transform duration-200 ${isMissingListOpen ? "rotate-180" : ""}`}
+                  />
+                </div>
+                {isMissingListOpen && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
+                        value={missingStart}
+                        onChange={(e) => setMissingStart(e.target.value)}
+                      />
+                      <input
+                        type="date"
+                        className="p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
+                        value={missingEnd}
+                        onChange={(e) => setMissingEnd(e.target.value)}
+                      />
+                    </div>
+                    {missingListText && (
+                      <div className="space-y-2">
+                        <pre className="bg-slate-50 rounded-2xl p-3 text-xs font-bold text-slate-700 whitespace-pre-wrap leading-relaxed border border-slate-100">
+                          {missingListText}
+                        </pre>
+                        <button
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(missingListText);
+                            setMissingCopied(true);
+                            setTimeout(() => setMissingCopied(false), 2000);
+                          }}
+                          className="w-full py-2.5 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 bg-slate-800 text-white"
+                        >
+                          {missingCopied ? (
+                            <>
+                              <Check size={14} /> コピーしました
+                            </>
+                          ) : (
+                            <>
+                              <ClipboardList size={14} /> テキストをコピー
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>{/* /右カラム */}
+          </div>
           )}
 
           {view === "coach-stats" && (
             <div className="space-y-4 animate-in fade-in">
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl lg:hidden">
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
                 {["ranking", "report"].map((sub) => (
                   <button
                     key={sub}
@@ -1108,9 +1122,8 @@ const CoachView = (props) => {
                   </button>
                 ))}
               </div>
-              <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0">
-              <div className={statsSubTab === "ranking" ? "" : "hidden lg:block"}>
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-auto lg:min-h-[28rem] flex flex-col">
+              {statsSubTab === "ranking" && (
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] flex flex-col">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2">
                       <Trophy size={18} className="text-orange-500" /> Team
@@ -1195,8 +1208,8 @@ const CoachView = (props) => {
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className={statsSubTab === "report" ? "" : "hidden lg:block"}>
+              )}
+              {statsSubTab === "report" && (
                 <CoachReportView
                   handleExportMatrixCSV={handleExportMatrixCSV}
                   handlePrint={handlePrint}
@@ -1207,8 +1220,7 @@ const CoachView = (props) => {
                   cumulativeData={cumulativeData}
                   reportChartData={reportChartData}
                 />
-              </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -1692,12 +1704,7 @@ const CoachView = (props) => {
           )}
 
           {view === "coach-race" && (
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black uppercase text-[10px] text-slate-400 tracking-[0.3em]">
-                  Race & Tournament
-                </h3>
-              </div>
+            <div className="bg-white p-5 rounded-[2rem] shadow-sm space-y-3 animate-in fade-in">
               <button
                 onClick={() => setIsNewTournamentModalOpen(true)}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl font-black text-sm hover:bg-blue-700 active:scale-95 transition-all shadow-sm shadow-blue-200"
@@ -1775,7 +1782,7 @@ const CoachView = (props) => {
                   </div>
                 </div>
               )}
-              <div className="space-y-3 pt-6 border-t border-slate-100">
+              <div className="space-y-3 pt-3 border-t border-slate-100">
                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
                   Registered Races
                 </h4>
@@ -1804,7 +1811,7 @@ const CoachView = (props) => {
                       </div>
                     );
                   })()}
-                <div className="overflow-y-auto max-h-[calc(100dvh-380px)] space-y-3 pr-1">
+                <div className="overflow-y-auto max-h-[calc(100dvh-300px)] space-y-3 pr-1">
                   {tournaments.length === 0 ? (
                     <p className="text-center text-xs text-slate-400 font-bold py-8 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                       大会はまだ登録されていません
@@ -1820,8 +1827,47 @@ const CoachView = (props) => {
                         .map((tour) => (
                           <div
                             key={tour.id}
-                            className="bg-white border border-slate-200 p-4 rounded-2xl flex justify-between items-center shadow-sm"
+                            className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm"
                           >
+                            {editingTourId === tour.id ? (
+                              <div className="space-y-2">
+                                <input
+                                  type="text"
+                                  value={editingTourInput.name}
+                                  onChange={(e) => setEditingTourInput((p) => ({ ...p, name: e.target.value }))}
+                                  className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
+                                  placeholder="大会名"
+                                  autoFocus
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input type="date" value={editingTourInput.startDate} onChange={(e) => setEditingTourInput((p) => ({ ...p, startDate: e.target.value }))} className="p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400" />
+                                  <input type="date" value={editingTourInput.endDate} onChange={(e) => setEditingTourInput((p) => ({ ...p, endDate: e.target.value }))} className="p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-500 outline-none border border-slate-200 focus:border-blue-400" />
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                  <button
+                                    onClick={async () => {
+                                      if (!editingTourInput.name) return;
+                                      await updateDoc(docRef("tournaments", tour.id), {
+                                        name: editingTourInput.name,
+                                        startDate: editingTourInput.startDate,
+                                        endDate: editingTourInput.endDate,
+                                      });
+                                      setEditingTourId(null);
+                                    }}
+                                    className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 active:scale-95 transition-all"
+                                  >
+                                    保存
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingTourId(null)}
+                                    className="px-4 py-2 bg-slate-100 text-slate-500 rounded-xl text-xs font-black hover:bg-slate-200 active:scale-95 transition-all"
+                                  >
+                                    キャンセル
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                            <div className="flex justify-between items-center">
                             <div
                               className="flex-1 cursor-pointer group pr-4"
                               onClick={() => setShowTeamReportId(tour.id)}
@@ -1839,38 +1885,43 @@ const CoachView = (props) => {
                               </p>
                             </div>
                             <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => setSelectedTourId(tour.id)}
-                                className="flex flex-col items-center gap-1 active:scale-95 transition-all cursor-pointer"
-                              >
-                                <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 hover:bg-indigo-100 shadow-sm">
-                                  <ClipboardCheck size={12} />
-                                  {
-                                    raceCards.filter(
-                                      (card) => card.tournamentId === tour.id,
-                                    ).length
-                                  }{" "}
-                                  枚提出
-                                </span>
+                              <div className="flex flex-col items-center gap-1">
+                                <button
+                                  onClick={() => { setSelectedTourId(tour.id); setOnlyPendingFeedback(false); }}
+                                  className="active:scale-95 transition-all"
+                                >
+                                  <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 hover:bg-indigo-100 shadow-sm">
+                                    <ClipboardCheck size={12} />
+                                    {raceCards.filter((card) => card.tournamentId === tour.id).length}{" "}枚提出
+                                  </span>
+                                </button>
                                 {(() => {
-                                  const pending = raceCards.filter(
-                                    (card) =>
-                                      card.tournamentId === tour.id &&
-                                      !card.coachFeedback,
-                                  ).length;
+                                  const pending = raceCards.filter((card) => card.tournamentId === tour.id && !card.coachFeedback).length;
                                   return pending > 0 ? (
-                                    <span className="text-[10px] font-black bg-amber-500 text-white px-3 py-1 rounded-lg flex items-center gap-1 shadow-sm">
-                                      <MessageSquare size={10} /> FB未 {pending}
-                                      件
-                                    </span>
-                                  ) : raceCards.filter(
-                                      (card) => card.tournamentId === tour.id,
-                                    ).length > 0 ? (
+                                    <button
+                                      onClick={() => { setSelectedTourId(tour.id); setOnlyPendingFeedback(true); }}
+                                      className="active:scale-95 transition-all"
+                                    >
+                                      <span className="text-[10px] font-black bg-amber-500 text-white px-3 py-1 rounded-lg flex items-center gap-1 shadow-sm hover:bg-amber-600">
+                                        <MessageSquare size={10} /> FB未 {pending}件
+                                      </span>
+                                    </button>
+                                  ) : raceCards.filter((card) => card.tournamentId === tour.id).length > 0 ? (
                                     <span className="text-[10px] font-black bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg border border-emerald-100 flex items-center gap-1">
                                       <Check size={10} /> FB完了
                                     </span>
                                   ) : null;
                                 })()}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setEditingTourId(tour.id);
+                                  setEditingTourInput({ name: tour.name, startDate: tour.startDate, endDate: tour.endDate || "" });
+                                }}
+                                className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="大会情報を編集する"
+                              >
+                                <Edit size={18} />
                               </button>
                               <button
                                 onClick={() => handleDeleteTournament(tour.id)}
@@ -1880,6 +1931,8 @@ const CoachView = (props) => {
                                 <Trash2 size={18} />
                               </button>
                             </div>
+                            </div>
+                            )}
                           </div>
                         ))}
                     </div>
@@ -3131,6 +3184,7 @@ const CoachView = (props) => {
                 tournaments={tournaments}
                 role="coach"
                 currentUserId={selectedRunner?.id || null}
+                onTournamentClick={(id) => setShowTeamReportId(id)}
               />
             </div>
           )}
@@ -3144,6 +3198,7 @@ const CoachView = (props) => {
             (c) => c.tournamentId === showTeamReportId,
           )}
           onClose={() => setShowTeamReportId(null)}
+          handlePrint={handlePrint}
           canEdit
           onSaveCard={async (cardId, { resultTime, lapTimes }) => {
             await updateDoc(docRef("raceCards", cardId), {
@@ -3153,45 +3208,142 @@ const CoachView = (props) => {
               updatedBy: "coach",
             });
           }}
+          onEditCard={async (cardId, fields) => {
+            await updateDoc(docRef("raceCards", cardId), {
+              ...fields,
+              updatedAt: new Date().toISOString(),
+              updatedBy: "coach",
+            });
+          }}
+          onOpenCard={(card) => {
+            setShowTeamReportId(null);
+            setSelectedTourId(card.tournamentId);
+            setOnlyPendingFeedback(false);
+            setReadingCard(card);
+            setCoachFeedbackInput(card.coachFeedback || "");
+          }}
+          allRunners={activeRunners.filter((r) => r.role !== "manager")}
+          onAddCard={async (cardData) => {
+            const cardId = `rc_coach_${Date.now()}`;
+            await setDoc(docRef("raceCards", cardId), {
+              ...cardData,
+              id: cardId,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              createdBy: "coach",
+            });
+          }}
         />
       )}
 
       {selectedTourId &&
         (() => {
           const currentTour = tournaments.find((t) => t.id === selectedTourId);
-          const submittedCards = raceCards.filter(
+          const allSubmittedCards = raceCards.filter(
             (c) => c.tournamentId === selectedTourId,
           );
+          const submittedCards = onlyPendingFeedback
+            ? allSubmittedCards.filter((c) => !c.coachFeedback)
+            : allSubmittedCards;
+
+          // ナビ用フラットリスト（一覧と同じ日付昇順・距離昇順）
+          const distToM = (card) => {
+            const d = card.raceType === "駅伝" || card.distance === "その他"
+              ? card.ekidenDistance : card.distance;
+            if (!d) return 99999;
+            const km = d.match(/^([\d.]+)km$/i);
+            if (km) return parseFloat(km[1]) * 1000;
+            const m = d.match(/^([\d.]+)m$/i);
+            if (m) return parseFloat(m[1]);
+            return 99999;
+          };
+          const cardsByDate = submittedCards.reduce((acc, card) => {
+            const d = card.date || currentTour?.startDate || "日付不明";
+            if (!acc[d]) acc[d] = [];
+            acc[d].push(card);
+            return acc;
+          }, {});
+          const flatCards = Object.keys(cardsByDate).sort().flatMap((d) =>
+            [...cardsByDate[d]].sort((a, b) => distToM(a) - distToM(b))
+          );
+          const currentIdx = readingCard ? flatCards.findIndex((c) => c.id === readingCard.id) : -1;
+          const prevCard = currentIdx > 0 ? flatCards[currentIdx - 1] : null;
+          const nextCard = currentIdx < flatCards.length - 1 ? flatCards[currentIdx + 1] : null;
+
+          const goToCard = (card) => {
+            setReadingCard(card);
+            setCoachFeedbackInput(card.coachFeedback || "");
+            setIsReassigningCard(false);
+            setReassignTourId("");
+            setIsEditingReadingCard(false);
+          };
 
           return (
+            <>
             <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col animate-in slide-in-from-bottom-4">
-              <div className="bg-slate-900 text-white p-4 flex items-center justify-between shadow-md pt-12 pb-6">
-                <button
-                  onClick={() => {
-                    setSelectedTourId(null);
-                    setReadingCard(null);
-                  }}
-                  className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
-                >
-                  <ArrowLeft size={20} />
-                </button>
-                <div className="text-center">
-                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-                    Submitted Cards
-                  </p>
-                  <h2 className="font-bold text-sm">{currentTour?.name}</h2>
-                </div>
-                <div className="w-10" />
+              <div className="bg-slate-900 text-white p-4 flex items-center justify-between shadow-md pt-12 pb-4">
+                {readingCard ? (
+                  <>
+                    <button
+                      onClick={() => { setReadingCard(null); setIsReassigningCard(false); setReassignTourId(""); setIsEditingReadingCard(false); }}
+                      className="flex items-center gap-1 text-[11px] font-black text-slate-300 hover:text-white transition-colors px-2 py-1.5 rounded-xl hover:bg-white/10"
+                    >
+                      <ArrowLeft size={14} /> 一覧
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => prevCard && goToCard(prevCard)}
+                        disabled={!prevCard}
+                        className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors disabled:opacity-30"
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                      <div className="text-center min-w-[120px]">
+                        <p className="font-black text-sm leading-tight">{readingCard.runnerName}</p>
+                        <p className="text-[10px] text-slate-400 font-bold">{currentIdx + 1} / {flatCards.length}</p>
+                      </div>
+                      <button
+                        onClick={() => nextCard && goToCard(nextCard)}
+                        disabled={!nextCard}
+                        className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors disabled:opacity-30"
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
+                    <div className="w-16" />
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setSelectedTourId(null);
+                        setReadingCard(null);
+                        setOnlyPendingFeedback(false);
+                      }}
+                      className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
+                    >
+                      <ArrowLeft size={20} />
+                    </button>
+                    <div className="text-center">
+                      <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Submitted Cards</p>
+                      <h2 className="font-bold text-sm">{currentTour?.name}</h2>
+                      {onlyPendingFeedback && (
+                        <button
+                          onClick={() => setOnlyPendingFeedback(false)}
+                          className="mt-1 text-[9px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1 mx-auto"
+                        >
+                          FB未入力のみ <X size={10} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="w-10" />
+                  </>
+                )}
               </div>
 
               {readingCard ? (
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-24 relative">
-                  <button
-                    onClick={() => setReadingCard(null)}
-                    className="text-[10px] font-black text-slate-500 bg-white px-4 py-2 rounded-full shadow-sm flex items-center gap-1 border border-slate-200 active:scale-95 transition-all"
-                  >
-                    <ArrowLeft size={14} /> 提出一覧に戻る
-                  </button>
+                <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-6">
 
                   <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-6">
                     <div className="border-b border-slate-100 pb-4">
@@ -3212,6 +3364,84 @@ const CoachView = (props) => {
                               ? `${readingCard.distance} (${readingCard.ekidenDistance}km)`
                               : readingCard.distance}
                         </span>
+                      </div>
+                      {/* 大会変更 */}
+                      <div className="mt-3">
+                        {isReassigningCard ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={reassignTourId}
+                              onChange={(e) => setReassignTourId(e.target.value)}
+                              className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-400"
+                            >
+                              <option value="">大会を選択...</option>
+                              {tournaments
+                                .filter((t) => t.id !== readingCard.tournamentId)
+                                .sort((a, b) => a.startDate < b.startDate ? 1 : -1)
+                                .map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name}（{t.startDate.replace(/-/g, "/")}）
+                                  </option>
+                                ))}
+                            </select>
+                            <button
+                              onClick={async () => {
+                                if (!reassignTourId) return;
+                                await updateDoc(docRef("raceCards", readingCard.id), {
+                                  tournamentId: reassignTourId,
+                                  updatedAt: new Date().toISOString(),
+                                  updatedBy: "coach",
+                                });
+                                setReadingCard(null);
+                                setIsReassigningCard(false);
+                                setReassignTourId("");
+                              }}
+                              disabled={!reassignTourId}
+                              className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-black disabled:opacity-40 hover:bg-blue-700 active:scale-95 transition-all"
+                            >
+                              移動
+                            </button>
+                            <button
+                              onClick={() => { setIsReassigningCard(false); setReassignTourId(""); }}
+                              className="px-3 py-2 bg-slate-100 text-slate-500 rounded-xl text-xs font-black hover:bg-slate-200 active:scale-95 transition-all"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => { setIsReassigningCard(true); setReassignTourId(""); }}
+                              className="text-[10px] font-black text-slate-400 hover:text-blue-600 flex items-center gap-1 transition-colors"
+                            >
+                              <Edit size={11} /> 別の大会に移動する
+                            </button>
+                            <button
+                              onClick={() => {
+                                setReadingCardEditInput({
+                                  date: readingCard.date || "",
+                                  status: readingCard.status || "finish",
+                                  dnsReason: readingCard.dnsReason || "",
+                                  dnfPoint: readingCard.dnfPoint || "",
+                                  resultTime: readingCard.resultTime || "",
+                                  lapTimes: readingCard.lapTimes || "",
+                                  targetTime: readingCard.targetTime || "",
+                                  racePlan: readingCard.racePlan || "",
+                                  wupPlan: readingCard.wupPlan || "",
+                                  goodPoints: readingCard.goodPoints || "",
+                                  issues: readingCard.issues || "",
+                                  teammateGoodPoints: readingCard.teammateGoodPoints || "",
+                                  nextGoal: readingCard.nextGoal || "",
+                                  badges: readingCard.badges || [],
+                                });
+                                setIsEditingReadingCard(true);
+                              }}
+                              className="text-[10px] font-black text-slate-400 hover:text-orange-500 flex items-center gap-1 transition-colors"
+                            >
+                              <Edit size={11} /> カードを修正する
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -3327,6 +3557,18 @@ const CoachView = (props) => {
                         <h4 className="font-black text-sm text-indigo-600 flex items-center gap-2 border-b border-indigo-200/50 pb-2">
                           <Flag size={16} /> POST-RACE (レース後)
                         </h4>
+                        {readingCard.badges?.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {readingCard.badges.map((badge) => (
+                              <span
+                                key={badge}
+                                className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${badge === "自己ベスト" ? "bg-orange-500" : badge === "組1位" ? "bg-blue-500" : "bg-emerald-500"}`}
+                              >
+                                {badge}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         <div>
                           <p className="text-[10px] font-black text-indigo-600">
                             実際のタイム (Result)
@@ -3426,7 +3668,7 @@ const CoachView = (props) => {
                         </div>
                       </div>
                       <div
-                        className={`p-5 rounded-2xl border space-y-3 mt-4 ${readingCard.coachFeedback ? "bg-indigo-600 border-indigo-700" : "bg-indigo-50 border-indigo-200"}`}
+                        className={`lg:hidden p-5 rounded-2xl border space-y-3 mt-4 ${readingCard.coachFeedback ? "bg-indigo-600 border-indigo-700" : "bg-indigo-50 border-indigo-200"}`}
                       >
                         <h4
                           className={`font-black text-sm flex items-center justify-between border-b pb-2 ${readingCard.coachFeedback ? "text-white border-indigo-500" : "text-indigo-700 border-indigo-200/50"}`}
@@ -3471,6 +3713,40 @@ const CoachView = (props) => {
                     </div>
                   </div>
                 </div>
+                {/* 右ペイン: Coach Feedback（PC専用） */}
+                <div className="hidden lg:flex flex-col w-80 xl:w-96 flex-shrink-0 border-l border-slate-200 bg-white overflow-y-auto p-6 space-y-4">
+                  <div className="border-b border-slate-100 pb-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Coach Feedback</p>
+                    <p className="font-black text-xl text-slate-800 mt-1">{readingCard.runnerName}</p>
+                  </div>
+                  <div className={`p-5 rounded-2xl border space-y-3 ${readingCard.coachFeedback ? "bg-indigo-600 border-indigo-700" : "bg-indigo-50 border-indigo-200"}`}>
+                    <h4 className={`font-black text-sm flex items-center justify-between border-b pb-2 ${readingCard.coachFeedback ? "text-white border-indigo-500" : "text-indigo-700 border-indigo-200/50"}`}>
+                      <span className="flex items-center gap-2">
+                        <MessageSquare size={16} /> Coach Feedback
+                      </span>
+                      {readingCard.coachFeedback && (
+                        <span className="text-[9px] font-black bg-white/20 text-white px-2 py-1 rounded-lg">送信済み</span>
+                      )}
+                    </h4>
+                    <textarea
+                      value={coachFeedbackInput}
+                      onChange={(e) => setCoachFeedbackInput(e.target.value)}
+                      placeholder="選手へのアドバイスや労いの言葉を入力..."
+                      className={`w-full p-4 rounded-xl font-bold text-sm outline-none border h-48 resize-none ${readingCard.coachFeedback ? "bg-white/10 border-indigo-400 text-white placeholder:text-indigo-300 focus:border-white" : "bg-white border-indigo-200 focus:border-indigo-400"}`}
+                    />
+                    <button
+                      onClick={() => {
+                        handleSaveRaceCardFeedback(readingCard.id, coachFeedbackInput);
+                        setReadingCard({ ...readingCard, coachFeedback: coachFeedbackInput });
+                      }}
+                      disabled={isSubmitting}
+                      className={`w-full py-3 rounded-xl font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:bg-slate-300 ${readingCard.coachFeedback ? "bg-white text-indigo-600 hover:bg-indigo-50" : "bg-indigo-600 text-white"}`}
+                    >
+                      <Save size={16} /> {readingCard.coachFeedback ? "フィードバックを更新" : "フィードバックを送信"}
+                    </button>
+                  </div>
+                </div>
+                </div>
               ) : (
                 <div className="flex-1 overflow-y-auto p-5 space-y-3 pb-24 bg-slate-50">
                   {submittedCards.length === 0 ? (
@@ -3484,73 +3760,217 @@ const CoachView = (props) => {
                       </p>
                     </div>
                   ) : (
-                    submittedCards.map((card) => (
-                      <div
-                        key={card.id}
-                        onClick={() => {
-                          setReadingCard(card);
-                          setCoachFeedbackInput(card.coachFeedback || "");
-                        }}
-                        className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between active:scale-95 transition-all cursor-pointer group hover:border-indigo-200"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">
-                            {card.runnerName.charAt(0)}
-                          </div>
-                          <div>
-                            <h4 className="font-black text-slate-800">
-                              {card.runnerName}
-                            </h4>
-                            <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                              {card.raceType} /{" "}
-                              {card.raceType === "駅伝"
-                                ? `${card.distance}(${card.ekidenDistance}km)`
-                                : card.distance}
-                            </p>
+                    (() => {
+                      const cardsByDate = submittedCards.reduce((acc, card) => {
+                        const d = card.date || currentTour?.startDate || "日付不明";
+                        if (!acc[d]) acc[d] = [];
+                        acc[d].push(card);
+                        return acc;
+                      }, {});
+                      const sortedDates = Object.keys(cardsByDate).sort((a, b) => a < b ? -1 : 1);
+                      const distToM = (card) => {
+                        const d = card.raceType === "駅伝" || card.distance === "その他"
+                          ? card.ekidenDistance : card.distance;
+                        if (!d) return 99999;
+                        const km = d.match(/^([\d.]+)km$/i);
+                        if (km) return parseFloat(km[1]) * 1000;
+                        const m = d.match(/^([\d.]+)m$/i);
+                        if (m) return parseFloat(m[1]);
+                        return 99999;
+                      };
+                      return sortedDates.map((dateStr) => (
+                        <div key={dateStr} className="space-y-2">
+                          <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1 pt-2">
+                            {dateStr === "日付不明" ? dateStr : dateStr.replace(/-/g, "/")}
+                          </p>
+                          <div className="lg:grid lg:grid-cols-3 lg:gap-3 space-y-2 lg:space-y-0">
+                          {[...cardsByDate[dateStr]].sort((a, b) => distToM(a) - distToM(b)).map((card) => (
+                            <div
+                              key={card.id}
+                              onClick={() => {
+                                setReadingCard(card);
+                                setCoachFeedbackInput(card.coachFeedback || "");
+                              }}
+                              className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between active:scale-95 transition-all cursor-pointer group hover:border-indigo-200"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">
+                                  {card.runnerName.charAt(0)}
+                                </div>
+                                <div>
+                                  <h4 className="font-black text-slate-800">
+                                    {card.runnerName}
+                                  </h4>
+                                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                                    {card.raceType} /{" "}
+                                    {card.raceType === "駅伝"
+                                      ? `${card.distance}(${card.ekidenDistance}km)`
+                                      : card.distance}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex flex-col items-end gap-1">
+                                  {card.resultTime || card.status === "finish" ? (
+                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                                      Resultあり
+                                    </span>
+                                  ) : card.status === "dns" ? (
+                                    <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">
+                                      DNS
+                                    </span>
+                                  ) : card.status === "dnf" ? (
+                                    <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+                                      DNF
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                                      レース前
+                                    </span>
+                                  )}
+                                  {card.coachFeedback ? (
+                                    <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200 flex items-center gap-1">
+                                      <MessageSquare size={9} /> FB済
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex items-center gap-1">
+                                      <MessageSquare size={9} /> FB未
+                                    </span>
+                                  )}
+                                </div>
+                                <ChevronRight
+                                  size={16}
+                                  className="text-slate-300 group-hover:text-indigo-500 transition-colors"
+                                />
+                              </div>
+                            </div>
+                          ))}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex flex-col items-end gap-1">
-                            {/* Result バッジ */}
-                            {card.resultTime || card.status === "finish" ? (
-                              <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                                Resultあり
-                              </span>
-                            ) : card.status === "dns" ? (
-                              <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">
-                                DNS
-                              </span>
-                            ) : card.status === "dnf" ? (
-                              <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
-                                DNF
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
-                                レース前
-                              </span>
-                            )}
-                            {/* フィードバック有無バッジ */}
-                            {card.coachFeedback ? (
-                              <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200 flex items-center gap-1">
-                                <MessageSquare size={9} /> FB済
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex items-center gap-1">
-                                <MessageSquare size={9} /> FB未
-                              </span>
-                            )}
-                          </div>
-                          <ChevronRight
-                            size={16}
-                            className="text-slate-300 group-hover:text-indigo-500 transition-colors"
-                          />
-                        </div>
-                      </div>
-                    ))
+                      ));
+                    })()
                   )}
                 </div>
               )}
             </div>
+
+            {/* カード修正モーダル */}
+            {isEditingReadingCard && readingCard && (
+              <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                <div className="bg-white w-full max-w-lg max-h-[90dvh] rounded-[2rem] flex flex-col shadow-2xl animate-in zoom-in-95">
+                  <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 flex-shrink-0">
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">カード修正</p>
+                      <p className="font-black text-lg text-slate-800">{readingCard.runnerName}</p>
+                    </div>
+                    <button onClick={() => setIsEditingReadingCard(false)} className="p-2 rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto px-6 py-4 space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">レース日</label>
+                      <input type="date" value={readingCardEditInput.date} onChange={(e) => setReadingCardEditInput((p) => ({ ...p, date: e.target.value }))} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">ステータス</label>
+                      <div className="flex gap-2">
+                        {[{ id: "finish", label: "Finish" }, { id: "dns", label: "DNS" }, { id: "dnf", label: "DNF" }].map((s) => (
+                          <button key={s.id} type="button"
+                            onClick={() => setReadingCardEditInput((p) => ({ ...p, status: s.id }))}
+                            className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${(readingCardEditInput.status || "finish") === s.id ? "bg-slate-800 text-white shadow-sm" : "bg-slate-100 text-slate-400 hover:bg-slate-200"}`}>
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                      {readingCardEditInput.status === "dns" && (
+                        <div className="mt-2">
+                          <label className="text-[10px] font-black text-rose-500 block mb-1">欠場理由</label>
+                          <div className="flex flex-wrap gap-2">
+                            {["体調不良", "故障", "家事都合", "その他"].map((r) => (
+                              <button key={r} type="button"
+                                onClick={() => setReadingCardEditInput((p) => ({ ...p, dnsReason: r }))}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${readingCardEditInput.dnsReason === r ? "bg-rose-500 text-white" : "bg-white text-rose-400 border border-rose-200 hover:bg-rose-50"}`}>
+                                {r}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {readingCardEditInput.status === "dnf" && (
+                        <div className="mt-2">
+                          <label className="text-[10px] font-black text-amber-500 block mb-1">途中棄権地点</label>
+                          <input type="text" value={readingCardEditInput.dnfPoint} onChange={(e) => setReadingCardEditInput((p) => ({ ...p, dnfPoint: e.target.value }))} placeholder="例：3000m地点" className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-amber-200 focus:border-amber-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">目標タイム</label>
+                        <input type="text" value={readingCardEditInput.targetTime} onChange={(e) => setReadingCardEditInput((p) => ({ ...p, targetTime: e.target.value }))} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">実際のタイム</label>
+                        <input type="text" value={readingCardEditInput.resultTime} onChange={(e) => setReadingCardEditInput((p) => ({ ...p, resultTime: e.target.value }))} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">ラップタイム</label>
+                      <textarea value={readingCardEditInput.lapTimes} onChange={(e) => setReadingCardEditInput((p) => ({ ...p, lapTimes: e.target.value }))} rows={4} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-mono font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 resize-none" />
+                    </div>
+                    {[
+                      { key: "racePlan", label: "レースプラン" },
+                      { key: "wupPlan", label: "W-UP計画" },
+                      { key: "goodPoints", label: "良かった点・収穫" },
+                      { key: "issues", label: "課題・反省点" },
+                      { key: "teammateGoodPoints", label: "仲間の良かった点" },
+                      { key: "nextGoal", label: "次に向けての目標" },
+                    ].map(({ key, label }) => (
+                      <div key={key}>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
+                        <textarea value={readingCardEditInput[key]} onChange={(e) => setReadingCardEditInput((p) => ({ ...p, [key]: e.target.value }))} rows={2} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 resize-none" />
+                      </div>
+                    ))}
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 mb-2">達成バッジ</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { label: "自己ベスト", color: "bg-orange-500" },
+                          { label: "組1位", color: "bg-blue-500" },
+                          { label: "県大会出場！", color: "bg-emerald-500" },
+                        ].map((b) => (
+                          <button key={b.label} type="button"
+                            onClick={() => setReadingCardEditInput((p) => {
+                              const cur = p.badges || [];
+                              return { ...p, badges: cur.includes(b.label) ? cur.filter((x) => x !== b.label) : [...cur, b.label] };
+                            })}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-black transition-all ${(readingCardEditInput.badges || []).includes(b.label) ? `${b.color} text-white shadow-md scale-105` : "bg-slate-100 text-slate-400 hover:bg-slate-200"}`}>
+                            {b.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
+                    <button
+                      onClick={async () => {
+                        await updateDoc(docRef("raceCards", readingCard.id), {
+                          ...readingCardEditInput,
+                          updatedAt: new Date().toISOString(),
+                          updatedBy: "coach",
+                        });
+                        setReadingCard({ ...readingCard, ...readingCardEditInput });
+                        setIsEditingReadingCard(false);
+                      }}
+                      className="w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 bg-blue-600 text-white hover:bg-blue-700 shadow-md"
+                    >
+                      <Save size={16} /> 保存する
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            </>
           );
         })()}
 

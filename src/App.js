@@ -41,7 +41,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.5.5";
+const APP_LAST_UPDATED = "6.6.0";
 
 const App = () => {
   // ─── 認証・ユーザー情報 ───
@@ -894,7 +894,9 @@ const App = () => {
     try {
       await updateDoc(docRef("raceCards", cardId), {
         coachFeedback: feedbackText,
+        coachFeedbackAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        updatedBy: "coach",
       });
       toast.success("フィードバックを送信しました！");
     } catch (e) {

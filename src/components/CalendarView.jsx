@@ -19,6 +19,7 @@ function CalendarView({
   role,
   currentUserId,
   onEntryRequest,
+  onTournamentClick,
 }) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
@@ -48,12 +49,12 @@ function CalendarView({
     return map;
   }, [teamLogs]);
 
-  // 大会期間マップ { "YYYY-MM-DD": tournamentName }
+  // 大会期間マップ { "YYYY-MM-DD": { name, id } }
   const tournamentDateMap = useMemo(() => {
     const map = {};
     (tournaments || []).forEach((t) => {
       getDatesInRange(t.startDate, t.endDate).forEach((d) => {
-        map[d] = t.name;
+        map[d] = { name: t.name, id: t.id };
       });
     });
     return map;
@@ -249,14 +250,20 @@ function CalendarView({
 
           {/* 大会バッジ */}
           {selectedTournament && (
-            <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
+            <div
+              className={`flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 ${onTournamentClick ? "cursor-pointer hover:bg-amber-100 transition-colors active:scale-95" : ""}`}
+              onClick={() => onTournamentClick && onTournamentClick(selectedTournament.id)}
+            >
               <span className="text-base">🏅</span>
-              <div>
+              <div className="flex-1">
                 <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">
                   Tournament
                 </p>
-                <p className="text-sm font-bold text-amber-900">{selectedTournament}</p>
+                <p className="text-sm font-bold text-amber-900">{selectedTournament.name}</p>
               </div>
+              {onTournamentClick && (
+                <span className="text-[9px] font-black text-amber-500">レポート →</span>
+              )}
             </div>
           )}
 
