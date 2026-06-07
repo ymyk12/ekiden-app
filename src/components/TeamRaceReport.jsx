@@ -24,6 +24,79 @@ import {
 import LapTimeModal from "./LapTimeModal";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
 
+// SmartLapInput と同じロジックで resultTime に合わせて最終 LAP を逆算する
+const adjustLapTimesForResult = (lapTimesStr, newResultTime, raceType, distanceStr, ekidenDist) => {
+  if (!lapTimesStr || !newResultTime) return lapTimesStr;
+
+  const ts = (str) => {
+    if (!str) return 0;
+    const c = str.replace(/[()（）]/g, "");
+    const m = c.match(/(?:(\d+)')?(?:(\d+)")?(\d+)?/);
+    if (!m) return 0;
+    return parseFloat(m[1] || 0) * 60 + parseFloat(m[2] || 0) + parseFloat(m[3] || 0) / 100;
+  };
+  const st = (sec) => {
+    if (sec <= 0) return "";
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    const c = Math.round((sec % 1) * 100);
+    return m > 0 ? `${m}'${String(s).padStart(2,"0")}"${String(c).padStart(2,"0")}` : `${s}"${String(c).padStart(2,"0")}`;
+  };
+
+  // 距離を m 換算
+  const dStr = ekidenDist ? String(ekidenDist) : distanceStr || "";
+  let totalDist = parseInt(dStr.replace(/[^0-9]/g, "")) || 0;
+  if (dStr.toLowerCase().includes("km")) totalDist *= 1000;
+
+  // 区間リスト生成（SmartLapInput と同一ロジック）
+  let splits = [];
+  const t = (raceType || "").toLowerCase();
+  if (totalDist > 0) {
+    if (t.includes("駅伝") || t.includes("ロード") || t.includes("3000msc")) {
+      for (let i = 1000; i <= totalDist; i += 1000) splits.push(i);
+      if (totalDist % 1000 !== 0) splits.push(totalDist);
+    } else if (totalDist === 800) {
+      splits = [200, 400, 600, 800];
+    } else if (totalDist === 1500) {
+      splits = [400, 800, 1000, 1200, 1500];
+    } else if (totalDist >= 3000) {
+      for (let i = 400; i <= totalDist; i += 400) {
+        splits.push(i);
+        const nextK = Math.ceil(i / 1000) * 1000;
+        if (nextK > i && nextK < i + 400 && nextK <= totalDist) splits.push(nextK);
+      }
+      if (splits[splits.length - 1] !== totalDist) splits.push(totalDist);
+    }
+  }
+  if (splits.length === 0) return lapTimesStr;
+
+  // 既存 lapTimes を解析
+  const lapMap = {};
+  lapTimesStr.split(/\s+/).forEach((line) => {
+    const m = line.match(/^(\d+)m:(.*?)(?:\(|$)/);
+    if (m) lapMap[parseInt(m[1])] = m[2];
+  });
+
+  // 最終 LAP を逆算
+  const resSec = ts(newResultTime);
+  if (resSec <= 0) return lapTimesStr;
+  let prevSec = 0;
+  splits.slice(0, -1).forEach((d) => { prevSec += ts(lapMap[d] || ""); });
+  const lastDist = splits[splits.length - 1];
+  const lastSec = resSec - prevSec;
+  lapMap[lastDist] = lastSec > 0 ? st(lastSec) : "";
+
+  // lapTimes 文字列を再構築
+  let cumSec = 0;
+  return splits.map((d, idx) => {
+    const seg = lapMap[d] || "";
+    cumSec += ts(seg);
+    const isLast = idx === splits.length - 1;
+    const paren = isLast && newResultTime ? `(${newResultTime})` : cumSec > 0 && ts(seg) > 0 ? `(${st(cumSec)})` : "";
+    return `${d}m:${seg}${paren}`;
+  }).join(" ");
+};
+
 const BADGE_OPTIONS = [
   { label: "自己ベスト", color: "bg-orange-500" },
   { label: "組1位", color: "bg-blue-500" },
@@ -883,9 +956,20 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                       try {
                         const matched = parsedResults.filter((e) => e.card);
                         for (const entry of matched) {
-                          await onEditCard(entry.card.id, {
+                          const card = entry.card;
+                          const adjustedLapTimes = entry.status === "finish" && card.lapTimes
+                            ? adjustLapTimesForResult(
+                                card.lapTimes,
+                                entry.resultTime,
+                                card.raceType,
+                                card.distance,
+                                card.ekidenDistance,
+                              )
+                            : undefined;
+                          await onEditCard(card.id, {
                             resultTime: entry.resultTime,
                             status: entry.status,
+                            ...(adjustedLapTimes != null ? { lapTimes: adjustedLapTimes } : {}),
                             ...(entry.status === "dns" ? { dnsReason: "棄権" } : {}),
                           });
                         }
