@@ -119,11 +119,11 @@
   th, td {
     padding: 4px 2px !important;
   }
-  /* 折れ線グラフ（上）: A4タテ上半分ほどの面積 */
+  /* 折れ線グラフ: A4タテに2つ収まるよう高さを調整 */
   .print-chart-line {
-    height: 140mm !important;
+    height: 105mm !important;
     width: 100% !important;
-    margin-bottom: 15mm !important;
+    margin-bottom: 8mm !important;
   }
   /* 棒グラフ（下）: 項目が多いので高さを確保 */
   .print-chart-bar {
@@ -161,6 +161,10 @@
     display: block !important;
     overflow: visible !important;
     background: transparent !important;
+  }
+  /* グラフセクション間の余白（累積→推移） */
+  .page-break > .report-card-base + .report-card-base {
+    margin-top: 40mm !important;
   }
   /* 最初の要素の余白を消して1ページ目に入れる */
   .report-card-base:first-child,
