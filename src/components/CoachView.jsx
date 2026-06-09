@@ -1111,7 +1111,7 @@ const CoachView = (props) => {
 
           {view === "coach-stats" && (
             <div className="space-y-4 animate-in fade-in">
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl print:hidden">
                 {["ranking", "report"].map((sub) => (
                   <button
                     key={sub}
