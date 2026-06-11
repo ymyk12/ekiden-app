@@ -464,24 +464,53 @@ const CoachView = (props) => {
     }
   };
 
-  const deleteCoachDiary = async () => {
-    if (!window.confirm(`${menuInput.date} の日誌を削除しますか？`)) return;
-    try {
-      await deleteDoc(docRef("team_logs", menuInput.date));
-      await deleteDoc(docRef("menus", menuInput.date));
-      const { toast } = await import("react-hot-toast");
-      toast.success("日誌を削除しました");
-      setDiaryMode("list");
-    } catch (e) {
-      const { toast } = await import("react-hot-toast");
-      toast.error("削除エラー: " + e.message);
-    }
+  const deleteCoachDiary = () => {
+    setConfirmDialog({
+      isOpen: true,
+      message: `${menuInput.date} の日誌を削除しますか？`,
+      onConfirm: async () => {
+        setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+        try {
+          await deleteDoc(docRef("team_logs", menuInput.date));
+          await deleteDoc(docRef("menus", menuInput.date));
+          const { toast } = await import("react-hot-toast");
+          toast.success("日誌を削除しました");
+          setDiaryMode("list");
+        } catch (e) {
+          const { toast } = await import("react-hot-toast");
+          toast.error("削除エラー: " + e.message);
+        }
+      },
+    });
   };
 
   // AI アシスタント
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiImage, setAiImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Esc キーで開いている最前面のモーダルを閉じる（PC操作向け）
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (showAIModal) return setShowAIModal(false);
+      if (showTeamReportId) return setShowTeamReportId(null);
+      if (isNotifOpen) return setIsNotifOpen(false);
+      if (confirmDialog?.isOpen)
+        return setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+      if (isCoachEditModalOpen) return setIsCoachEditModalOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    showAIModal,
+    showTeamReportId,
+    isNotifOpen,
+    confirmDialog,
+    isCoachEditModalOpen,
+    setConfirmDialog,
+    setIsCoachEditModalOpen,
+  ]);
 
   const generateCoachDiaryWithAI = async () => {
     if (!aiImage) {
@@ -690,35 +719,39 @@ const CoachView = (props) => {
         </div>
       </header>
       <div className="flex flex-col flex-1 overflow-hidden">
-        <div className="md:hidden flex-shrink-0 flex bg-slate-950 px-3 py-2 overflow-x-auto no-scrollbar print:hidden gap-1">
-          {[
-            { id: "home", icon: Home, label: "Home" },
-            { id: "diary", icon: BookOpen, label: "Diary" },
-            { id: "stats", icon: BarChart2, label: "Stats" },
-            { id: "race", icon: Flag, label: "Race" },
-            { id: "calendar", icon: CalendarDays, label: "Cal" },
-            { id: "roster", icon: Users, label: "Roster" },
-            { id: "settings", icon: Settings, label: "Settings" },
-          ].map((item) => {
-            const Icon = item.icon;
-            const isActive = view === `coach-${item.id}`;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setView(`coach-${item.id}`)}
-                className={`flex-none flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95 ${
-                  isActive
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "text-slate-400 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
-                <span className="text-[9px] font-black uppercase tracking-wide">
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
+        <div className="md:hidden relative flex-shrink-0 print:hidden">
+          <div className="flex bg-slate-950 px-3 py-2 overflow-x-auto no-scrollbar gap-1">
+            {[
+              { id: "home", icon: Home, label: "Home" },
+              { id: "diary", icon: BookOpen, label: "Diary" },
+              { id: "stats", icon: BarChart2, label: "Stats" },
+              { id: "race", icon: Flag, label: "Race" },
+              { id: "calendar", icon: CalendarDays, label: "Cal" },
+              { id: "roster", icon: Users, label: "Roster" },
+              { id: "settings", icon: Settings, label: "Settings" },
+            ].map((item) => {
+              const Icon = item.icon;
+              const isActive = view === `coach-${item.id}`;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setView(`coach-${item.id}`)}
+                  className={`flex-none flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95 ${
+                    isActive
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "text-slate-400 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+                  <span className="text-[10px] font-black uppercase tracking-wide">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {/* 右端フェード: 横スクロールで続きのタブがあることを示す */}
+          <div className="pointer-events-none absolute top-0 right-0 h-full w-10 bg-gradient-to-l from-slate-950 to-transparent" />
         </div>
         <div className="flex-shrink-0 flex justify-end items-center gap-3 px-5 py-2 bg-slate-50 border-b border-slate-100 no-print print:hidden">
           <span className="text-xs font-bold text-slate-400">Target:</span>
@@ -872,7 +905,7 @@ const CoachView = (props) => {
               </div>
 
               {/* Recent Activity */}
-              <div className="bg-white rounded-[2rem] shadow-sm overflow-hidden border border-slate-100 h-[28rem] flex flex-col">
+              <div className="bg-white rounded-[2rem] shadow-sm overflow-hidden border border-slate-100 h-[28rem] lg:h-[calc(100dvh-220px)] flex flex-col">
                 <div className="p-5 bg-slate-50 border-b flex items-center gap-2">
                   <Activity size={16} className="text-slate-400" />
                   <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
@@ -891,7 +924,7 @@ const CoachView = (props) => {
                         key={l.id}
                         className="p-4 mb-2 bg-white rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors relative group"
                       >
-                        <div className="absolute right-4 top-4 hidden group-hover:block">
+                        <div className="absolute right-4 top-4 block md:hidden md:group-hover:block">
                           <button
                             onClick={() => openCoachEditModal(l)}
                             className="bg-white border border-slate-200 p-2 rounded-lg text-slate-400 hover:text-blue-600 shadow-sm transition-colors"
@@ -1021,7 +1054,7 @@ const CoachView = (props) => {
                 ))}
               </div>
               {statsSubTab === "ranking" && (
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] flex flex-col">
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] lg:h-[calc(100dvh-240px)] flex flex-col">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2">
                       <Trophy size={18} className="text-orange-500" /> Team
@@ -1871,7 +1904,7 @@ const CoachView = (props) => {
                           {r.lastName} {r.firstName}
                         </p>
                         <div className="flex items-center gap-2 mt-0.5 mb-0.5">
-                          <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] md:text-xs font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                             ID: {r.memberCode || "-"}
                           </span>
                           {r.gender && (
@@ -1881,7 +1914,7 @@ const CoachView = (props) => {
                               {r.gender}
                             </span>
                           )}
-                          <span className="text-[10px] text-slate-300 font-mono">
+                          <span className="text-[10px] md:text-xs text-slate-400 font-mono">
                             PIN: {r.pin || "----"}
                           </span>
                         </div>
@@ -1959,10 +1992,10 @@ const CoachView = (props) => {
                                     {r.lastName} {r.firstName}
                                   </p>
                                   <div className="flex items-center gap-2 mt-0.5 mb-0.5">
-                                    <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    <span className="text-[10px] md:text-xs font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                                       ID: {r.memberCode || "-"}
                                     </span>
-                                    <span className="text-[10px] text-slate-300 font-mono">
+                                    <span className="text-[10px] md:text-xs text-slate-400 font-mono">
                                       PIN: {r.pin || "----"}
                                     </span>
                                   </div>
@@ -2350,7 +2383,7 @@ const CoachView = (props) => {
                         </div>
                         <button
                           onClick={() => openCoachEditModal(l)}
-                          className="absolute right-2 top-2 bg-white p-1.5 rounded-lg text-slate-300 hover:text-blue-600 shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute right-2 top-2 bg-white p-1.5 rounded-lg text-slate-400 md:text-slate-300 hover:text-blue-600 shadow-sm border border-slate-100 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                           title="修正する"
                         >
                           <Edit size={14} />
@@ -3899,7 +3932,7 @@ const CoachView = (props) => {
       {confirmDialog.isOpen && (
         <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
-            <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">
+            <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm whitespace-pre-wrap">
               {confirmDialog.message}
             </p>
             <div className="flex gap-3">

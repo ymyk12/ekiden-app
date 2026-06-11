@@ -5,7 +5,8 @@
  * 日付タップで詳細ポップアップを表示。
  */
 import { useState, useMemo } from "react";
-import { ChevronLeft, ChevronRight, X, Plus } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, ChevronRight, X, Plus, Pencil } from "lucide-react";
 import { ROLES, CATEGORY } from "../utils/constants";
 import { getDatesInRange, getTodayStr } from "../utils/dateUtils";
 
@@ -19,7 +20,12 @@ function CalendarView({
   role,
   currentUserId,
   onEntryRequest,
+  onEditRequest,
   onTournamentClick,
+  // responsive=true: 広い画面(lg)で左カレンダー＋右詳細の横並び（コーチ向け）
+  // responsive=false: 常に縦1列＋詳細はボトムシート（選手/マネージャーは
+  //   コンテナが max-w-md 固定で、ビューポート基準の lg: が誤発火するため）
+  responsive = true,
 }) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
@@ -104,10 +110,198 @@ function CalendarView({
     return `${parseInt(m)}月${parseInt(day)}日（${dayOfWeekLabel(dateStr)}）`;
   };
 
+  // 詳細パネルの中身（PC=右カラム / スマホ=ボトムシート で共用）
+  const detailBody = (
+    <>
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-black text-slate-800">
+            {formatDateLabel(selectedDate)}
+          </h3>
+          {selectedTeamLog && (selectedTeamLog.weather || selectedTeamLog.temp || selectedTeamLog.humidity) && (
+            <p className="text-[11px] font-bold text-slate-400 mt-0.5 flex items-center gap-1.5">
+              {selectedTeamLog.weather && <span>{selectedTeamLog.weather}</span>}
+              {selectedTeamLog.temp && <span>{selectedTeamLog.temp}℃</span>}
+              {selectedTeamLog.humidity && <span>{selectedTeamLog.humidity}%</span>}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => setSelectedDate(null)}
+          className="p-2 rounded-xl hover:bg-slate-100 transition-colors text-slate-400"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* 大会バッジ */}
+      {selectedTournament && (
+        <div
+          className={`flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 ${onTournamentClick ? "cursor-pointer hover:bg-amber-100 transition-colors active:scale-95" : ""}`}
+          onClick={() => onTournamentClick && onTournamentClick(selectedTournament.id)}
+        >
+          <span className="text-base">🏅</span>
+          <div className="flex-1">
+            <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">
+              Tournament
+            </p>
+            <p className="text-sm font-bold text-amber-900">{selectedTournament.name}</p>
+          </div>
+          {onTournamentClick && (
+            <span className="text-[9px] font-black text-amber-500">レポート →</span>
+          )}
+        </div>
+      )}
+
+      {/* 個人ログ */}
+      {selectedLog ? (
+        <div
+          className={`rounded-2xl px-4 py-3 space-y-2 ${
+            isRest
+              ? "bg-emerald-50 border border-emerald-100"
+              : "bg-blue-50 border border-blue-100"
+          }`}
+        >
+          <p
+            className={`text-[9px] font-black uppercase tracking-widest ${
+              isRest ? "text-emerald-600" : "text-blue-600"
+            }`}
+          >
+            My Log
+          </p>
+          {isRest ? (
+            <p className="text-sm font-bold text-emerald-700">
+              💤 完全休養
+            </p>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-blue-700">
+                  {selectedLog.distance}
+                </span>
+                <span className="text-xs font-bold text-blue-500">km</span>
+                <span className="ml-auto text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
+                  {selectedLog.category}
+                </span>
+              </div>
+              {selectedLog.menuDetail && (
+                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                  {selectedLog.menuDetail}
+                </p>
+              )}
+              <div className="flex gap-2">
+                {selectedLog.rpe > 0 && (
+                  <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${selectedLog.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : selectedLog.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                    RPE {selectedLog.rpe}
+                  </span>
+                )}
+                {selectedLog.pain > 1 && (
+                  <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${selectedLog.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200" : selectedLog.pain >= 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>
+                    Pain {selectedLog.pain}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        role === ROLES.RUNNER && (
+          <div className="rounded-2xl px-4 py-3 bg-slate-50 border border-dashed border-slate-200">
+            <p className="text-xs text-slate-400 font-bold text-center">
+              この日の記録はありません
+            </p>
+          </div>
+        )
+      )}
+
+      {/* チーム日誌 */}
+      {selectedTeamLog && (
+        <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 space-y-1.5">
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+            Team Diary
+          </p>
+          {selectedTeamLog.isRestDay ? (
+            <p className="text-sm font-bold text-slate-600">💤 チームオフ</p>
+          ) : (
+            <>
+              {(selectedTeamLog.startTime || selectedTeamLog.location) && (
+                <p className="text-[11px] text-slate-500 font-bold">
+                  {[
+                    selectedTeamLog.startTime && selectedTeamLog.endTime
+                      ? `${selectedTeamLog.startTime}〜${selectedTeamLog.endTime}`
+                      : selectedTeamLog.startTime,
+                    selectedTeamLog.location,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
+              {selectedTeamLog.menu && (
+                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {selectedTeamLog.menu}
+                </p>
+              )}
+              {selectedTeamLog.result && (
+                <div className="bg-white rounded-xl px-3 py-2 border border-slate-200">
+                  <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">Results / Notes</p>
+                  <pre className="text-xs font-mono text-slate-700 whitespace-pre overflow-x-auto">{selectedTeamLog.result}</pre>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 記録入力ボタン（選手のみ・未記録の日のみ） */}
+      {role === ROLES.RUNNER && !selectedLog && onEntryRequest && (
+        <button
+          onClick={() => {
+            onEntryRequest(selectedDate);
+            setSelectedDate(null);
+          }}
+          className="w-full bg-gradient-to-br from-blue-500 to-blue-700 text-white py-3.5 rounded-2xl font-black text-sm shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+        >
+          <Plus size={16} strokeWidth={3} />
+          この日に記録を入力
+        </button>
+      )}
+
+      {/* 記録編集ボタン（選手のみ・記録済みの日） */}
+      {role === ROLES.RUNNER && selectedLog && onEditRequest && (
+        <button
+          onClick={() => {
+            onEditRequest(selectedLog);
+            setSelectedDate(null);
+          }}
+          className="w-full bg-slate-100 text-slate-700 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 hover:bg-slate-200 transition-all"
+        >
+          <Pencil size={15} strokeWidth={2.5} />
+          この記録を編集
+        </button>
+      )}
+
+      {/* 何もない日 */}
+      {!selectedLog && !selectedTeamLog && !selectedTournament && role !== ROLES.RUNNER && (
+        <p className="text-xs text-slate-400 font-bold text-center py-2">
+          この日の記録はありません
+        </p>
+      )}
+    </>
+  );
+
   return (
-    <div className="flex flex-col lg:flex-row lg:gap-6 h-[calc(100dvh-290px)] lg:h-[calc(100dvh-160px)]">
+    <div
+      className={
+        responsive
+          ? "flex flex-col lg:flex-row lg:gap-6 h-[calc(100dvh-290px)] lg:h-[calc(100dvh-160px)]"
+          : "flex flex-col h-[calc(100dvh-290px)]"
+      }
+    >
       {/* ヘッダー: 月ナビ（固定） */}
-      <div className="bg-white rounded-[2rem] shadow-sm p-5 flex-shrink-0 lg:w-[400px]">
+      <div
+        className={`bg-white rounded-[2rem] shadow-sm p-5 flex-shrink-0 ${responsive ? "lg:w-[400px]" : ""}`}
+      >
         <div className="flex items-center justify-between mb-5">
           <button
             onClick={prevMonth}
@@ -216,179 +410,55 @@ function CalendarView({
         </div>
       </div>
 
-      {/* 詳細（スクロール領域） */}
-      <div className="flex-1 overflow-y-auto mt-4 lg:mt-0 pb-4">
-      {!selectedDate && (
-        <div className="hidden lg:flex h-full items-center justify-center flex-col gap-3 text-slate-300">
-          <span className="text-5xl">📅</span>
-          <p className="text-sm font-bold">日付を選択してください</p>
+      {/* 詳細: 横並びモード(コーチ)では右カラムにインライン表示 */}
+      {responsive && (
+        <div className="hidden lg:block flex-1 overflow-y-auto pb-4">
+          {!selectedDate && (
+            <div className="flex h-full items-center justify-center flex-col gap-3 text-slate-300">
+              <span className="text-5xl">📅</span>
+              <p className="text-sm font-bold">日付を選択してください</p>
+            </div>
+          )}
+          {selectedDate && (
+            <div className="bg-white rounded-[2rem] shadow-sm p-5 space-y-4 animate-in fade-in slide-in-from-bottom-2">
+              {detailBody}
+            </div>
+          )}
         </div>
       )}
-      {selectedDate && (
-        <div className="bg-white rounded-[2rem] shadow-sm p-5 space-y-4 animate-in fade-in slide-in-from-bottom-2">
-          {/* ヘッダー */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-black text-slate-800">
-                {formatDateLabel(selectedDate)}
-              </h3>
-              {selectedTeamLog && (selectedTeamLog.weather || selectedTeamLog.temp || selectedTeamLog.humidity) && (
-                <p className="text-[10px] font-bold text-slate-400 mt-0.5 flex items-center gap-1.5">
-                  {selectedTeamLog.weather && <span>{selectedTeamLog.weather}</span>}
-                  {selectedTeamLog.temp && <span>{selectedTeamLog.temp}℃</span>}
-                  {selectedTeamLog.humidity && <span>{selectedTeamLog.humidity}%</span>}
-                </p>
-              )}
-            </div>
-            <button
+
+      {/* 詳細: ボトムシート（ポップアップ）で表示
+          createPortal で body 直下に出すことで、祖先の transform/overflow に
+          よる position:fixed の封じ込めを完全に回避する。
+          responsive 時のみ lg で隠し（右カラムに切替）、非responsive では常に表示 */}
+      {selectedDate &&
+        createPortal(
+          <div
+            className={`${responsive ? "lg:hidden " : ""}fixed inset-0 z-[100] flex flex-col justify-end`}
+          >
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in"
               onClick={() => setSelectedDate(null)}
-              className="p-1.5 rounded-xl hover:bg-slate-100 transition-colors text-slate-400"
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          {/* 大会バッジ */}
-          {selectedTournament && (
+            />
             <div
-              className={`flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 ${onTournamentClick ? "cursor-pointer hover:bg-amber-100 transition-colors active:scale-95" : ""}`}
-              onClick={() => onTournamentClick && onTournamentClick(selectedTournament.id)}
+              className="relative w-full max-w-md mx-auto max-h-[85dvh] flex flex-col bg-white rounded-t-[2rem] shadow-2xl animate-in slide-in-from-bottom duration-300"
+              style={{ maxHeight: "85dvh" }}
             >
-              <span className="text-base">🏅</span>
-              <div className="flex-1">
-                <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">
-                  Tournament
-                </p>
-                <p className="text-sm font-bold text-amber-900">{selectedTournament.name}</p>
+              {/* グラブハンドル（固定） */}
+              <div className="flex-shrink-0 flex justify-center pt-3 pb-2">
+                <div className="w-10 h-1.5 bg-slate-200 rounded-full" />
               </div>
-              {onTournamentClick && (
-                <span className="text-[9px] font-black text-amber-500">レポート →</span>
-              )}
-            </div>
-          )}
-
-          {/* 個人ログ */}
-          {selectedLog ? (
-            <div
-              className={`rounded-2xl px-4 py-3 space-y-2 ${
-                isRest
-                  ? "bg-emerald-50 border border-emerald-100"
-                  : "bg-blue-50 border border-blue-100"
-              }`}
-            >
-              <p
-                className={`text-[9px] font-black uppercase tracking-widest ${
-                  isRest ? "text-emerald-600" : "text-blue-600"
-                }`}
+              {/* 本文（ここだけスクロール） */}
+              <div
+                className="overflow-y-auto overscroll-contain min-h-0 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] space-y-4"
+                style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
               >
-                My Log
-              </p>
-              {isRest ? (
-                <p className="text-sm font-bold text-emerald-700">
-                  💤 完全休養
-                </p>
-              ) : (
-                <>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-blue-700">
-                      {selectedLog.distance}
-                    </span>
-                    <span className="text-xs font-bold text-blue-500">km</span>
-                    <span className="ml-auto text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
-                      {selectedLog.category}
-                    </span>
-                  </div>
-                  {selectedLog.menuDetail && (
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {selectedLog.menuDetail}
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    {selectedLog.rpe > 0 && (
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${selectedLog.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : selectedLog.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
-                        RPE {selectedLog.rpe}
-                      </span>
-                    )}
-                    {selectedLog.pain > 1 && (
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${selectedLog.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200" : selectedLog.pain >= 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>
-                        Pain {selectedLog.pain}
-                      </span>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            role === ROLES.RUNNER && (
-              <div className="rounded-2xl px-4 py-3 bg-slate-50 border border-dashed border-slate-200">
-                <p className="text-xs text-slate-400 font-bold text-center">
-                  この日の記録はありません
-                </p>
+                {detailBody}
               </div>
-            )
-          )}
-
-          {/* チーム日誌 */}
-          {selectedTeamLog && (
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 space-y-1.5">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                Team Diary
-              </p>
-              {selectedTeamLog.isRestDay ? (
-                <p className="text-sm font-bold text-slate-600">💤 チームオフ</p>
-              ) : (
-                <>
-                  {(selectedTeamLog.startTime || selectedTeamLog.location) && (
-                    <p className="text-[11px] text-slate-500 font-bold">
-                      {[
-                        selectedTeamLog.startTime && selectedTeamLog.endTime
-                          ? `${selectedTeamLog.startTime}〜${selectedTeamLog.endTime}`
-                          : selectedTeamLog.startTime,
-                        selectedTeamLog.location,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  )}
-                  {selectedTeamLog.menu && (
-                    <p className="text-xs text-slate-700 leading-relaxed">
-                      {selectedTeamLog.menu}
-                    </p>
-                  )}
-                  {selectedTeamLog.result && (
-                    <div className="bg-white rounded-xl px-3 py-2 border border-slate-200">
-                      <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">Results / Notes</p>
-                      <pre className="text-xs font-mono text-slate-700 whitespace-pre overflow-x-auto">{selectedTeamLog.result}</pre>
-                    </div>
-                  )}
-                </>
-              )}
             </div>
-          )}
-
-          {/* 記録入力ボタン（選手のみ・未記録の日のみ） */}
-          {role === ROLES.RUNNER && !selectedLog && onEntryRequest && (
-            <button
-              onClick={() => {
-                onEntryRequest(selectedDate);
-                setSelectedDate(null);
-              }}
-              className="w-full bg-gradient-to-br from-blue-500 to-blue-700 text-white py-3.5 rounded-2xl font-black text-sm shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
-            >
-              <Plus size={16} strokeWidth={3} />
-              この日に記録を入力
-            </button>
-          )}
-
-          {/* 何もない日 */}
-          {!selectedLog && !selectedTeamLog && !selectedTournament && role !== ROLES.RUNNER && (
-            <p className="text-xs text-slate-400 font-bold text-center py-2">
-              この日の記録はありません
-            </p>
-          )}
-        </div>
-      )}
-      </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

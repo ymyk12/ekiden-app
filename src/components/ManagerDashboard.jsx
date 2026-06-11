@@ -5,7 +5,7 @@
  * 大会情報の閲覧・入力を担当する。
  * デモモード時は isDemoMode フラグで保存処理を抑制する。
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { setDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { docRef } from "../utils/firestore";
 import {
@@ -96,6 +96,13 @@ const ManagerDashboard = ({
   // 詳細モーダル関連のステート
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // 削除確認ダイアログ（AthleteView / CoachView と同じ見た目に統一）
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    message: "",
+    onConfirm: null,
+  });
 
   const [selectedTourId, setSelectedTourId] = useState(null);
   const [raceMonthFilter, setRaceMonthFilter] = useState("all");
@@ -188,6 +195,40 @@ const ManagerDashboard = ({
     d.setDate(d.getDate() + days);
     setCheckDate(d.toLocaleDateString("sv-SE"));
   };
+
+  // Esc でモーダルを閉じる／提出チェック画面では ←→ で日付送り（PC操作向け）
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        if (showAIModal) return setShowAIModal(false);
+        if (showTeamReportId) return setShowTeamReportId(null);
+        if (isDetailOpen) return setIsDetailOpen(false);
+        if (confirmDialog?.isOpen)
+          return setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+        return;
+      }
+      // 入力欄にフォーカス中は矢印キーを横取りしない
+      const tag = (e.target?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      const anyModalOpen =
+        showAIModal || showTeamReportId || isDetailOpen || confirmDialog?.isOpen;
+      if (currentView === "check" && diaryMode === "list" && !anyModalOpen) {
+        if (e.key === "ArrowLeft") shiftDate(-1);
+        if (e.key === "ArrowRight") shiftDate(1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    showAIModal,
+    showTeamReportId,
+    isDetailOpen,
+    confirmDialog,
+    currentView,
+    diaryMode,
+    checkDate,
+  ]);
 
   const shiftMonth = (months) => {
     const d = new Date(listMonth);
@@ -369,8 +410,18 @@ const ManagerDashboard = ({
     }
   };
 
-  const deleteDiary = async () => {
-    if (!window.confirm(`${checkDate} の日誌を削除しますか？`)) return;
+  const deleteDiary = () => {
+    setConfirmDialog({
+      isOpen: true,
+      message: `${checkDate} の日誌を削除しますか？`,
+      onConfirm: () => {
+        setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+        executeDeleteDiary();
+      },
+    });
+  };
+
+  const executeDeleteDiary = async () => {
     if (isDemoMode) {
       toast.success("【デモ】日誌を削除しました");
       setDiaryMode("list");
@@ -575,7 +626,7 @@ const ManagerDashboard = ({
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden px-5 w-full max-w-md mx-auto mt-6 pb-6 flex flex-col">
+      <main className="flex-1 overflow-hidden px-5 w-full max-w-md mx-auto mt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col">
         {/* --- 1. 提出チェック --- */}
         {currentView === "check" && (
           <div className="h-full flex flex-col gap-4 animate-in fade-in">
@@ -585,7 +636,7 @@ const ManagerDashboard = ({
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Select Date
                   </span>
-                  <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">
+                  <span className="text-[11px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">
                     {checkDate}
                   </span>
                 </div>
@@ -642,12 +693,12 @@ const ManagerDashboard = ({
                             {r.lastName} {r.firstName}
                           </span>
                           <div className="flex gap-2 items-center">
-                            <span className="text-[9px] text-slate-400 font-bold bg-slate-100 px-1.5 rounded">
+                            <span className="text-[11px] text-slate-500 font-bold bg-slate-100 px-1.5 rounded">
                               月間: {r.monthTotal}km
                             </span>
                             {targetLog && targetLog.pain >= 3 && (
-                              <span className="text-[9px] text-rose-500 font-bold flex items-center gap-0.5 animate-pulse">
-                                <HeartPulse size={9} /> Pain
+                              <span className="text-[11px] text-rose-500 font-bold flex items-center gap-0.5 animate-pulse">
+                                <HeartPulse size={10} /> Pain
                               </span>
                             )}
                           </div>
@@ -655,12 +706,12 @@ const ManagerDashboard = ({
                       </div>
                       <div>
                         {r.status === "unsubmitted" ? (
-                          <span className="text-[10px] font-bold text-rose-400 bg-rose-50 px-2 py-1 rounded-full border border-rose-100">
+                          <span className="text-[11px] font-bold text-rose-500 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-100">
                             未提出
                           </span>
                         ) : (
                           <span
-                            className={`px-3 py-1 rounded-full text-[10px] font-black border flex items-center gap-1 ${r.status === "rest" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-blue-50 text-blue-600 border-blue-100"}`}
+                            className={`px-3 py-1 rounded-full text-[11px] font-black border flex items-center gap-1 ${r.status === "rest" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-blue-50 text-blue-600 border-blue-100"}`}
                           >
                             <Check size={10} /> {r.label}
                           </span>
@@ -1294,6 +1345,7 @@ const ManagerDashboard = ({
               tournaments={tournaments}
               role="manager"
               currentUserId={null}
+              responsive={false}
             />
           </div>
         )}
@@ -1471,6 +1523,32 @@ const ManagerDashboard = ({
           )}
           onClose={() => setShowTeamReportId(null)}
         />
+      )}
+      {/* 削除確認ダイアログ */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
+            <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm whitespace-pre-wrap">
+              {confirmDialog.message}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() =>
+                  setConfirmDialog({ ...confirmDialog, isOpen: false })
+                }
+                className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500 text-sm"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {/* ========================================== */}
     </div>

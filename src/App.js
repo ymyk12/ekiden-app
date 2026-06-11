@@ -42,7 +42,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.7.0";
+const APP_LAST_UPDATED = "6.7.1";
 
 // FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
 const FCM_VAPID_KEY =
@@ -833,24 +833,24 @@ const App = () => {
   };
 
   // 大会情報を削除する
-  const handleDeleteTournament = async (tournamentId) => {
-    if (
-      !window.confirm(
-        "この大会を削除しますか？\n※選手の振り返りシートも影響を受けます",
-      )
-    )
-      return;
-
-    setIsSubmitting(true);
-    try {
-      await deleteDoc(docRef("tournaments", tournamentId));
-      toast.success("大会を削除しました");
-    } catch (error) {
-      console.error("Error deleting tournament:", error);
-      toast.error("削除に失敗しました");
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleDeleteTournament = (tournamentId) => {
+    setConfirmDialog({
+      isOpen: true,
+      message: "この大会を削除しますか？\n※選手の振り返りシートも影響を受けます",
+      onConfirm: async () => {
+        setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+        setIsSubmitting(true);
+        try {
+          await deleteDoc(docRef("tournaments", tournamentId));
+          toast.success("大会を削除しました");
+        } catch (error) {
+          console.error("Error deleting tournament:", error);
+          toast.error("削除に失敗しました");
+        } finally {
+          setIsSubmitting(false);
+        }
+      },
+    });
   };
 
   const [editingRaceCardId, setEditingRaceCardId] = useState(null);
@@ -913,15 +913,21 @@ const App = () => {
     }
   };
 
-  const handleDeleteRaceCard = async (cardId) => {
-    if (!window.confirm("このシートを削除しますか？")) return;
-    try {
-      await deleteDoc(docRef("raceCards", cardId));
-      toast.success("シートを削除しました");
-    } catch (e) {
-      console.error(e);
-      toast.error("削除に失敗しました");
-    }
+  const handleDeleteRaceCard = (cardId) => {
+    setConfirmDialog({
+      isOpen: true,
+      message: "このシートを削除しますか？",
+      onConfirm: async () => {
+        setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+        try {
+          await deleteDoc(docRef("raceCards", cardId));
+          toast.success("シートを削除しました");
+        } catch (e) {
+          console.error(e);
+          toast.error("削除に失敗しました");
+        }
+      },
+    });
   };
 
   const handleSaveRaceCardFeedback = async (cardId, feedbackText) => {

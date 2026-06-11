@@ -7,6 +7,7 @@
  * 監督が特定選手のデータをプレビューする際にも使用される。
  */
 import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 import {
   Eye,
@@ -36,6 +37,7 @@ import {
   Flag,
   Calendar,
   Bell,
+  X,
 } from "lucide-react";
 
 import { ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
@@ -209,6 +211,28 @@ const AthleteView = (props) => {
   const [raceMonthFilter, setRaceMonthFilter] = useState("all");
   const [isQuarterExpanded, setIsQuarterExpanded] = useState(false);
   const [teamSubView, setTeamSubView] = useState("ranking");
+  const [diaryDetailLog, setDiaryDetailLog] = useState(null);
+
+  // Esc キーで開いている最前面のモーダルを閉じる（PC操作向け）
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (isNotifOpen) return setIsNotifOpen(false);
+      if (confirmDialog?.isOpen)
+        return setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+      if (diaryDetailLog) return setDiaryDetailLog(null);
+      if (isAthleteEditModalOpen) return setIsAthleteEditModalOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    isNotifOpen,
+    confirmDialog,
+    diaryDetailLog,
+    isAthleteEditModalOpen,
+    setConfirmDialog,
+    setIsAthleteEditModalOpen,
+  ]);
 
   // 日誌の赤バッジ判定を独立させる（一覧やプッシュ通知には出ない）
   const latestDiaryTime =
@@ -509,12 +533,12 @@ const AthleteView = (props) => {
                             <span className="font-black text-sm">
                               {d.getMonth() + 1}/{d.getDate()}
                             </span>
-                            <span className="text-[10px] font-bold opacity-70">
+                            <span className="text-xs font-bold opacity-70">
                               未入力
                             </span>
                           </div>
                         </div>
-                        <div className="bg-white/90 text-slate-900 px-2 py-1 rounded text-[10px] font-black min-w-[40px] text-center">
+                        <div className="bg-white/90 text-slate-900 px-2.5 py-1 rounded text-xs font-black min-w-[44px] text-center">
                           入力
                         </div>
                       </div>
@@ -522,12 +546,12 @@ const AthleteView = (props) => {
                   })}
                 </div>
                 {missingDates.length > 3 && (
-                  <p className="text-center text-[10px] text-slate-400 font-bold mt-2">
+                  <p className="text-center text-[11px] text-slate-500 font-bold mt-2">
                     ↑ スクロールして過去分も確認できます
                   </p>
                 )}
                 {missingDates.length >= 2 && (
-                  <p className="text-center text-[10px] text-slate-400 font-bold">
+                  <p className="text-center text-[11px] text-slate-500 font-bold">
                     休みだった場合も「完全休養」として記録しましょう！
                   </p>
                 )}
@@ -827,18 +851,54 @@ const AthleteView = (props) => {
               </h3>
             </div>
 
+            {/* 今日・昨日クイック選択 */}
+            <div className="flex gap-2">
+              {[
+                { label: "今日", offset: 0 },
+                { label: "昨日", offset: 1 },
+              ].map(({ label, offset }) => {
+                const d = new Date();
+                d.setDate(d.getDate() - offset);
+                const dateStr = d.toLocaleDateString("sv-SE");
+                const isSelected = logInput.date === dateStr;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setLogInput({ ...logInput, date: dateStr })}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${isSelected ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Date + Type */}
+            {/* フォントは16px(text-base)未満にしない: iOS Safariがフォーカス時に自動ズームするため */}
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="date"
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 text-sm"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 text-base"
                 value={logInput.date}
                 onChange={(e) => setLogInput({ ...logInput, date: e.target.value })}
               />
               <select
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 text-sm appearance-none"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 text-base appearance-none"
                 value={logInput.category}
-                onChange={(e) => setLogInput({ ...logInput, category: e.target.value })}
+                onChange={(e) => {
+                  const cat = e.target.value;
+                  const next = { ...logInput, category: cat };
+                  if (cat === CATEGORY.REST) {
+                    next.distance = "0";
+                  } else if (
+                    logInput.category === CATEGORY.REST &&
+                    logInput.distance === "0"
+                  ) {
+                    next.distance = "";
+                  }
+                  setLogInput(next);
+                }}
               >
                 {Object.values(CATEGORY).map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -851,21 +911,27 @@ const AthleteView = (props) => {
               <div className="relative">
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.1"
                   placeholder="0.0"
-                  className="w-full p-3 pr-14 bg-blue-50/40 border border-blue-100 rounded-2xl font-black text-3xl text-blue-600 text-center outline-none focus:ring-2 ring-blue-500"
+                  disabled={logInput.category === CATEGORY.REST}
+                  className="w-full p-3 pr-14 bg-blue-50/40 border border-blue-100 rounded-2xl font-black text-3xl text-blue-600 text-center outline-none focus:ring-2 ring-blue-500 disabled:bg-slate-50 disabled:border-slate-200 disabled:text-slate-300"
                   value={logInput.distance}
                   onChange={(e) => setLogInput({ ...logInput, distance: e.target.value })}
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-blue-400">km</span>
               </div>
-              <p className="text-[10px] text-slate-400 font-bold text-center">アップ・ダウンを含めた距離を入力してください</p>
+              <p className="text-[11px] text-slate-500 font-bold text-center">
+                {logInput.category === CATEGORY.REST
+                  ? "完全休養日として 0km で記録されます"
+                  : "アップ・ダウンを含めた距離を入力してください"}
+              </p>
             </div>
 
             {/* Menu Detail */}
             <textarea
               placeholder="メニューの内容、タイムなど"
-              className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 outline-none focus:ring-2 ring-blue-500 text-sm resize-none min-h-[120px]"
+              className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 outline-none focus:ring-2 ring-blue-500 text-base resize-none min-h-[120px]"
               value={logInput.menuDetail}
               onChange={(e) => setLogInput({ ...logInput, menuDetail: e.target.value })}
             />
@@ -874,19 +940,23 @@ const AthleteView = (props) => {
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-slate-50 px-3 py-2.5 rounded-2xl space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">RPE 強度</label>
-                  <span className="text-lg font-black text-slate-700">{logInput.rpe}</span>
+                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">RPE 強度</label>
+                  <span className={`text-lg font-black ${logInput.rpe >= 7 ? "text-rose-500" : logInput.rpe >= 4 ? "text-amber-500" : "text-emerald-600"}`}>{logInput.rpe}</span>
                 </div>
                 <input
                   type="range" min="1" max="10" step="1"
-                  className="w-full accent-blue-600"
+                  className={`w-full ${logInput.rpe >= 7 ? "accent-rose-500" : logInput.rpe >= 4 ? "accent-amber-500" : "accent-emerald-500"}`}
                   value={logInput.rpe}
                   onChange={(e) => setLogInput({ ...logInput, rpe: parseInt(e.target.value, 10) })}
                 />
+                <div className="flex justify-between text-[10px] font-bold text-slate-400 leading-none">
+                  <span>楽</span>
+                  <span>限界</span>
+                </div>
               </div>
               <div className="bg-slate-50 px-3 py-2.5 rounded-2xl space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pain 痛み</label>
+                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Pain 痛み</label>
                   <span className={`text-lg font-black ${logInput.pain >= 3 ? "text-rose-500" : "text-slate-700"}`}>{logInput.pain}</span>
                 </div>
                 <input
@@ -895,6 +965,10 @@ const AthleteView = (props) => {
                   value={logInput.pain}
                   onChange={(e) => setLogInput({ ...logInput, pain: parseInt(e.target.value, 10) })}
                 />
+                <div className="flex justify-between text-[10px] font-bold text-slate-400 leading-none">
+                  <span>なし</span>
+                  <span>強い</span>
+                </div>
               </div>
             </div>
 
@@ -957,7 +1031,11 @@ const AthleteView = (props) => {
                   .map((log) => {
                     const isRest = log.category === "完全休養";
                     return (
-                      <div key={log.id} className="bg-slate-50 rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3">
+                      <button
+                        key={log.id}
+                        onClick={() => setDiaryDetailLog(log)}
+                        className="w-full bg-slate-50 rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3 active:scale-[0.98] hover:bg-slate-100 transition-all text-left"
+                      >
                         <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center text-white flex-shrink-0 ${isRest ? "bg-emerald-400" : "bg-blue-500"}`}>
                           {isRest ? (
                             <span className="text-base">💤</span>
@@ -970,21 +1048,21 @@ const AthleteView = (props) => {
                         </div>
                         <div className="text-left min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1 mb-0.5">
-                            <p className="text-[10px] font-bold text-slate-400">
+                            <p className="text-[11px] font-bold text-slate-500">
                               {log.date.slice(5).replace("-", "/")}
                             </p>
                             {!isRest && (
-                              <span className="text-[9px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
                                 {log.category}
                               </span>
                             )}
                             {log.rpe > 0 && (
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${log.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : log.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${log.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : log.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
                                 RPE {log.rpe}
                               </span>
                             )}
                             {log.pain > 1 && (
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${log.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200" : log.pain >= 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${log.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200" : log.pain >= 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>
                                 Pain {log.pain}
                               </span>
                             )}
@@ -993,21 +1071,8 @@ const AthleteView = (props) => {
                             {isRest ? "完全休養" : (log.menuDetail || "—")}
                           </p>
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => handleEditLog(log)}
-                            className="p-2 text-slate-400 hover:text-blue-500 active:scale-95 transition-all"
-                          >
-                            <Edit size={15} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteLog(log.id)}
-                            className="p-2 text-slate-400 hover:text-rose-500 active:scale-95 transition-all"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </div>
+                        <ChevronRight size={18} className="text-slate-300 flex-shrink-0" />
+                      </button>
                     );
                   })
               )}
@@ -1829,6 +1894,7 @@ const AthleteView = (props) => {
         {view === "race-entry" && (
           <RaceCardEntry
             setView={setView}
+            setConfirmDialog={setConfirmDialog}
             tournaments={tournaments}
             raceCardInput={raceCardInput}
             setRaceCardInput={setRaceCardInput}
@@ -1849,10 +1915,12 @@ const AthleteView = (props) => {
             tournaments={tournaments}
             role={role}
             currentUserId={currentUserId}
+            responsive={false}
             onEntryRequest={(dateStr) => {
               setLogInput({ ...logInput, date: dateStr });
               setView("entry");
             }}
+            onEditRequest={(log) => handleEditLog(log)}
           />
         )}
       </main>
@@ -1869,13 +1937,13 @@ const AthleteView = (props) => {
       )}
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 max-w-md mx-auto pointer-events-none">
-        <div className="bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-8 pt-2 px-3 rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] flex justify-between items-end h-24 pointer-events-auto">
+        <div className="bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-[max(2rem,env(safe-area-inset-bottom))] pt-2 px-3 rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] flex justify-between items-end min-h-24 pointer-events-auto">
           <button
             onClick={() => safeChangeView("menu")}
             className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 rounded-xl py-1 ${view === "menu" ? "text-blue-600 -translate-y-1 bg-blue-50" : "text-slate-400 hover:text-slate-500"}`}
           >
             <Home size={20} strokeWidth={view === "menu" ? 3 : 2} />
-            <span className="text-[10px] font-black uppercase tracking-widest">Home</span>
+            <span className="text-[11px] font-black uppercase tracking-widest">Home</span>
           </button>
           <button
             onClick={() => safeChangeView("diary")}
@@ -1890,7 +1958,7 @@ const AthleteView = (props) => {
                 </span>
               )}
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest">My Log</span>
+            <span className="text-[11px] font-black uppercase tracking-tight whitespace-nowrap">My Log</span>
           </button>
           <div className="relative mx-1">
             <button
@@ -1920,14 +1988,14 @@ const AthleteView = (props) => {
                 </span>
               )}
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest">Team</span>
+            <span className="text-[11px] font-black uppercase tracking-widest">Team</span>
           </button>
           <button
             onClick={() => safeChangeView("calendar")}
             className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 rounded-xl py-1 ${view === "calendar" ? "text-blue-600 -translate-y-1 bg-blue-50" : "text-slate-400 hover:text-slate-500"}`}
           >
             <Calendar size={20} strokeWidth={view === "calendar" ? 3 : 2} />
-            <span className="text-[10px] font-black uppercase tracking-widest">Cal</span>
+            <span className="text-[11px] font-black uppercase tracking-widest">Cal</span>
           </button>
         </div>
       </nav>
@@ -1936,7 +2004,7 @@ const AthleteView = (props) => {
       {confirmDialog.isOpen && (
         <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full animate-in zoom-in-95">
-            <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm">
+            <p className="font-bold text-slate-800 mb-6 text-center leading-relaxed text-sm whitespace-pre-wrap">
               {confirmDialog.message}
             </p>
             <div className="flex gap-3">
@@ -2045,6 +2113,107 @@ const AthleteView = (props) => {
           onClose={() => setShowTeamReportId(null)}
         />
       )}
+
+      {/* My Log 詳細ボトムシート（閲覧用 → 編集はここから）
+          createPortal で body 直下に出し position:fixed の封じ込めを回避 */}
+      {diaryDetailLog && (() => {
+        const log = diaryDetailLog;
+        const isRest = log.category === "完全休養";
+        return createPortal(
+          <div className="fixed inset-0 z-[100] flex flex-col justify-end">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in"
+              onClick={() => setDiaryDetailLog(null)}
+            />
+            <div
+              className="relative w-full max-w-md mx-auto max-h-[85dvh] flex flex-col bg-white rounded-t-[2rem] shadow-2xl animate-in slide-in-from-bottom duration-300"
+              style={{ maxHeight: "85dvh" }}
+            >
+              {/* グラブハンドル＋ヘッダー（固定） */}
+              <div className="flex-shrink-0 px-5 pt-3">
+                <div className="w-10 h-1.5 bg-slate-200 rounded-full mx-auto mb-2" />
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-slate-800">
+                    {log.date.replace(/-/g, "/")}
+                  </h3>
+                  <button
+                    onClick={() => setDiaryDetailLog(null)}
+                    className="p-2 rounded-xl hover:bg-slate-100 transition-colors text-slate-400"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* 本文（ここだけスクロール） */}
+              <div
+                className="overflow-y-auto overscroll-contain min-h-0 px-5 pt-3 space-y-4"
+                style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+              >
+              <div
+                className={`rounded-2xl px-4 py-3 space-y-2 ${isRest ? "bg-emerald-50 border border-emerald-100" : "bg-blue-50 border border-blue-100"}`}
+              >
+                {isRest ? (
+                  <p className="text-sm font-bold text-emerald-700">💤 完全休養</p>
+                ) : (
+                  <>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-blue-700">{log.distance}</span>
+                      <span className="text-xs font-bold text-blue-500">km</span>
+                      <span className="ml-auto text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
+                        {log.category}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      {log.rpe > 0 && (
+                        <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${log.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : log.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                          RPE {log.rpe}
+                        </span>
+                      )}
+                      {log.pain > 1 && (
+                        <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${log.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200" : log.pain >= 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>
+                          Pain {log.pain}
+                        </span>
+                      )}
+                    </div>
+                    {log.menuDetail && (
+                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap pt-1">
+                        {log.menuDetail}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              </div>{/* /本文スクロール */}
+
+              {/* アクション（下部固定） */}
+              <div className="flex-shrink-0 flex gap-2 px-5 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setDiaryDetailLog(null);
+                    handleDeleteLog(log.id);
+                  }}
+                  className="p-3 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-100 active:scale-95 transition-all flex-shrink-0"
+                >
+                  <Trash2 size={18} />
+                </button>
+                <button
+                  onClick={() => {
+                    setDiaryDetailLog(null);
+                    handleEditLog(log);
+                  }}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30"
+                >
+                  <Edit size={16} strokeWidth={2.5} />
+                  この記録を編集
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        );
+      })()}
 
       {/* 選手自身の練習記録編集モーダル */}
       {isAthleteEditModalOpen && (

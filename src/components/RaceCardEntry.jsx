@@ -28,6 +28,7 @@ import { formatTimeInput } from "../utils/lapUtils";
 
 const RaceCardEntry = ({
   setView,
+  setConfirmDialog,
   tournaments,
   raceCardInput,
   setRaceCardInput,
@@ -461,15 +462,23 @@ const RaceCardEntry = ({
               onClick={() => {
                 const template =
                   "・60分前：ジョグ (15分)\n・40分前：体操・ドリル\n・25分前：流し (100m×3本)\n・15分前：招集・スパイク履き替え\n・ 5分前：50mD";
-                if (
-                  !raceCardInput.wupPlan ||
-                  window.confirm("入力内容をテンプレートで上書きしますか？")
-                ) {
+                const applyTemplate = () =>
                   setRaceCardInput({
                     ...raceCardInput,
                     wupPlan: template,
                   });
+                if (!raceCardInput.wupPlan) {
+                  applyTemplate();
+                  return;
                 }
+                setConfirmDialog({
+                  isOpen: true,
+                  message: "入力内容をテンプレートで上書きしますか？",
+                  onConfirm: () => {
+                    applyTemplate();
+                    setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
+                  },
+                });
               }}
               className="text-[9px] bg-amber-100/80 text-amber-700 px-2 py-1.5 rounded-lg font-bold active:scale-95 transition-all flex items-center gap-1 shadow-sm"
             >
