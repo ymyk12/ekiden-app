@@ -1313,7 +1313,10 @@ const AthleteView = (props) => {
                     </p>
                   </div>
                 )}
-                {targetPeriod.type !== "month" && (
+                {/* 期間合計目標の保存対象は custom/global のみ（App.js updateGoals）。
+                    year/month では保存されず無言で破棄されるため入力欄を出さない。 */}
+                {(targetPeriod.type === "custom" ||
+                  targetPeriod.type === "global") && (
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       期間合計目標 (km)

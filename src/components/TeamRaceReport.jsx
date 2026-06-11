@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import LapTimeModal from "./LapTimeModal";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
+import { timeToSeconds, analyzeLaps } from "../utils/lapUtils";
 
 // SmartLapInput と同じロジックで resultTime に合わせて最終 LAP を逆算する
 const adjustLapTimesForResult = (lapTimesStr, newResultTime, raceType, distanceStr, ekidenDist) => {
@@ -51,8 +52,10 @@ const adjustLapTimesForResult = (lapTimesStr, newResultTime, raceType, distanceS
   // 区間リスト生成（SmartLapInput と同一ロジック）
   let splits = [];
   const t = (raceType || "").toLowerCase();
+  // SC(障害)は raceType ではなく distance 側に入るため dStr で判定する
+  const dLower = dStr.toLowerCase();
   if (totalDist > 0) {
-    if (t.includes("駅伝") || t.includes("ロード") || t.includes("3000msc")) {
+    if (t.includes("駅伝") || t.includes("ロード") || dLower.includes("sc")) {
       for (let i = 1000; i <= totalDist; i += 1000) splits.push(i);
       if (totalDist % 1000 !== 0) splits.push(totalDist);
     } else if (totalDist === 800) {
@@ -119,8 +122,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
   const [officialResultText, setOfficialResultText] = useState("");
   const [parsedResults, setParsedResults] = useState(null);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
-
-  const normalizeName = (name) => name.replace(/\s/g, "");
 
   // 任意形式のタイム文字列を「分'秒"コンマ秒」形式に統一する
   const normalizeTimeStr = (str) => {
@@ -331,17 +332,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     return val;
   };
 
-  const timeToSeconds = (str) => {
-    if (!str) return 0;
-    const cleanStr = str.replace(/[()（）]/g, "");
-    const match = cleanStr.match(/(?:(\d+)')?(?:(\d+)")?(\d+)?/);
-    if (!match) return 0;
-    const m = parseFloat(match[1] || 0);
-    const s = parseFloat(match[2] || 0);
-    const c = parseFloat(match[3] || 0) / 100;
-    return m * 60 + s + c;
-  };
-
   // 日付でグループ化
   const cardsByDate = {};
   reportCards.forEach((card) => {
@@ -367,96 +357,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
       return ta - tb;
     });
   });
-
-  const secondsToTime = (totalSeconds) => {
-    if (totalSeconds <= 0) return "";
-    const m = Math.floor(totalSeconds / 60);
-    const s = Math.floor(totalSeconds % 60);
-    const c = Math.round((totalSeconds % 1) * 100);
-    const ss = String(s).padStart(2, "0");
-    const cc = String(c).padStart(2, "0");
-    return m > 0 ? `${m}'${ss}"${cc}` : `${s}"${cc}`;
-  };
-
-  const analyzeLaps = (lapStr, raceType, distanceStr, ekidenDist) => {
-    if (!lapStr) return null;
-    let targetDistStr = ekidenDist ? String(ekidenDist) + "km" : distanceStr;
-    let totalDist = parseInt((targetDistStr || "").replace(/[^0-9]/g, ""));
-    if ((targetDistStr || "").toLowerCase().includes("km")) totalDist *= 1000;
-
-    const lines = lapStr.replace(/\s+(?=\d+(?:km|m):)/g, "\n").split("\n");
-    let currentKilo = 1000;
-    let current400 = 400;
-    let lastKiloCumul = 0;
-    let last400Cumul = 0;
-
-    let totalSec = 0;
-    let totalEnteredDist = 0;
-
-    const formattedLines = [];
-
-    const isLongDistance =
-      totalDist >= 1500 ||
-      (raceType && (raceType.includes("駅伝") || raceType.includes("ロード")));
-
-    lines.forEach((line) => {
-      const cleanLine = line.trim().replace(/\s/g, "").replace(/km:/g, "000m:");
-      const match = cleanLine.match(/(\d+)m:(.*?)(?:\((.*?)\))?$/);
-      if (!match) {
-        if (line.trim()) formattedLines.push(line.trim());
-        return;
-      }
-
-      const dist = parseInt(match[1]);
-      const segTime = match[2];
-      const cumulTimeStr = match[3] || match[2];
-
-      const cumulSec = timeToSeconds(cumulTimeStr);
-      if (cumulSec <= 0) {
-        formattedLines.push(`${dist}m: ${segTime}`);
-        return;
-      }
-
-      totalSec = cumulSec;
-      totalEnteredDist = dist;
-
-      let displayLine = `${dist}m: ${segTime}`;
-
-      if (cumulTimeStr !== segTime) {
-        displayLine += ` ${cumulTimeStr}`;
-      }
-
-      if (dist === currentKilo) {
-        const splitSec = cumulSec - lastKiloCumul;
-        if (isLongDistance) {
-          displayLine += `(${secondsToTime(splitSec)})`;
-        }
-        lastKiloCumul = cumulSec;
-        currentKilo += 1000;
-      }
-
-      if (dist === current400) {
-        const splitSec = cumulSec - last400Cumul;
-        if (!isLongDistance) {
-          displayLine += `(${secondsToTime(splitSec)})`;
-        }
-        last400Cumul = cumulSec;
-        current400 += 400;
-      }
-
-      formattedLines.push(displayLine);
-    });
-
-    if (totalEnteredDist === 0) return null;
-
-    const avgPace = isLongDistance
-      ? totalSec / (totalEnteredDist / 1000)
-      : totalSec / (totalEnteredDist / 400);
-
-    formattedLines.push(`AVG ${secondsToTime(avgPace)}`);
-
-    return { formattedLines };
-  };
 
   return (<>
     <div className="fixed inset-0 z-[120] bg-slate-50 flex flex-col animate-in fade-in print:absolute print:inset-auto print:top-0 print:left-0 print:w-full print:h-auto print:bg-white print:overflow-visible">

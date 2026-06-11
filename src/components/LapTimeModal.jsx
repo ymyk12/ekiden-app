@@ -82,7 +82,6 @@ const LapTimeModal = ({
           <div className="flex-1">
             <SmartLapInput
               value={lapInput}
-              resultValue={editingCard.resultTime || ""}
               onChange={setLapInput}
               raceType={editingCard.raceType}
               distance={

@@ -38,7 +38,6 @@ const COLORS = [
 ];
 
 const CoachReportView = ({
-  handleExportMatrixCSV,
   activeRunners,
   targetPeriod,
   reportMatrix,

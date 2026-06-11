@@ -103,7 +103,7 @@ export const useTeamData = (user, role, fetchCutoff) => {
           ...prev,
           ...data,
           customPeriods: data.customPeriods || [],
-          defaultPeriodId: data.defaultPeriodId || "global_period",
+          defaultPeriodId: data.defaultPeriodId || "dynamic_current",
           loaded: true,
         }));
       }

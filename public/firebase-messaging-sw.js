@@ -10,6 +10,11 @@ importScripts(
 
 // 🌟 あなたの Firebase Config の内容をここに直接貼り付けてください！
 // (firebaseConfig.js にある apiKey や projectId などの値です)
+//
+// ⚠️ 重要: Service Worker は .env を読み込めないため、ここは直書きです。
+//   ルートの .env（REACT_APP_FIREBASE_*）を変更したら、必ず以下の値も
+//   同じ内容に手動で更新してください。特に messagingSenderId / projectId が
+//   .env と食い違うと、プッシュ通知が一切届かなくなります。
 const firebaseConfig = {
   apiKey: "AIzaSyAVvrlLTsioEuloE11hzykIz8rSk6qMJrk",
   authDomain: "kswc-tf-distancerecords.firebaseapp.com",

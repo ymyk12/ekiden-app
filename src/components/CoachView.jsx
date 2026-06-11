@@ -1,4 +1,4 @@
-﻿/*
+/*
  * CoachView — 監督ダッシュボード（メイン画面）
  *
  * 監督がログイン後に使うすべての機能を含む大型コンポーネント。
@@ -70,6 +70,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { docRef, settingsDocRef } from "../utils/firestore";
 import { ROLES } from "../utils/constants";
 import { getTodayStr, getDatesInRange } from "../utils/dateUtils";
+import { analyzeLaps } from "../utils/lapUtils";
 
 import DiaryListItem from "./DiaryListItem";
 import CoachReportView from "./CoachReportView";
@@ -77,108 +78,6 @@ import CalendarView from "./CalendarView";
 import { usePrint } from "../hooks/usePrint";
 import LapTimeModal from "./LapTimeModal";
 import TeamRaceReport from "./TeamRaceReport";
-
-// LAP解析ヘルパー関数
-const timeToSeconds = (str) => {
-  if (!str) return 0;
-  const cleanStr = str.replace(/[()（）]/g, "");
-  const match = cleanStr.match(/(?:(\d+)')?(?:(\d+)")?(\d+)?/);
-  if (!match) return 0;
-  const m = parseFloat(match[1] || 0);
-  const s = parseFloat(match[2] || 0);
-  const c = parseFloat(match[3] || 0) / 100;
-  return m * 60 + s + c;
-};
-
-const secondsToTime = (totalSeconds) => {
-  if (totalSeconds <= 0) return "";
-  const m = Math.floor(totalSeconds / 60);
-  const s = Math.floor(totalSeconds % 60);
-  const c = Math.round((totalSeconds % 1) * 100);
-  const ss = String(s).padStart(2, "0");
-  const cc = String(c).padStart(2, "0");
-  return m > 0 ? `${m}'${ss}"${cc}` : `${s}"${cc}`;
-};
-
-const analyzeLaps = (lapStr, raceType, distanceStr, ekidenDist) => {
-  if (!lapStr) return null;
-  let targetDistStr = ekidenDist ? String(ekidenDist) + "km" : distanceStr;
-  let totalDist = parseInt((targetDistStr || "").replace(/[^0-9]/g, ""));
-  if ((targetDistStr || "").toLowerCase().includes("km")) totalDist *= 1000;
-
-  const lines = lapStr.replace(/\s+(?=\d+(?:km|m):)/g, "\n").split("\n");
-  let currentKilo = 1000;
-  let current400 = 400;
-  let lastKiloCumul = 0;
-  let last400Cumul = 0;
-
-  let totalSec = 0;
-  let totalEnteredDist = 0;
-
-  const formattedLines = [];
-
-  const isLongDistance =
-    totalDist >= 1500 ||
-    (raceType && (raceType.includes("駅伝") || raceType.includes("ロード")));
-
-  lines.forEach((line) => {
-    const cleanLine = line.trim().replace(/\s/g, "").replace(/km:/g, "000m:");
-    const match = cleanLine.match(/(\d+)m:(.*?)(?:\((.*?)\))?$/);
-    if (!match) {
-      if (line.trim()) formattedLines.push(line.trim());
-      return;
-    }
-
-    const dist = parseInt(match[1]);
-    const segTime = match[2];
-    const cumulTimeStr = match[3] || match[2];
-
-    const cumulSec = timeToSeconds(cumulTimeStr);
-    if (cumulSec <= 0) {
-      formattedLines.push(`${dist}m: ${segTime}`);
-      return;
-    }
-
-    totalSec = cumulSec;
-    totalEnteredDist = dist;
-
-    let displayLine = `${dist}m: ${segTime}`;
-
-    if (cumulTimeStr !== segTime) {
-      displayLine += ` ${cumulTimeStr}`;
-    }
-
-    if (dist === currentKilo) {
-      const splitSec = cumulSec - lastKiloCumul;
-      if (isLongDistance) {
-        displayLine += `(${secondsToTime(splitSec)})`;
-      }
-      lastKiloCumul = cumulSec;
-      currentKilo += 1000;
-    }
-
-    if (dist === current400) {
-      const splitSec = cumulSec - last400Cumul;
-      if (!isLongDistance) {
-        displayLine += `(${secondsToTime(splitSec)})`;
-      }
-      last400Cumul = cumulSec;
-      current400 += 400;
-    }
-
-    formattedLines.push(displayLine);
-  });
-
-  if (totalEnteredDist === 0) return null;
-
-  const avgPace = isLongDistance
-    ? totalSec / (totalEnteredDist / 1000)
-    : totalSec / (totalEnteredDist / 400);
-
-  formattedLines.push(`AVG ${secondsToTime(avgPace)}`);
-
-  return { formattedLines };
-};
 
 const CoachView = (props) => {
   const {
@@ -246,7 +145,6 @@ const CoachView = (props) => {
     handleSaveCoachFeedback,
     openCoachEditModal,
     confirmDialog,
-    handleExportMatrixCSV,
     setDemoMode,
     tournaments,
     raceCards,
@@ -1211,7 +1109,6 @@ const CoachView = (props) => {
               )}
               {statsSubTab === "report" && (
                 <CoachReportView
-                  handleExportMatrixCSV={handleExportMatrixCSV}
                   handlePrint={handlePrint}
                   activeRunners={activeRunners}
                   targetPeriod={targetPeriod}
@@ -2332,7 +2229,10 @@ const CoachView = (props) => {
                       }
                     />
                   </div>
-                  {targetPeriod.type !== "month" && (
+                  {/* Total Goal は保存対象が custom/global のみ（App.js handleCoachSaveGoals）。
+                      year/month では保存されず無言で破棄されるため入力欄を出さない。 */}
+                  {(targetPeriod.type === "custom" ||
+                    targetPeriod.type === "global") && (
                     <div className="space-y-1">
                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                         Total Goal ({targetPeriod.name})
@@ -2483,6 +2383,7 @@ const CoachView = (props) => {
                     <Edit size={10} /> Coach Comment
                   </p>
                   <textarea
+                    key={selectedRunner.id}
                     className="w-full p-4 bg-blue-50 rounded-2xl text-sm font-bold text-slate-700 min-h-[100px] outline-none focus:ring-2 ring-blue-200 border border-blue-100"
                     placeholder="フィードバックを入力..."
                     defaultValue={
@@ -2853,6 +2754,41 @@ const CoachView = (props) => {
                   )}
                 </button>
               </div>
+
+              {/* Admin Tools（デモ／プレビュー）。
+                  App.js の handleExitDemo がデモ終了時にこの設定画面へ遷移し
+                  demo-buttons-section へスクロール復帰するため、ここに配置する。 */}
+              <div className="bg-purple-50/50 p-6 rounded-3xl border border-purple-100 space-y-4 mt-2">
+                <h4 className="font-black text-sm text-purple-700 flex items-center gap-2">
+                  <Eye size={18} /> Admin Tools
+                </h4>
+                <p className="text-[10px] text-slate-600 font-bold leading-relaxed">
+                  この機能はシステム管理者用です。他のユーザー権限での動作確認や、設定のテストを行うことができます。
+                </p>
+                <div
+                  id="demo-buttons-section"
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                >
+                  <button
+                    onClick={() => setDemoMode("manager")}
+                    className="p-5 bg-amber-50 text-amber-700 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-amber-100 border border-amber-200 shadow-sm active:scale-95 transition-all"
+                  >
+                    <Users size={24} />
+                    マネージャープレビュー
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDemoMode("admin");
+                      setView("menu");
+                      window.scrollTo(0, 0);
+                    }}
+                    className="p-5 bg-purple-100 text-purple-800 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-purple-200 border border-purple-300 shadow-sm active:scale-95 transition-all"
+                  >
+                    <Eye size={24} />
+                    選手プレビュー
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -3136,37 +3072,6 @@ const CoachView = (props) => {
                   )}
                 </div>
               </div>
-              <div className="bg-purple-50/50 p-6 rounded-3xl border border-purple-100 space-y-4">
-                <h4 className="font-black text-sm text-purple-700 flex items-center gap-2">
-                  <Eye size={18} /> Admin Tools
-                </h4>
-                <p className="text-[10px] text-slate-600 font-bold leading-relaxed">
-                  この機能はシステム管理者用です。他のユーザー権限での動作確認や、設定のテストを行うことができます。
-                </p>
-                <div
-                  id="demo-buttons-section"
-                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                >
-                  <button
-                    onClick={() => setDemoMode("manager")}
-                    className="p-5 bg-amber-50 text-amber-700 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-amber-100 border border-amber-200 shadow-sm active:scale-95 transition-all"
-                  >
-                    <Users size={24} />
-                    マネージャープレビュー
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDemoMode("admin");
-                      setView("menu");
-                      window.scrollTo(0, 0);
-                    }}
-                    className="p-5 bg-purple-100 text-purple-800 rounded-2xl font-black text-xs flex flex-col items-center justify-center gap-2 hover:bg-purple-200 border border-purple-300 shadow-sm active:scale-95 transition-all"
-                  >
-                    <Eye size={24} />
-                    選手プレビュー
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 
@@ -3253,7 +3158,7 @@ const CoachView = (props) => {
             if (!d) return 99999;
             const km = d.match(/^([\d.]+)km$/i);
             if (km) return parseFloat(km[1]) * 1000;
-            const m = d.match(/^([\d.]+)m$/i);
+            const m = d.match(/^([\d.]+)m/i);
             if (m) return parseFloat(m[1]);
             return 99999;
           };
@@ -3774,7 +3679,7 @@ const CoachView = (props) => {
                         if (!d) return 99999;
                         const km = d.match(/^([\d.]+)km$/i);
                         if (km) return parseFloat(km[1]) * 1000;
-                        const m = d.match(/^([\d.]+)m$/i);
+                        const m = d.match(/^([\d.]+)m/i);
                         if (m) return parseFloat(m[1]);
                         return 99999;
                       };

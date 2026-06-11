@@ -24,6 +24,7 @@ import {
   Award,
 } from "lucide-react";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
+import { formatTimeInput } from "../utils/lapUtils";
 
 const RaceCardEntry = ({
   setView,
@@ -67,16 +68,6 @@ const RaceCardEntry = ({
   const tourDates = currentTour
     ? `${currentTour.startDate.replace(/-/g, "/")} 〜 ${currentTour.endDate.replace(/-/g, "/")}`
     : "日程未定";
-
-  const formatTimeInput = (text) => {
-    if (!text) return "";
-    let normalized = text.replace(/['"：:]/g, ".");
-    const parts = normalized.split(".");
-    if (parts.length === 1) return parts[0];
-    if (parts.length === 2) return `${parts[0]}"${parts[1]}`;
-    if (parts.length === 3) return `${parts[0]}'${parts[1]}"${parts[2]}`;
-    return text;
-  };
 
   return (
     <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in slide-in-from-bottom-8 pb-24">
@@ -713,7 +704,6 @@ const RaceCardEntry = ({
               /* それ以外（長距離・中距離・駅伝）の時はSmartLapInputを表示 */
               <SmartLapInput
                 value={raceCardInput.lapTimes || ""}
-                resultValue={raceCardInput.resultTime || ""}
                 onChange={(newValue) =>
                   setRaceCardInput((prev) => ({ ...prev, lapTimes: newValue }))
                 }

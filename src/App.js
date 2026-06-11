@@ -30,6 +30,7 @@ import { messaging } from "./firebaseConfig";
 import "./print.css";
 
 // ログイン前に表示する画面（遅延なし）
+import ErrorBoundary from "./components/ErrorBoundary";
 import WelcomeScreen from "./components/WelcomeScreen";
 import LoginScreen from "./components/LoginScreen";
 import RegisterScreen from "./components/RegisterScreen";
@@ -41,7 +42,11 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.6.1";
+const APP_LAST_UPDATED = "6.7.0";
+
+// FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
+const FCM_VAPID_KEY =
+  "BKhAK3cczxwz1pSnOOQjaiIRfRwywvhohAcoqosBZyLLzZecKMk3ZOuFuMnKyoKp01J6A4-0UzkaeCaNrfpeQkY";
 
 const App = () => {
   // ─── 認証・ユーザー情報 ───
@@ -274,21 +279,24 @@ const App = () => {
   });
 
   // プッシュ通知の許可と FCM トークン保存
+  // 必ずログイン本人（profile）のドキュメントにのみ保存する。
+  // プレビュー中は currentProfile が選手側に変わるため、それを使うと
+  // 監督端末のトークンで選手のトークンを上書きしてしまう（誤配送の原因）。
   useEffect(() => {
+    if (previewRunner) return; // 監督プレビュー中は実行しない
     const requestPushPermission = async () => {
-      if (!currentProfile?.id) return;
+      if (!profile?.id) return;
 
       try {
         const permission = await Notification.requestPermission();
 
         if (permission === "granted") {
           const currentToken = await getToken(messaging, {
-            vapidKey:
-              "BKhAK3cczxwz1pSnOOQjaiIRfRwywvhohAcoqosBZyLLzZecKMk3ZOuFuMnKyoKp01J6A4-0UzkaeCaNrfpeQkY",
+            vapidKey: FCM_VAPID_KEY,
           });
 
           if (currentToken) {
-            await updateDoc(docRef("runners", currentProfile.id), {
+            await updateDoc(docRef("runners", profile.id), {
               fcmToken: currentToken,
             });
             console.log("プッシュ通知の準備完了！トークンを保存しました。");
@@ -300,7 +308,30 @@ const App = () => {
     };
 
     requestPushPermission();
-  }, [currentProfile?.id]);
+  }, [profile?.id, previewRunner]);
+
+  // 監督端末の通知登録。監督は runners にプロフィールを持たないため、
+  // coach_devices コレクションへトークンを保存し、Cloud Functions が
+  // 大会ノート提出時にこの宛先へ直接プッシュ通知を送る。
+  useEffect(() => {
+    if (role !== ROLES.COACH) return;
+    const registerCoachDevice = async () => {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") return;
+        const token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
+        if (token) {
+          await setDoc(docRef("coach_devices", token), {
+            token,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.error("監督向け通知の登録に失敗しました:", e);
+      }
+    };
+    registerCoachDevice();
+  }, [role]);
 
   useEffect(() => {
     if (role === ROLES.COACH && selectedRunner && targetPeriod) {
@@ -853,8 +884,12 @@ const App = () => {
     }
     setIsSubmitting(true);
     try {
+      // 出場日が未入力なら大会開始日で補完する（フォームは表示のみ
+      // フォールバックしており、未操作だと date が保存されないため）
+      const tour = tournaments.find((t) => t.id === raceCardInput.tournamentId);
       const dataToSave = {
         ...raceCardInput,
+        date: raceCardInput.date || tour?.startDate || "",
         runnerId: currentUserId,
         runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
         updatedAt: new Date().toISOString(),
@@ -1010,38 +1045,6 @@ const App = () => {
     link.download = `ekiden_team_data.csv`;
     link.click();
     toast.success("CSVをダウンロードしました");
-  };
-
-  const handleExportMatrixCSV = () => {
-    const runnerIds = activeRunners.map((r) => r.id);
-    const headerRow = [
-      "日付",
-      ...activeRunners.map((r) => `${r.lastName} ${r.firstName}`),
-    ];
-    const dataRows = reportMatrix.matrix.map((row) => {
-      const rowData = [row.date.slice(5).replace("-", "/")];
-      runnerIds.forEach((id) => {
-        rowData.push(row[id] !== "-" ? row[id] : "");
-      });
-      return rowData;
-    });
-    const totalRow = ["TOTAL"];
-    runnerIds.forEach((id) => {
-      totalRow.push(reportMatrix.totals[id] || 0);
-    });
-    const csvContent = [
-      headerRow.join(","),
-      ...dataRows.map((r) => r.join(",")),
-      totalRow.join(","),
-    ].join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `ekiden_report_${targetPeriod.name}.csv`;
-    link.click();
-    toast.success("マトリックスCSVをダウンロードしました");
   };
 
   // ─── 目標・振り返り・フィードバック ───
@@ -1280,7 +1283,6 @@ const App = () => {
     teamLogs,
     appId,
     confirmDialog,
-    handleExportMatrixCSV,
     view,
     setView,
     handleLogout,
@@ -1548,16 +1550,18 @@ const App = () => {
   };
 
   return (
-    <Suspense
-      fallback={
-        <div className="h-screen flex items-center justify-center bg-slate-50">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-        </div>
-      }
-    >
-      <Toaster position="top-center" reverseOrder={false} />
-      {renderContent()}
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense
+        fallback={
+          <div className="h-screen flex items-center justify-center bg-slate-50">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
+          </div>
+        }
+      >
+        <Toaster position="top-center" reverseOrder={false} />
+        {renderContent()}
+      </Suspense>
+    </ErrorBoundary>
   );
 };
 

@@ -7,6 +7,7 @@
  */
 import React, { useState, useEffect, useMemo } from "react";
 import { Timer } from "lucide-react";
+import { timeToSeconds, secondsToTime, formatTimeInput } from "../utils/lapUtils";
 
 const SmartLapInput = ({
   value,
@@ -28,8 +29,10 @@ const SmartLapInput = ({
     if (!raceType || totalDist === 0) return [];
     let splits = [];
     const t = raceType.toLowerCase();
+    // 種目(raceType)ではなく距離(distance)側に "SC" が入るため distance で判定する
+    const d = (distance || "").toLowerCase();
 
-    if (t.includes("駅伝") || t.includes("ロード") || t.includes("3000msc")) {
+    if (t.includes("駅伝") || t.includes("ロード") || d.includes("sc")) {
       for (let i = 1000; i <= totalDist; i += 1000) splits.push(i);
       if (totalDist % 1000 !== 0) splits.push(totalDist);
     } else if (totalDist === 800) {
@@ -46,39 +49,7 @@ const SmartLapInput = ({
       if (splits[splits.length - 1] !== totalDist) splits.push(totalDist);
     }
     return splits;
-  }, [raceType, totalDist]);
-
-  // 3. タイム・秒数変換ロジック
-  const timeToSeconds = (str) => {
-    if (!str) return 0;
-    const cleanStr = str.replace(/[()（）]/g, "");
-    const match = cleanStr.match(/(?:(\d+)')?(?:(\d+)")?(\d+)?/);
-    if (!match) return 0;
-    const m = parseFloat(match[1] || 0);
-    const s = parseFloat(match[2] || 0);
-    const c = parseFloat(match[3] || 0) / 100;
-    return m * 60 + s + c;
-  };
-
-  const secondsToTime = (totalSeconds) => {
-    if (totalSeconds <= 0) return "";
-    const m = Math.floor(totalSeconds / 60);
-    const s = Math.floor(totalSeconds % 60);
-    const c = Math.round((totalSeconds % 1) * 100);
-    const ss = String(s).padStart(2, "0");
-    const cc = String(c).padStart(2, "0");
-    return m > 0 ? `${m}'${ss}"${cc}` : `${s}"${cc}`;
-  };
-
-  const formatInput = (text) => {
-    if (!text) return "";
-    let normalized = text.replace(/['"：:]/g, ".");
-    const parts = normalized.split(".");
-    if (parts.length === 1) return parts[0];
-    if (parts.length === 2) return `${parts[0]}"${parts[1]}`;
-    if (parts.length === 3) return `${parts[0]}'${parts[1]}"${parts[2]}`;
-    return text;
-  };
+  }, [raceType, totalDist, distance]);
 
   // 4. ステート管理
   const [laps, setLaps] = useState({});
@@ -127,7 +98,7 @@ const SmartLapInput = ({
   };
 
   const handleResultChange = (rawResult) => {
-    const formattedResult = formatInput(rawResult);
+    const formattedResult = formatTimeInput(rawResult);
     setOfficialResult(formattedResult);
 
     if (onResultChange) {
@@ -159,7 +130,7 @@ const SmartLapInput = ({
   };
 
   const handleLapChange = (dist, rawValue) => {
-    const formatted = formatInput(rawValue);
+    const formatted = formatTimeInput(rawValue);
     let nextLaps = { ...laps, [dist]: formatted };
     let currentOfficialResult = officialResult;
 

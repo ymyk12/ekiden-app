@@ -24,4 +24,13 @@ export const db = initializeFirestore(app, {
   localCache: persistentLocalCache(),
 });
 
-export const messaging = getMessaging(app);
+// FCM非対応環境（古いiOS Safari・テスト環境など）では getMessaging が
+// throw してアプリ全体が起動しなくなるため、失敗時は null にフォールバックする。
+// 利用側（getToken）は try/catch 内で呼ばれるので null でも安全に失敗する。
+let messagingInstance = null;
+try {
+  messagingInstance = getMessaging(app);
+} catch (e) {
+  console.warn("このブラウザはプッシュ通知に対応していません:", e.message);
+}
+export const messaging = messagingInstance;

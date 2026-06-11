@@ -50,9 +50,54 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
+// アプリのデータ領域。クライアント側 src/utils/firestore.js の basePath と
+// 必ず一致させること（ここがズレるとトリガーが一切発火しなくなる）
+const APP_ID = "kswc-ekidenteam-distancerecords";
+const DATA_PATH = `artifacts/${APP_ID}/public/data`;
+
+// coach_devices に登録された監督端末すべてへ通知を送る。
+// 以前は sendToTopic("coaches") だったが、クライアントにトピック購読の
+// 仕組みがなく誰にも届かないため、保存済みトークンへの直接送信に変更した。
+const sendToCoachDevices = async (notification) => {
+  const devicesSnap = await db.collection(`${DATA_PATH}/coach_devices`).get();
+  const tokens = devicesSnap.docs
+    .map((d) => d.data().token || d.id)
+    .filter(Boolean);
+
+  if (tokens.length === 0) {
+    console.log("監督端末が未登録のため通知をスキップしました");
+    return;
+  }
+
+  const res = await admin
+    .messaging()
+    .sendEachForMulticast({ tokens, notification });
+
+  // 無効になったトークン（アンインストール等）を掃除する
+  const batch = db.batch();
+  let invalidCount = 0;
+  res.responses.forEach((r, i) => {
+    if (!r.success) {
+      const code = (r.error && r.error.code) || "";
+      if (
+        code.includes("registration-token-not-registered") ||
+        code.includes("invalid-argument")
+      ) {
+        batch.delete(devicesSnap.docs[i].ref);
+        invalidCount++;
+      }
+    }
+  });
+  if (invalidCount > 0) await batch.commit();
+
+  console.log(
+    `通知送信: 成功 ${res.successCount} / 失敗 ${res.failureCount}（無効トークン削除 ${invalidCount}件）`,
+  );
+};
+
 // 🌟 2. データが追加された時に動く「仕分け係」
 exports.queueOrSendNotification = functions.firestore
-  .document("raceCards/{cardId}")
+  .document(`artifacts/${APP_ID}/public/data/raceCards/{cardId}`)
   .onCreate(async (snap, context) => {
     const newCard = snap.data();
 
@@ -69,13 +114,10 @@ exports.queueOrSendNotification = functions.firestore
       });
       console.log("夜間なので通知を保留しました");
     } else {
-      const payload = {
-        notification: {
-          title: "大会ノート追加",
-          body: `${newCard.runnerName}さんが新しい大会ノートを追加しました！`,
-        },
-      };
-      await admin.messaging().sendToTopic("coaches", payload);
+      await sendToCoachDevices({
+        title: "大会ノート追加",
+        body: `${newCard.runnerName}さんが新しい大会ノートを追加しました！`,
+      });
       console.log("昼間なので即時通知を送信しました");
     }
   });
@@ -95,13 +137,10 @@ exports.morningBatchNotification = functions.pubsub
 
     const count = snapshot.size;
 
-    const payload = {
-      notification: {
-        title: "☀️ 朝のまとめ通知",
-        body: `おはようございます！夜間に ${count} 件の大会ノート追加がありました。確認しましょう！`,
-      },
-    };
-    await admin.messaging().sendToTopic("coaches", payload);
+    await sendToCoachDevices({
+      title: "☀️ 朝のまとめ通知",
+      body: `おはようございます！夜間に ${count} 件の大会ノート追加がありました。確認しましょう！`,
+    });
 
     const batch = db.batch();
     snapshot.docs.forEach((doc) => {
