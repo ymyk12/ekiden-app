@@ -52,6 +52,8 @@ import {
   Sparkles,
   Home,
   ChevronDown,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 
 import {
@@ -74,6 +76,7 @@ import { analyzeLaps } from "../utils/lapUtils";
 
 import DiaryListItem from "./DiaryListItem";
 import CoachReportView from "./CoachReportView";
+import MonthlyReportView from "./MonthlyReportView";
 import CalendarView from "./CalendarView";
 import { usePrint } from "../hooks/usePrint";
 import LapTimeModal from "./LapTimeModal";
@@ -261,6 +264,8 @@ const CoachView = (props) => {
 
   const [selectedTourId, setSelectedTourId] = useState(null);
   const [onlyPendingFeedback, setOnlyPendingFeedback] = useState(false);
+  // カードを開いた時点の送り順を固定する（FB送信でフィルタから外れても 0/N に戻らないように）
+  const [readingNavIds, setReadingNavIds] = useState(null);
   const [readingCard, setReadingCard] = useState(null);
   const [coachFeedbackInput, setCoachFeedbackInput] = useState("");
   const [showTeamReportId, setShowTeamReportId] = useState(null);
@@ -1043,13 +1048,19 @@ const CoachView = (props) => {
           {view === "coach-stats" && (
             <div className="space-y-4 animate-in fade-in">
               <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl print:hidden">
-                {["ranking", "report"].map((sub) => (
+                {["ranking", "report", "monthly"].map((sub) => (
                   <button
                     key={sub}
                     onClick={() => setStatsSubTab(sub)}
                     className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${statsSubTab === sub ? "bg-white text-blue-600 shadow-sm" : "text-slate-400"}`}
                   >
-                    {sub === "ranking" ? "ランキング" : "レポート"}
+                    {
+                      {
+                        ranking: "ランキング",
+                        report: "レポート",
+                        monthly: "月間レポート",
+                      }[sub]
+                    }
                   </button>
                 ))}
               </div>
@@ -1149,6 +1160,15 @@ const CoachView = (props) => {
                   monthlyTrendData={monthlyTrendData}
                   cumulativeData={cumulativeData}
                   reportChartData={reportChartData}
+                />
+              )}
+              {statsSubTab === "monthly" && (
+                <MonthlyReportView
+                  handlePrint={handlePrint}
+                  activeRunners={activeRunners}
+                  allLogs={allLogs}
+                  raceCards={raceCards}
+                  tournaments={tournaments}
                 />
               )}
             </div>
@@ -1826,7 +1846,7 @@ const CoachView = (props) => {
                                   </span>
                                 </button>
                                 {(() => {
-                                  const pending = raceCards.filter((card) => card.tournamentId === tour.id && !card.coachFeedback).length;
+                                  const pending = raceCards.filter((card) => card.tournamentId === tour.id && !card.coachFeedback && !card.feedbackSkipped).length;
                                   return pending > 0 ? (
                                     <button
                                       onClick={() => { setSelectedTourId(tour.id); setOnlyPendingFeedback(true); }}
@@ -3157,6 +3177,7 @@ const CoachView = (props) => {
             setShowTeamReportId(null);
             setSelectedTourId(card.tournamentId);
             setOnlyPendingFeedback(false);
+            setReadingNavIds(null);
             setReadingCard(card);
             setCoachFeedbackInput(card.coachFeedback || "");
           }}
@@ -3181,7 +3202,7 @@ const CoachView = (props) => {
             (c) => c.tournamentId === selectedTourId,
           );
           const submittedCards = onlyPendingFeedback
-            ? allSubmittedCards.filter((c) => !c.coachFeedback)
+            ? allSubmittedCards.filter((c) => !c.coachFeedback && !c.feedbackSkipped)
             : allSubmittedCards;
 
           // ナビ用フラットリスト（一覧と同じ日付昇順・距離昇順）
@@ -3201,9 +3222,17 @@ const CoachView = (props) => {
             acc[d].push(card);
             return acc;
           }, {});
-          const flatCards = Object.keys(cardsByDate).sort().flatMap((d) =>
+          const liveFlatCards = Object.keys(cardsByDate).sort().flatMap((d) =>
             [...cardsByDate[d]].sort((a, b) => distToM(a) - distToM(b))
           );
+          // カードを開いている間は開いた時点の並びを使う
+          // （FB未入力のみ表示中にFBを送信してもカード送りの位置が崩れない）
+          const flatCards =
+            readingCard && readingNavIds
+              ? readingNavIds
+                  .map((id) => allSubmittedCards.find((c) => c.id === id))
+                  .filter(Boolean)
+              : liveFlatCards;
           const currentIdx = readingCard ? flatCards.findIndex((c) => c.id === readingCard.id) : -1;
           const prevCard = currentIdx > 0 ? flatCards[currentIdx - 1] : null;
           const nextCard = currentIdx < flatCards.length - 1 ? flatCards[currentIdx + 1] : null;
@@ -3223,7 +3252,7 @@ const CoachView = (props) => {
                 {readingCard ? (
                   <>
                     <button
-                      onClick={() => { setReadingCard(null); setIsReassigningCard(false); setReassignTourId(""); setIsEditingReadingCard(false); }}
+                      onClick={() => { setReadingCard(null); setReadingNavIds(null); setIsReassigningCard(false); setReassignTourId(""); setIsEditingReadingCard(false); }}
                       className="flex items-center gap-1 text-[11px] font-black text-slate-300 hover:text-white transition-colors px-2 py-1.5 rounded-xl hover:bg-white/10"
                     >
                       <ArrowLeft size={14} /> 一覧
@@ -3331,6 +3360,7 @@ const CoachView = (props) => {
                                   updatedBy: "coach",
                                 });
                                 setReadingCard(null);
+                                setReadingNavIds(null);
                                 setIsReassigningCard(false);
                                 setReassignTourId("");
                               }}
@@ -3508,12 +3538,44 @@ const CoachView = (props) => {
                           </div>
                         )}
                         <div>
-                          <p className="text-[10px] font-black text-indigo-600">
-                            実際のタイム (Result)
-                          </p>
-                          <p className="font-black text-2xl text-indigo-600 mt-1">
-                            {readingCard.resultTime || "未入力"}
-                          </p>
+                          {readingCard.status === "dns" ? (
+                            <>
+                              <p className="text-[10px] font-black text-rose-500">
+                                レース結果
+                              </p>
+                              <p className="font-black text-2xl text-rose-500 mt-1">
+                                DNS（欠場）
+                              </p>
+                              {readingCard.dnsReason && (
+                                <p className="text-xs font-bold text-rose-400 mt-1">
+                                  理由：{readingCard.dnsReason}
+                                </p>
+                              )}
+                            </>
+                          ) : readingCard.status === "dnf" ? (
+                            <>
+                              <p className="text-[10px] font-black text-amber-600">
+                                レース結果
+                              </p>
+                              <p className="font-black text-2xl text-amber-600 mt-1">
+                                DNF（途中棄権）
+                              </p>
+                              {readingCard.dnfPoint && (
+                                <p className="text-xs font-bold text-amber-500 mt-1">
+                                  棄権地点：{readingCard.dnfPoint}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[10px] font-black text-indigo-600">
+                                実際のタイム (Result)
+                              </p>
+                              <p className="font-black text-2xl text-indigo-600 mt-1">
+                                {readingCard.resultTime || "未入力"}
+                              </p>
+                            </>
+                          )}
                         </div>
 
                         {readingCard.lapTimes &&
@@ -3647,6 +3709,31 @@ const CoachView = (props) => {
                             ? "フィードバックを更新"
                             : "フィードバックを送信"}
                         </button>
+                        <button
+                          onClick={async () => {
+                            const next = !readingCard.feedbackSkipped;
+                            await updateDoc(
+                              docRef("raceCards", readingCard.id),
+                              {
+                                feedbackSkipped: next,
+                                updatedAt: new Date().toISOString(),
+                                updatedBy: "coach",
+                              },
+                            );
+                            setReadingCard({
+                              ...readingCard,
+                              feedbackSkipped: next,
+                            });
+                          }}
+                          className={`w-full py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${readingCard.feedbackSkipped ? "bg-slate-700 text-white" : "bg-white/60 text-slate-500 border border-slate-200 hover:bg-white"}`}
+                        >
+                          {readingCard.feedbackSkipped ? (
+                            <CheckSquare size={14} />
+                          ) : (
+                            <Square size={14} />
+                          )}
+                          フィードバック不要にする
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -3681,6 +3768,21 @@ const CoachView = (props) => {
                       className={`w-full py-3 rounded-xl font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:bg-slate-300 ${readingCard.coachFeedback ? "bg-white text-indigo-600 hover:bg-indigo-50" : "bg-indigo-600 text-white"}`}
                     >
                       <Save size={16} /> {readingCard.coachFeedback ? "フィードバックを更新" : "フィードバックを送信"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const next = !readingCard.feedbackSkipped;
+                        await updateDoc(docRef("raceCards", readingCard.id), {
+                          feedbackSkipped: next,
+                          updatedAt: new Date().toISOString(),
+                          updatedBy: "coach",
+                        });
+                        setReadingCard({ ...readingCard, feedbackSkipped: next });
+                      }}
+                      className={`w-full py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${readingCard.feedbackSkipped ? "bg-slate-700 text-white" : "bg-white/60 text-slate-500 border border-slate-200 hover:bg-white"}`}
+                    >
+                      {readingCard.feedbackSkipped ? <CheckSquare size={14} /> : <Square size={14} />}
+                      フィードバック不要にする
                     </button>
                   </div>
                 </div>
@@ -3726,6 +3828,7 @@ const CoachView = (props) => {
                             <div
                               key={card.id}
                               onClick={() => {
+                                setReadingNavIds(liveFlatCards.map((c) => c.id));
                                 setReadingCard(card);
                                 setCoachFeedbackInput(card.coachFeedback || "");
                               }}
@@ -3769,6 +3872,10 @@ const CoachView = (props) => {
                                   {card.coachFeedback ? (
                                     <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200 flex items-center gap-1">
                                       <MessageSquare size={9} /> FB済
+                                    </span>
+                                  ) : card.feedbackSkipped ? (
+                                    <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
+                                      <Check size={9} /> FB不要
                                     </span>
                                   ) : (
                                     <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex items-center gap-1">
