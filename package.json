@@ -1,6 +1,6 @@
 {
   "name": "ekiden-app",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "dependencies": {
     "@testing-library/dom": "^10.4.1",

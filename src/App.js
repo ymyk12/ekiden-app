@@ -42,7 +42,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.7.3";
+const APP_LAST_UPDATED = "6.7.4";
 
 // FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
 const FCM_VAPID_KEY =
@@ -569,6 +569,10 @@ const App = () => {
   // 選手が自分の練習記録を修正・保存する
   const handleAthleteUpdateLog = async () => {
     if (!editingLogId) return;
+    if (!logInput.category) {
+      toast.error("区分を選択してください");
+      return;
+    }
     setIsSubmitting(true);
     try {
       await updateDoc(docRef("logs", editingLogId), {
@@ -610,6 +614,10 @@ const App = () => {
   // 監督が選手の練習記録を修正・上書きする
   const handleCoachUpdateLog = async () => {
     if (!editingLogId) return;
+    if (!logInput.category) {
+      toast.error("区分を選択してください");
+      return;
+    }
     setIsSubmitting(true);
     try {
       await updateDoc(docRef("logs", editingLogId), {
@@ -757,6 +765,10 @@ const App = () => {
   // 練習記録を Firestore に保存する（新規・上書き両対応）
   const handleSaveLog = async () => {
     if (!logInput.distance) return;
+    if (!logInput.category) {
+      toast.error("区分を選択してください");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const dataToSave = {

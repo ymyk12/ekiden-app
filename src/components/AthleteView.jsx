@@ -900,6 +900,9 @@ const AthleteView = (props) => {
                   setLogInput(next);
                 }}
               >
+                <option value="" disabled>
+                  区分を選択
+                </option>
                 {Object.values(CATEGORY).map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
@@ -2257,6 +2260,9 @@ const AthleteView = (props) => {
                   }
                   className="w-full mt-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500 focus:border-transparent"
                 >
+                  <option value="" disabled>
+                    区分を選択
+                  </option>
                   {Object.values(CATEGORY).map((c) => (
                     <option key={c} value={c}>
                       {c}
