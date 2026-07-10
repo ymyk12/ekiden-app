@@ -1405,8 +1405,16 @@ const AthleteView = (props) => {
                     <div className="grid grid-cols-2 gap-4">
                       {activeQuarters.map((q, idx) => (
                         <div key={idx} className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400">
-                            Q{idx + 1}
+                          <label className="flex items-baseline gap-1.5">
+                            <span className="text-[9px] font-bold text-slate-400">
+                              Q{idx + 1}
+                            </span>
+                            {q.start && q.end && (
+                              <span className="text-[9px] font-bold text-slate-400">
+                                {q.start.slice(5).replace("-", "/")}-
+                                {q.end.slice(5).replace("-", "/")}
+                              </span>
+                            )}
                           </label>
                           <input
                             type="number"

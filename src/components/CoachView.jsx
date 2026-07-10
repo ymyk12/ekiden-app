@@ -2310,8 +2310,16 @@ const CoachView = (props) => {
                       <div className="grid grid-cols-2 gap-3 pt-2">
                         {activeQuarters.map((q, idx) => (
                           <div key={idx} className="space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                              Q{idx + 1} Goal
+                            <label className="ml-1 flex items-baseline gap-1.5">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                Q{idx + 1} Goal
+                              </span>
+                              {q.start && q.end && (
+                                <span className="text-[9px] font-bold text-slate-400 normal-case tracking-normal">
+                                  {q.start.slice(5).replace("-", "/")}-
+                                  {q.end.slice(5).replace("-", "/")}
+                                </span>
+                              )}
                             </label>
                             <input
                               type="number"
