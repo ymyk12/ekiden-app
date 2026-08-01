@@ -33,6 +33,7 @@ import {
   Home,
   Users,
   CalendarDays,
+  FileText,
 } from "lucide-react";
 
 // Utilsから読み込む
@@ -47,6 +48,8 @@ import LapTimeModal from "./LapTimeModal";
 import TeamRaceReport from "./TeamRaceReport";
 // カレンダービュー
 import CalendarView from "./CalendarView";
+// チーム共有資料（しおり等）
+import DocumentsModal from "./DocumentsModal";
 
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "react-hot-toast";
@@ -109,6 +112,7 @@ const ManagerDashboard = ({
   const [editingCard, setEditingCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
   const [showTeamReportId, setShowTeamReportId] = useState(null);
+  const [showDocs, setShowDocs] = useState(false);
 
   const reinforcementOptions = [
     "コア",
@@ -585,12 +589,20 @@ const ManagerDashboard = ({
               {profile.lastName} {profile.firstName}
             </h1>
           </div>
-          <button
-            onClick={handleLogout}
-            className="bg-indigo-800/50 hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors"
-          >
-            <LogOut size={14} className="inline mr-1" /> ログアウト
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowDocs(true)}
+              className="bg-indigo-800/50 hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors"
+            >
+              <FileText size={14} className="inline mr-1" /> 資料
+            </button>
+            <button
+              onClick={handleLogout}
+              className="bg-indigo-800/50 hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors"
+            >
+              <LogOut size={14} className="inline mr-1" /> ログアウト
+            </button>
+          </div>
         </div>
         {/* タブバーをヘッダー内に統合して一緒にstickyにする */}
         <div className="relative z-10 flex gap-1 pb-3">
@@ -1551,6 +1563,8 @@ const ManagerDashboard = ({
         </div>
       )}
       {/* ========================================== */}
+
+      <DocumentsModal open={showDocs} onClose={() => setShowDocs(false)} />
     </div>
   );
 };

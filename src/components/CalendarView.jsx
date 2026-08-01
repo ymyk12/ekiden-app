@@ -35,14 +35,24 @@ function CalendarView({
 
   const todayStr = getTodayStr();
 
-  // 自分の練習記録マップ { "YYYY-MM-DD": log }
+  // 自分の練習記録マップ { "YYYY-MM-DD": [log, ...] }
+  // 1日に複数練習（朝練・午後練など）があるため配列で保持する
   const myLogMap = useMemo(() => {
     const map = {};
     (allLogs || [])
       .filter((l) => l.runnerId === currentUserId)
       .forEach((l) => {
-        map[l.date] = l;
+        (map[l.date] = map[l.date] || []).push(l);
       });
+    // 各日を時系列（朝練→午前練→午後練…= CATEGORY定義順）に並べる
+    const order = Object.values(CATEGORY);
+    Object.values(map).forEach((arr) =>
+      arr.sort((a, b) => {
+        const ia = order.indexOf(a.category);
+        const ib = order.indexOf(b.category);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      }),
+    );
     return map;
   }, [allLogs, currentUserId]);
 
@@ -93,10 +103,9 @@ function CalendarView({
 
   const monthLabel = `${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月`;
 
-  const selectedLog = selectedDate ? myLogMap[selectedDate] : null;
+  const selectedLogs = selectedDate ? myLogMap[selectedDate] || [] : [];
   const selectedTeamLog = selectedDate ? teamLogMap[selectedDate] : null;
   const selectedTournament = selectedDate ? tournamentDateMap[selectedDate] : null;
-  const isRest = selectedLog?.category === CATEGORY.REST;
 
   const dayOfWeekLabel = (dateStr) => {
     if (!dateStr) return "";
@@ -154,66 +163,83 @@ function CalendarView({
         </div>
       )}
 
-      {/* 個人ログ */}
-      {selectedLog ? (
-        <div
-          className={`rounded-2xl px-4 py-3 space-y-2 ${
-            isRest
-              ? "bg-emerald-50 border border-emerald-100"
-              : "bg-blue-50 border border-blue-100"
-          }`}
-        >
-          <p
-            className={`text-[9px] font-black uppercase tracking-widest ${
-              isRest ? "text-emerald-600" : "text-blue-600"
-            }`}
-          >
-            My Log
-          </p>
-          {isRest ? (
-            <p className="text-sm font-bold text-emerald-700">
-              💤 完全休養
-            </p>
-          ) : (
-            <>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-blue-700">
-                  {selectedLog.distance}
-                </span>
-                <span className="text-xs font-bold text-blue-500">km</span>
-                <span className="ml-auto text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
-                  {selectedLog.category}
-                </span>
-              </div>
-              {selectedLog.menuDetail && (
-                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                  {selectedLog.menuDetail}
-                </p>
-              )}
-              <div className="flex gap-2">
-                {selectedLog.rpe > 0 && (
-                  <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${selectedLog.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : selectedLog.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
-                    RPE {selectedLog.rpe}
-                  </span>
+      {/* 個人ログ（1日に複数練習ある場合は全件表示） */}
+      {selectedLogs.length > 0
+        ? selectedLogs.map((log) => {
+            const logIsRest = log.category === CATEGORY.REST;
+            return (
+              <div
+                key={log.id}
+                className={`rounded-2xl px-4 py-3 space-y-2 ${
+                  logIsRest
+                    ? "bg-emerald-50 border border-emerald-100"
+                    : "bg-blue-50 border border-blue-100"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <p
+                    className={`text-[9px] font-black uppercase tracking-widest ${
+                      logIsRest ? "text-emerald-600" : "text-blue-600"
+                    }`}
+                  >
+                    My Log
+                  </p>
+                  {role === ROLES.RUNNER && onEditRequest && (
+                    <button
+                      onClick={() => {
+                        onEditRequest(log);
+                        setSelectedDate(null);
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-black text-slate-400 hover:text-blue-600 transition-colors active:scale-95"
+                    >
+                      <Pencil size={12} strokeWidth={2.5} /> 編集
+                    </button>
+                  )}
+                </div>
+                {logIsRest ? (
+                  <p className="text-sm font-bold text-emerald-700">
+                    💤 完全休養
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-blue-700">
+                        {log.distance}
+                      </span>
+                      <span className="text-xs font-bold text-blue-500">km</span>
+                      <span className="ml-auto text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
+                        {log.category}
+                      </span>
+                    </div>
+                    {log.menuDetail && (
+                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                        {log.menuDetail}
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      {log.rpe > 0 && (
+                        <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${log.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : log.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                          RPE {log.rpe}
+                        </span>
+                      )}
+                      {log.pain > 1 && (
+                        <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${log.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200" : log.pain >= 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>
+                          Pain {log.pain}
+                        </span>
+                      )}
+                    </div>
+                  </>
                 )}
-                {selectedLog.pain > 1 && (
-                  <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border ${selectedLog.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200" : selectedLog.pain >= 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>
-                    Pain {selectedLog.pain}
-                  </span>
-                )}
               </div>
-            </>
+            );
+          })
+        : role === ROLES.RUNNER && (
+            <div className="rounded-2xl px-4 py-3 bg-slate-50 border border-dashed border-slate-200">
+              <p className="text-xs text-slate-400 font-bold text-center">
+                この日の記録はありません
+              </p>
+            </div>
           )}
-        </div>
-      ) : (
-        role === ROLES.RUNNER && (
-          <div className="rounded-2xl px-4 py-3 bg-slate-50 border border-dashed border-slate-200">
-            <p className="text-xs text-slate-400 font-bold text-center">
-              この日の記録はありません
-            </p>
-          </div>
-        )
-      )}
 
       {/* チーム日誌 */}
       {selectedTeamLog && (
@@ -253,8 +279,8 @@ function CalendarView({
         </div>
       )}
 
-      {/* 記録入力ボタン（選手のみ・未記録の日のみ） */}
-      {role === ROLES.RUNNER && !selectedLog && onEntryRequest && (
+      {/* 記録入力ボタン（選手のみ・複数練習に対応するため常時表示） */}
+      {role === ROLES.RUNNER && onEntryRequest && (
         <button
           onClick={() => {
             onEntryRequest(selectedDate);
@@ -263,26 +289,12 @@ function CalendarView({
           className="w-full bg-gradient-to-br from-blue-500 to-blue-700 text-white py-3.5 rounded-2xl font-black text-sm shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
         >
           <Plus size={16} strokeWidth={3} />
-          この日に記録を入力
-        </button>
-      )}
-
-      {/* 記録編集ボタン（選手のみ・記録済みの日） */}
-      {role === ROLES.RUNNER && selectedLog && onEditRequest && (
-        <button
-          onClick={() => {
-            onEditRequest(selectedLog);
-            setSelectedDate(null);
-          }}
-          className="w-full bg-slate-100 text-slate-700 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 hover:bg-slate-200 transition-all"
-        >
-          <Pencil size={15} strokeWidth={2.5} />
-          この記録を編集
+          {selectedLogs.length > 0 ? "この日に練習を追加" : "この日に記録を入力"}
         </button>
       )}
 
       {/* 何もない日 */}
-      {!selectedLog && !selectedTeamLog && !selectedTournament && role !== ROLES.RUNNER && (
+      {selectedLogs.length === 0 && !selectedTeamLog && !selectedTournament && role !== ROLES.RUNNER && (
         <p className="text-xs text-slate-400 font-bold text-center py-2">
           この日の記録はありません
         </p>
@@ -337,11 +349,11 @@ function CalendarView({
               return <div key={`empty-${idx}`} />;
             }
 
-            const myLog = myLogMap[dateStr];
+            const dayLogs = myLogMap[dateStr] || [];
             const hasTeamLog = !!teamLogMap[dateStr];
             const hasTournament = !!tournamentDateMap[dateStr];
-            const dayIsRest = myLog?.category === CATEGORY.REST;
-            const hasLog = !!myLog && !dayIsRest;
+            const dayIsRest = dayLogs.some((l) => l.category === CATEGORY.REST);
+            const hasLog = dayLogs.some((l) => l.category !== CATEGORY.REST);
             const isToday = dateStr === todayStr;
             const colIdx = idx % 7;
             const isSat = colIdx === 5;

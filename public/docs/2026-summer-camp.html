@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>令和8年度 夏季強化合宿 しおり｜柏中央高校 陸上競技部 長距離ブロック</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pine-900:#0a1930; --pine-800:#123a66; --pine-700:#1d56a0;
+    --moss:#1f7a8c; --moss-soft:#e3eef4;
+    --coral:#f2a63d; --coral-600:#c9800f; --coral-soft:#fff3de;
+    --card:#ffffff;
+    --ink:#15211b; --ink-2:#4a5852; --ink-3:#7d8b84;
+    --line:#d6e0d6;
+    --jp:'Zen Kaku Gothic New', system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+    --mono:'Space Mono', ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#dde3ea; color:var(--ink);
+    font-family:var(--jp); font-weight:400; line-height:1.55; letter-spacing:.01em;
+    font-feature-settings:"palt" 1; -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:var(--mono); font-feature-settings:normal; letter-spacing:0;}
+
+  /* ---------- A4 SHEET ---------- */
+  .sheet{
+    width:210mm; min-height:297mm; background:var(--card);
+    margin:0 auto 8mm; padding:12mm 13mm 11mm;
+    position:relative; box-shadow:0 2px 6px rgba(0,0,0,.14), 0 10px 30px rgba(0,0,0,.10);
+    overflow:hidden;
+  }
+  .pfoot{position:absolute; left:13mm; right:13mm; bottom:6mm; display:flex; justify-content:space-between;
+    font-family:var(--mono); font-size:8.5px; letter-spacing:.06em; color:var(--ink-3); border-top:1px solid var(--line); padding-top:4px;}
+  .pfoot .r{color:var(--moss);}
+
+  /* ---------- BANNER ---------- */
+  .banner{position:relative; overflow:hidden; border-radius:11px; color:#eaf1fa;
+    background:linear-gradient(150deg,var(--pine-700) 0%, var(--pine-900) 78%); padding:16px 20px 17px;}
+  .banner-topo{position:absolute; inset:0; width:100%; height:100%; opacity:.5;}
+  .banner-topo path{fill:none; stroke:#3f6fa0; stroke-width:1.2;}
+  .banner-topo .thin{stroke:#274b78; stroke-width:.9;}
+  .banner-in{position:relative; display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap;}
+  .banner .eyebrow{font-family:var(--mono); font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:#7fb8dc; margin:0 0 8px;}
+  .banner .eyebrow b{color:var(--coral);}
+  .banner h1{margin:0; font-weight:900; font-size:30px; line-height:1.1; color:#fff; letter-spacing:.02em;}
+  .banner h1 .yr{font-size:13px; font-weight:700; color:#a8d4ee; letter-spacing:.14em; display:block; margin-bottom:5px;}
+  .banner h1 .sh{color:var(--coral);}
+  .banner .place{margin:9px 0 0; font-size:12.5px; color:#d3e6f5; font-weight:500;}
+  .banner .place::before{content:"▲"; color:var(--coral); margin-right:.4em; font-size:.85em;}
+  .bchips{display:flex; flex-direction:column; gap:6px; align-items:flex-end;}
+  .bchip{display:flex; align-items:baseline; gap:7px; background:rgba(255,255,255,.07);
+    border:1px solid rgba(127,184,220,.3); border-radius:999px; padding:4px 13px;}
+  .bchip .k{font-family:var(--mono); font-size:8.5px; letter-spacing:.12em; color:#7fb8dc;}
+  .bchip .v{font-family:var(--mono); font-weight:700; font-size:12.5px; color:#fff;}
+  .bchip .v em{font-style:normal; color:var(--coral);}
+
+  /* ---------- SUMMARY ---------- */
+  .summary{display:grid; grid-template-columns:repeat(5,1fr); border:1px solid var(--line);
+    border-radius:10px; overflow:hidden; margin-top:12px;}
+  .summary .cell{padding:9px 11px; border-right:1px solid var(--line);}
+  .summary .cell:last-child{border-right:none;}
+  .summary .lbl{font-family:var(--mono); font-size:8px; letter-spacing:.12em; color:var(--moss); text-transform:uppercase; margin-bottom:3px;}
+  .summary .val{font-size:11.5px; font-weight:700; line-height:1.4;}
+  .summary .val small{display:block; font-weight:400; font-size:10px; color:var(--ink-2); margin-top:1px;}
+  .summary .val .mono{font-size:10.5px;}
+
+  /* ---------- SECTION ---------- */
+  .sec{margin-top:15px;}
+  .sec-head{display:flex; align-items:center; gap:10px; margin-bottom:9px;}
+  .sec-idx{font-family:var(--mono); font-weight:700; font-size:11px; color:var(--coral-600);
+    border:1.4px solid var(--coral-600); border-radius:6px; padding:1px 7px;}
+  .sec-head h2{margin:0; font-size:17px; font-weight:900; letter-spacing:.03em;}
+  .sec-head .en{margin-left:auto; font-family:var(--mono); font-size:9px; letter-spacing:.16em; color:var(--ink-3); text-transform:uppercase;}
+  .sec-head .rule{flex:1; height:1px; background:var(--line); margin-left:2px;}
+
+  /* lodge + courses */
+  .lodge{display:flex; flex-wrap:wrap; align-items:center; gap:4px 14px; padding:9px 14px;
+    background:var(--pine-800); color:#eaf1fa; border-radius:9px;}
+  .lodge .name{font-weight:900; font-size:15px; color:#fff;}
+  .lodge .addr{font-size:11px; color:#b9d7ef;}
+  .lodge .tel{font-family:var(--mono); font-weight:700; color:var(--coral); font-size:12px; margin-left:auto;}
+  .courses{list-style:none; margin:8px 0 0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:7px;}
+  .courses li{display:grid; grid-template-columns:auto 1fr; gap:9px; align-items:start;
+    padding:8px 10px; border:1px solid var(--line); border-radius:9px; background:#fbfdfb;}
+  .courses .rt{width:22px; height:22px; flex:none; border-radius:6px; background:var(--moss-soft);
+    display:grid; place-items:center; color:var(--moss); font-size:12px; margin-top:1px;}
+  .courses .cn{font-weight:700; font-size:11.5px; line-height:1.35;}
+  .courses .ca{font-size:9.5px; color:var(--ink-2); line-height:1.4;}
+  .courses .ca .mono{color:var(--ink); font-weight:700; font-size:9.5px;}
+
+  /* emergency */
+  .emg{border:1px solid var(--line); border-radius:9px; overflow:hidden;}
+  .emg .row{display:grid; grid-template-columns:64px 1fr 1.15fr; border-top:1px solid var(--line);}
+  .emg .row:first-child{border-top:none;}
+  .emg .row.head > div{background:var(--pine-800); color:#d3e6f5; font-family:var(--mono); font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; padding:6px 12px;}
+  .emg .row > div{padding:8px 12px; font-size:11px;}
+  .emg .tag{font-weight:900; color:var(--pine-700); background:var(--moss-soft); display:flex; align-items:center;}
+  .emg .nm{font-weight:700; line-height:1.35;}
+  .emg .nm small{font-weight:400; font-size:9px; color:var(--ink-3);}
+  .emg .info{color:var(--ink-2); font-size:10px; display:flex; flex-direction:column; justify-content:center; gap:1px;}
+  .emg .info .mono{color:var(--coral-600); font-weight:700; font-size:11px;}
+
+  /* cost */
+  .ledger{border:1px solid var(--line); border-radius:10px; padding:5px 14px 14px;}
+  .ledger .li{display:flex; justify-content:space-between; gap:14px; padding:7px 0; border-bottom:1px dashed var(--line); align-items:baseline;}
+  .ledger .li .d{font-size:11.5px; color:var(--ink);}
+  .ledger .li .d small{color:var(--ink-3); font-family:var(--mono); font-size:9.5px; margin-left:6px;}
+  .ledger .li .a{font-family:var(--mono); font-weight:700; font-size:12.5px; white-space:nowrap;}
+  .ledger .total{display:flex; justify-content:space-between; align-items:center; margin-top:11px; padding:9px 15px; background:var(--pine-800); color:#fff; border-radius:8px;}
+  .ledger .total .d{font-weight:900; font-size:12.5px; letter-spacing:.08em;}
+  .ledger .total .a{font-family:var(--mono); font-size:19px; font-weight:700; color:var(--coral);}
+  .cost-note{font-size:10px; color:var(--ink-3); margin:9px 2px 0;}
+
+  /* ---------- SCHEDULE ---------- */
+  .daygrid{display:grid; grid-template-columns:1fr 1fr; gap:9px;}
+  .day{border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .day-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 11px; color:#fff;
+    background-image:linear-gradient(90deg,var(--pine-700),var(--pine-800));}
+  .day-head .dno{font-family:var(--mono); font-weight:700; font-size:9px; letter-spacing:.1em; color:var(--coral); border:1px solid rgba(242,166,61,.55); border-radius:5px; padding:1px 6px;}
+  .day-head .date{font-weight:900; font-size:13px;}
+  .day-head .dow{font-size:9.5px; color:#b9d7ef;}
+  .day-head .mi{margin-left:auto; display:flex; gap:5px; font-family:var(--mono); font-size:9px;}
+  .day-head .mi span{background:rgba(255,255,255,.12); border-radius:999px; padding:2px 7px; font-weight:700;}
+  .day-head .mi .m em{color:#a8d4ee; font-style:normal;}
+  .day-head .mi .f em{color:var(--coral); font-style:normal;}
+  .tl{padding:3px 11px 7px;}
+  .tl .ev{display:grid; grid-template-columns:44px 1fr; gap:9px; padding:3.5px 0; align-items:baseline;}
+  .tl .ev + .ev{border-top:1px solid #eef3ee;}
+  .tl .t{font-family:var(--mono); font-weight:700; font-size:10.5px; color:var(--pine-700); text-align:right;}
+  .tl .c{font-size:10.7px; font-weight:500; line-height:1.4;}
+  .tl .c b{color:var(--pine-700);}
+  .tl .c .sub{display:inline-block; margin-top:3px; background:var(--coral-soft); color:var(--coral-600);
+    border-radius:6px; padding:2px 8px; font-size:10px; font-weight:700;}
+  .tl .c .sub::before{content:"▶ "; font-size:7px;}
+  .tl .ev.move .c{color:var(--ink-3);}
+
+  /* mileage */
+  .mileage{border:1px solid var(--line); border-radius:10px; padding:10px 14px 12px; margin-top:10px;}
+  .mileage .mh{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .mileage .mh .t{font-weight:900; font-size:12.5px;}
+  .mileage .mh .lg{margin-left:auto; display:flex; gap:12px; font-family:var(--mono); font-size:9px; color:var(--ink-2);}
+  .mileage .mh .lg i{width:16px; height:8px; border-radius:4px; display:inline-block; vertical-align:middle; margin-right:4px;}
+  .mileage .mrow{display:grid; grid-template-columns:34px 1fr 52px; align-items:center; gap:11px; padding:3.5px 0;}
+  .mileage .mrow .dl{font-family:var(--mono); font-size:10px; color:var(--ink-2);}
+  .mileage .bars{display:grid; gap:4px;}
+  .mileage .bar{height:8px; border-radius:4px;}
+  .mileage .bar.m{background:linear-gradient(90deg,var(--moss),var(--pine-700));}
+  .mileage .bar.f{background:linear-gradient(90deg,var(--coral),var(--coral-600));}
+  .mileage .val{font-family:var(--mono); font-size:10px; font-weight:700; text-align:right;}
+  .mileage .tot{display:flex; justify-content:flex-end; gap:18px; margin-top:9px; padding-top:9px; border-top:1px solid var(--line); font-family:var(--mono); font-size:11px;}
+  .mileage .tot b{font-size:15px;}
+
+  /* ---------- KIT ---------- */
+  .kit-title{display:flex; align-items:center; gap:8px; margin:12px 0 8px;}
+  .kit-title:first-child{margin-top:2px;}
+  .kit-title .kt{font-weight:900; font-size:13px;}
+  .kit-title .badge{font-family:var(--mono); font-size:8.5px; letter-spacing:.08em; padding:2px 8px; border-radius:999px; text-transform:uppercase; color:#fff;}
+  .kit-title .badge.must{background:var(--coral);}
+  .kit-title .badge.gear{background:var(--moss);}
+  .kit-title .line{flex:1; height:1px; background:var(--line);}
+  .kit{display:grid; grid-template-columns:1fr 1fr; gap:6px;}
+  .item{display:grid; grid-template-columns:auto 1fr; gap:9px; align-items:start;
+    border:1px solid var(--line); border-radius:9px; padding:7px 11px; cursor:pointer; transition:.12s;}
+  .item:hover{border-color:var(--moss);}
+  .item .box{width:16px; height:16px; border:1.8px solid var(--moss); border-radius:4px; margin-top:1px; flex:none; display:grid; place-items:center;}
+  .item .box svg{width:11px; height:11px; opacity:0;}
+  .item.done{background:#f3f8f4;}
+  .item.done .box{background:var(--moss);}
+  .item.done .box svg{opacity:1;}
+  .item.done .nm{text-decoration:line-through; color:var(--ink-3);}
+  .item .nm{display:block; font-weight:700; font-size:11.5px; line-height:1.25;}
+  .item .nm .opt{color:var(--ink-3); font-weight:400; font-size:9px;}
+  .item .nt{display:block; font-size:9.5px; color:var(--ink-2); line-height:1.42; margin-top:1.5px;}
+  .item .nt b{color:var(--coral-600);}
+
+  /* ---------- WASH ---------- */
+  .wash-note{font-size:11px; color:var(--ink-2); margin:0 0 4px;}
+  .wash-note b{color:var(--pine-700);}
+  .wash-sub{font-size:9.5px; color:var(--ink-3); margin:0 0 9px;}
+  .wtable{width:100%; border-collapse:separate; border-spacing:0; border:1px solid var(--line); border-radius:9px; overflow:hidden;}
+  .wtable th, .wtable td{padding:8px 10px; text-align:center; font-size:11px; border-bottom:1px solid var(--line); border-right:1px solid var(--line);}
+  .wtable tr:last-child td{border-bottom:none;}
+  .wtable th:last-child, .wtable td:last-child{border-right:none;}
+  .wtable thead th{background:var(--pine-800); color:#d3e6f5; font-family:var(--mono); font-size:9.5px; letter-spacing:.06em;}
+  .wtable tbody th{text-align:left; background:#f6faf7; font-weight:700; font-size:10.5px;}
+  .wtable td.m{color:var(--pine-700); font-weight:700;}
+  .wtable td.f{color:var(--coral-600); font-weight:700;}
+  .wtable td.both{background:var(--coral-soft); color:var(--coral-600); font-weight:700;}
+  .wtable td.na{color:var(--ink-3);}
+
+  /* ---------- NOTICES ---------- */
+  .notices{display:grid; gap:8px;}
+  .notice{display:grid; grid-template-columns:auto 1fr; gap:13px; border-radius:9px; padding:10px 13px; border:1px solid var(--line); border-left:4px solid var(--coral); align-items:start;}
+  .notice .n{font-family:var(--mono); font-weight:700; font-size:17px; color:var(--coral-600); line-height:1;}
+  .notice .txt{font-size:11px; line-height:1.55;}
+  .notice .txt b{color:var(--pine-700);}
+  .notice .txt .h{display:block; font-weight:900; margin-bottom:1px;}
+
+  /* ---------- MINDSET ---------- */
+  .mindset{background:linear-gradient(155deg,var(--pine-700),var(--pine-900)); color:#eaf1fa; border-radius:10px; padding:15px 18px;}
+  .mindset h3{margin:0 0 11px; font-size:11px; font-family:var(--mono); letter-spacing:.14em; color:#a8d4ee; text-transform:uppercase; font-weight:700;}
+  .mindset ul{list-style:none; margin:0; padding:0; display:grid; gap:7px;}
+  .mindset li{display:grid; grid-template-columns:auto 1fr; gap:10px; font-size:11.5px; font-weight:500; align-items:baseline;}
+  .mindset li::before{content:"—"; color:var(--coral); font-weight:700;}
+
+  /* ---------- SIGN ---------- */
+  .sign{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; margin-top:14px; padding:13px 16px; border:1.5px solid var(--pine-800); border-radius:10px;}
+  .sign .lead{font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--moss); text-transform:uppercase; margin-bottom:4px;}
+  .sign .who{font-weight:900; font-size:16px;}
+  .sign .tel{font-family:var(--mono); font-weight:700; color:var(--coral-600); font-size:15px; margin-left:12px;}
+  .sign .org{text-align:right; font-size:10.5px; color:var(--ink-2); line-height:1.6;}
+
+  /* ---------- TOOLBAR (screen only) ---------- */
+  .toolbar{position:fixed; right:20px; bottom:20px; z-index:50; display:flex; gap:10px;}
+  .btn-print{font-family:var(--jp); font-weight:700; font-size:14px; color:#fff; background:var(--coral-600);
+    border:none; border-radius:999px; padding:12px 20px; box-shadow:0 6px 20px rgba(201,128,15,.45);
+    cursor:pointer; display:flex; align-items:center; gap:8px;}
+  .btn-print:hover{background:#a86c0c;}
+  .hint{position:fixed; left:16px; bottom:20px; z-index:50; font-size:11px; color:#3b4a43; background:#fff;
+    border:1px solid var(--line); border-radius:8px; padding:7px 12px; box-shadow:0 3px 10px rgba(0,0,0,.08);}
+  .hint b{color:var(--coral-600);}
+
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+
+  /* ---------- PRINT ---------- */
+  @media print{
+    @page{size:A4; margin:0;}
+    html,body{background:#fff;}
+    body{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    *{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    .sheet{margin:0; box-shadow:none; break-after:page; page-break-after:always;}
+    .sheet:last-of-type{break-after:auto; page-break-after:auto;}
+    .no-print{display:none !important;}
+    .day, .item, .notice, .lodge, .emg, .mindset, .courses li{break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================= SHEET 1 -->
+<div class="sheet">
+  <div class="banner">
+    <svg class="banner-topo" viewBox="0 0 900 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <path class="thin" d="M-30 30 C 160 8, 320 55, 490 30 S 760 4, 940 38"/>
+      <path d="M-30 66 C 180 40, 360 92, 540 62 S 800 34, 940 74"/>
+      <path class="thin" d="M-30 104 C 200 74, 400 128, 590 96 S 820 66, 940 112"/>
+      <path d="M-30 144 C 220 112, 440 168, 640 134 S 850 100, 940 150"/>
+      <path class="thin" d="M-30 184 C 240 150, 470 206, 690 172 S 880 138, 940 188"/>
+      <path d="M470 20 C 540 55, 575 110, 540 165 S 470 250, 520 300"/>
+    </svg>
+    <div class="banner-in">
+      <div>
+        <p class="eyebrow">千葉県立柏中央高等学校 <b>/</b> 陸上競技部 長距離ブロック</p>
+        <h1><span class="yr">令和8年度</span>夏季強化合宿 <span class="sh">しおり</span></h1>
+        <p class="place">菅平高原（長野県上田市）</p>
+      </div>
+      <div class="bchips">
+        <div class="bchip"><span class="k">DATE</span><span class="v">8/3<em>→</em>8/6</span></div>
+        <div class="bchip"><span class="k">DAYS</span><span class="v">3泊4日</span></div>
+        <div class="bchip"><span class="k">TOTAL</span><span class="v">男114<em>/</em>女98<em>km</em></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="cell"><div class="lbl">Period</div><div class="val">3泊4日<small class="mono">8/3–8/6</small></div></div>
+    <div class="cell"><div class="lbl">Meet</div><div class="val">上野駅 中央改札前<small>8/3(月) <span class="mono">8:45</span></small></div></div>
+    <div class="cell"><div class="lbl">Dismiss</div><div class="val">上野駅<small>8/6(木) <span class="mono">16:06</span>頃</small></div></div>
+    <div class="cell"><div class="lbl">Lodge</div><div class="val">ロッヂありす<small>上田市菅平高原</small></div></div>
+    <div class="cell"><div class="lbl">Members</div><div class="val">長距離ブロック<small>部員のみ参加</small></div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><span class="sec-idx">01</span><h2>宿舎・練習場所</h2><span class="rule"></span><span class="en">Base &amp; Courses</span></div>
+    <div class="lodge">
+      <span class="name">ロッヂありす</span>
+      <span class="addr">長野県上田市菅平高原1223-5417</span>
+      <span class="tel mono">0268-74-2589</span>
+    </div>
+    <ul class="courses">
+      <li><span class="rt">〜</span><span><span class="cn">菅平高原ロードランニングコース</span><span class="ca">ウエストランニングコース</span></span></li>
+      <li><span class="rt">〜</span><span><span class="cn">ハリマヤハイパークロカンコース 峰の原高原</span><span class="ca">須坂市大字仁礼3153-654 <span class="mono">026-245-9441</span></span></span></li>
+      <li><span class="rt">〜</span><span><span class="cn">アンダーアーマー菅平サニアパーク</span><span class="ca">上田市菅平高原1278-244 <span class="mono">0268-61-7090</span></span></span></li>
+      <li><span class="rt">〜</span><span><span class="cn">ダボスの丘クロスカントリーコース</span><span class="ca">上田市菅平高原1223-1751 <span class="mono">0268-74-2003</span></span></span></li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><span class="sec-idx">02</span><h2>緊急連絡先</h2><span class="rule"></span><span class="en">Emergency</span></div>
+    <div class="emg">
+      <div class="row head"><div>区分</div><div>名称</div><div>所在地／電話</div></div>
+      <div class="row"><div class="tag">病院</div><div class="nm">菅平高原クリニック <small>整形・内科・外科・皮膚科</small></div><div class="info">上田市菅平高原1223<span class="mono">026-61-7211</span></div></div>
+      <div class="row"><div class="tag">警察</div><div class="nm">上田警察署</div><div class="info">上田市天神3-15-74<span class="mono">0268-22-0110</span></div></div>
+      <div class="row"><div class="tag">　</div><div class="nm">真田町駐在所</div><div class="info">上田市真田町長7172-6<span class="mono">0268-72-2215</span></div></div>
+      <div class="row"><div class="tag">消防</div><div class="nm">真田消防署</div><div class="info">上田市真田町長7174-1<span class="mono">0268-72-0119</span></div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><span class="sec-idx">03</span><h2>費用</h2><span class="rule"></span><span class="en">Cost</span></div>
+    <div class="ledger">
+      <div class="li"><span class="d">宿泊費 <small>1泊3食 7,700円 × 3泊</small></span><span class="a">¥23,100</span></div>
+      <div class="li"><span class="d">交通費 <small>往復電車賃 柏駅〜上田駅</small></span><span class="a">¥10,260</span></div>
+      <div class="li"><span class="d">施設利用料</span><span class="a">¥2,000</span></div>
+      <div class="li"><span class="d">雑費 <small>飲料費・氷代 など</small></span><span class="a">¥2,640</span></div>
+      <div class="total"><span class="d">合計</span><span class="a">¥38,000</span></div>
+    </div>
+    <p class="cost-note">※ 今合宿は長距離ブロック部員のみの参加です。</p>
+  </div>
+
+  <div class="pfoot"><span>令和8年度 夏季強化合宿 しおり</span><span class="r">PAGE 1 / 4 — 概要</span></div>
+</div>
+
+<!-- ============================================================= SHEET 2 -->
+<div class="sheet">
+  <div class="sec" style="margin-top:2px;">
+    <div class="sec-head"><span class="sec-idx">04</span><h2>行程</h2><span class="rule"></span><span class="en">Schedule</span></div>
+    <div class="daygrid">
+
+      <div class="day">
+        <div class="day-head"><span class="dno">DAY 1</span><span class="date">8月3日</span><span class="dow">月</span>
+          <span class="mi"><span class="m">男<em>29</em></span><span class="f">女<em>25</em></span></span></div>
+        <div class="tl">
+          <div class="ev"><div class="t">8:45</div><div class="c">上野駅 中央改札前 <b>集合</b></div></div>
+          <div class="ev move"><div class="t">9:10</div><div class="c">上野駅発（あさま605号）</div></div>
+          <div class="ev move"><div class="t">10:29</div><div class="c">上田駅着 →送迎バス</div></div>
+          <div class="ev move"><div class="t">11:30</div><div class="c">宿舎着</div></div>
+          <div class="ev"><div class="t">11:40</div><div class="c">コース下見Jog</div></div>
+          <div class="ev"><div class="t">13:00</div><div class="c">昼食（各自持参）</div></div>
+          <div class="ev"><div class="t">15:00</div><div class="c">午後練習（ウエスト）<span class="sub">テンポ走 男16km・女12km</span></div></div>
+          <div class="ev"><div class="t">19:30</div><div class="c">夕食・ミーティング</div></div>
+          <div class="ev"><div class="t">22:30</div><div class="c">消灯</div></div>
+        </div>
+      </div>
+
+      <div class="day">
+        <div class="day-head"><span class="dno">DAY 2</span><span class="date">8月4日</span><span class="dow">火</span>
+          <span class="mi"><span class="m">男<em>42</em></span><span class="f">女<em>36</em></span></span></div>
+        <div class="tl">
+          <div class="ev"><div class="t">5:30</div><div class="c">起床</div></div>
+          <div class="ev"><div class="t">6:00</div><div class="c">朝練習（ウエスト）<span class="sub">テンポ走 10km</span></div></div>
+          <div class="ev"><div class="t">8:30</div><div class="c">朝食</div></div>
+          <div class="ev"><div class="t">10:30</div><div class="c">午前練習（峰の原クロカン）<span class="sub">LSD</span></div></div>
+          <div class="ev"><div class="t">13:00</div><div class="c">昼食</div></div>
+          <div class="ev"><div class="t">15:30</div><div class="c">午後練習（峰の原クロカン）<span class="sub">PR or BUR</span></div></div>
+          <div class="ev"><div class="t">19:30</div><div class="c">夕食・ミーティング</div></div>
+          <div class="ev"><div class="t">22:30</div><div class="c">消灯</div></div>
+        </div>
+      </div>
+
+      <div class="day">
+        <div class="day-head"><span class="dno">DAY 3</span><span class="date">8月5日</span><span class="dow">水</span>
+          <span class="mi"><span class="m">男<em>28</em></span><span class="f">女<em>25</em></span></span></div>
+        <div class="tl">
+          <div class="ev"><div class="t">5:30</div><div class="c">起床</div></div>
+          <div class="ev"><div class="t">6:00</div><div class="c">朝練習（ウエスト）<span class="sub">テンポ走 10km</span></div></div>
+          <div class="ev"><div class="t">8:30</div><div class="c">朝食</div></div>
+          <div class="ev"><div class="t">10:30</div><div class="c">午前練習（サニアパーク）<span class="sub">Jog</span></div></div>
+          <div class="ev"><div class="t">13:00</div><div class="c">昼食</div></div>
+          <div class="ev"><div class="t">15:30</div><div class="c">午後練習（サニアパーク）<span class="sub">INT or RT</span></div></div>
+          <div class="ev"><div class="t">19:30</div><div class="c">夕食・ミーティング</div></div>
+          <div class="ev"><div class="t">22:30</div><div class="c">消灯</div></div>
+        </div>
+      </div>
+
+      <div class="day">
+        <div class="day-head"><span class="dno">DAY 4</span><span class="date">8月6日</span><span class="dow">木</span>
+          <span class="mi"><span class="m">男<em>15</em></span><span class="f">女<em>12</em></span></span></div>
+        <div class="tl">
+          <div class="ev"><div class="t">5:30</div><div class="c">起床</div></div>
+          <div class="ev"><div class="t">6:00</div><div class="c">朝練習（ウエスト）<span class="sub">Jog</span></div></div>
+          <div class="ev"><div class="t">7:00</div><div class="c">朝食</div></div>
+          <div class="ev"><div class="t">8:45</div><div class="c">午前練習（ウエスト）<span class="sub">TT 男6+1km・女4+1km</span></div></div>
+          <div class="ev"><div class="t">12:00</div><div class="c">昼食</div></div>
+          <div class="ev move"><div class="t">13:00</div><div class="c">宿舎発 →送迎バス</div></div>
+          <div class="ev move"><div class="t">14:00</div><div class="c">上田駅着</div></div>
+          <div class="ev move"><div class="t">14:41</div><div class="c">上田駅発（あさま620号）</div></div>
+          <div class="ev"><div class="t">16:06</div><div class="c">上野駅着・<b>解散</b></div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="mileage">
+      <div class="mh"><span class="t">想定走行距離</span>
+        <span class="lg"><span><i class="bar m"></i>男子</span><span><i class="bar f"></i>女子</span></span></div>
+      <div class="mrow"><div class="dl">8/3</div><div class="bars"><div class="bar m" style="width:69%"></div><div class="bar f" style="width:60%"></div></div><div class="val">29 / 25</div></div>
+      <div class="mrow"><div class="dl">8/4</div><div class="bars"><div class="bar m" style="width:100%"></div><div class="bar f" style="width:86%"></div></div><div class="val">42 / 36</div></div>
+      <div class="mrow"><div class="dl">8/5</div><div class="bars"><div class="bar m" style="width:67%"></div><div class="bar f" style="width:60%"></div></div><div class="val">28 / 25</div></div>
+      <div class="mrow"><div class="dl">8/6</div><div class="bars"><div class="bar m" style="width:36%"></div><div class="bar f" style="width:29%"></div></div><div class="val">15 / 12</div></div>
+      <div class="tot"><span>合計&nbsp; 男子 <b style="color:var(--pine-700)">114</b>km</span><span>女子 <b style="color:var(--coral-600)">98</b>km</span></div>
+    </div>
+  </div>
+
+  <div class="pfoot"><span>令和8年度 夏季強化合宿 しおり</span><span class="r">PAGE 2 / 4 — 行程</span></div>
+</div>
+
+<!-- ============================================================= SHEET 3 -->
+<div class="sheet">
+  <div class="sec" style="margin-top:2px;">
+    <div class="sec-head"><span class="sec-idx">05</span><h2>持ち物</h2><span class="rule"></span><span class="en">Packing List</span></div>
+
+    <div class="kit-title"><span class="badge must">Must</span><span class="kt">必ず持っていくもの</span><span class="line"></span></div>
+    <div class="kit">
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">病院受診に必要なもの</span><span class="nt">マイナンバーカード等。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">昼食（初日分）</span><span class="nt"><b>8/3は各自持参。</b>電車内で食べられるもの。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">チームTシャツ（または体操服）</span><span class="nt">電車移動時に着用する。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">ユニフォーム</span><span class="nt">最終日TTで使用。無い場合は中学時のもの（それも無ければ指定なし）。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">練習着・チームウェア一式</span><span class="nt">WB・ジャージ・Tシャツ等。雨天を考え多めに。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">常備薬</span><span class="nt">必要に応じて用意する。</span></span></div>
+    </div>
+
+    <div class="kit-title"><span class="badge gear">Gear</span><span class="kt">装備・生活用品</span><span class="line"></span></div>
+    <div class="kit">
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">着替え（5〜6日分）</span><span class="nt">平均19℃(最低16・最高25)。<b>朝練・悪天候は寒い。</b>ブヨ対策に長袖長ズボン1着以上。洗濯機2台あるが多めに。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">靴（2足以上推奨）</span><span class="nt">3部練。山間で天候が変わりやすく雨も。競技場日はスパイクも。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">タオル（大小・複数）</span><span class="nt">用途が多い。大小合わせて複数あるとよい。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">洗濯ネット(大)・洗剤・ハンガー</span><span class="nt">混在防止に大きめネット。<b>洗剤は各自持参。</b>乾燥機なし→干す準備を。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">氷のう（＋固定バンド）</span><span class="nt">宿舎で氷可。一人一つ。<b>ビニール袋は水漏れで不可。</b>固定バンドが便利。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">帽子</span><span class="nt">高地でも日差しが強い。日差し・雨天対策に。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">手袋</span><span class="nt">山間部は朝など冷える。念のため用意。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">移動用/ビニールバッグ</span><span class="nt">ジョグ移動が基本、状況によりバスも。急な雨にビニール袋。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">カッパ（レインコート）</span><span class="nt">雷雨・豪雨以外は屋外。LSDやw-up/c-downで活躍。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">洗面具</span><span class="nt">アメニティは付いていない。各自用意。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">電源タップ・延長コード <span class="opt">任意</span></span><span class="nt">あると便利。部屋は男子2・女子1。</span></span></div>
+      <div class="item"><span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><span class="nm">古新聞紙 <span class="opt">任意</span></span><span class="nt">雨で濡れた靴が乾きやすくなる。</span></span></div>
+    </div>
+  </div>
+
+  <div class="pfoot"><span>令和8年度 夏季強化合宿 しおり</span><span class="r">PAGE 3 / 4 — 持ち物</span></div>
+</div>
+
+<!-- ============================================================= SHEET 4 -->
+<div class="sheet">
+  <div class="sec" style="margin-top:2px;">
+    <div class="sec-head"><span class="sec-idx">06</span><h2>洗濯時間<span style="font-weight:400;font-size:12px;color:var(--ink-2);">（部内ルール）</span></h2><span class="rule"></span><span class="en">Laundry</span></div>
+    <p class="wash-note">宿舎内に洗濯機が<b>2台</b>あり、自由に使えます（利用は無料）。洗剤は各自持参、乾燥機はありませんので各自で干す準備をしてください。</p>
+    <table class="wtable">
+      <thead><tr><th style="text-align:left">洗濯時間</th><th>3日</th><th>4日</th><th>5日</th></tr></thead>
+      <tbody>
+        <tr><th>① 起床時 〜 午前練開始時</th><td class="na">―</td><td class="f">女子</td><td class="m">男子</td></tr>
+        <tr><th>② 午前練終了時 〜 午後練開始時</th><td class="na">―</td><td class="m">男子</td><td class="f">女子</td></tr>
+        <tr><th>③ 午後練終了時 〜 夕食時</th><td class="m">男子</td><td class="m">男子</td><td class="f">女子</td></tr>
+        <tr><th>④ 夕食後 〜 消灯前</th><td class="m">男子</td><td class="f">女子</td><td class="m">男子</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><span class="sec-idx">07</span><h2>諸注意</h2><span class="rule"></span><span class="en">Notes</span></div>
+    <div class="notices">
+      <div class="notice"><span class="n">1</span><span class="txt"><span class="h">上野駅の集合場所</span>常磐線 上野駅で降車後、「新幹線のりかえ口」を目指すと中央改札に出ます。<b>中央改札を一度出て</b>集合してください。</span></div>
+      <div class="notice"><span class="n">2</span><span class="txt">初日（8/3）の昼食は<b>各自持参</b>。忘れずに用意すること。</span></div>
+      <div class="notice"><span class="n">3</span><span class="txt">電車移動時の服装は、<b>チームTシャツ</b>（持っていない者は体操服）を着用すること。</span></div>
+      <div class="notice"><span class="n">4</span><span class="txt">最終日のTTは<b>ユニフォーム</b>で行う。持っていない者は中学時のユニフォーム（それも無ければ指定なし）。</span></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><span class="sec-idx">08</span><h2>心構え</h2><span class="rule"></span><span class="en">Mindset</span></div>
+    <div class="mindset">
+      <h3>Make it count.</h3>
+      <ul>
+        <li>体調管理を怠らず、万全の体調で合宿に臨むこと。</li>
+        <li>高地・暑さに留意し、こまめな水分補給とアイシングで体を回復させること。</li>
+        <li>合宿を通し、規律ある生活習慣を身につけること。</li>
+        <li>寝食を共にし、部の結束を強めること。</li>
+        <li>明確な目的意識を持ち、有意義な練習の機会とすること。</li>
+        <li>生活のON／OFFをおろそかにしないこと。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="sign">
+    <div>
+      <div class="lead">引率顧問</div>
+      <span class="who">三宅 悠太</span>
+    </div>
+    <div class="org">千葉県立柏中央高等学校<br>陸上競技部 長距離ブロック</div>
+  </div>
+
+  <div class="pfoot"><span>令和8年度 夏季強化合宿 しおり</span><span class="r">PAGE 4 / 4 — 洗濯・諸注意・心構え</span></div>
+</div>
+
+<!-- toolbar -->
+<div class="hint no-print">画面はA4見開き。右下の<b>印刷</b>から用紙サイズ<b>A4・余白なし</b>で出力してください。</div>
+<div class="toolbar no-print">
+  <button class="btn-print" onclick="window.print()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    A4で印刷
+  </button>
+</div>
+
+<script>
+  document.querySelectorAll('.item').forEach(function(el){
+    el.addEventListener('click', function(){ el.classList.toggle('done'); });
+  });
+</script>
+</body>
+</html>

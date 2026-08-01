@@ -78,6 +78,7 @@ import DiaryListItem from "./DiaryListItem";
 import CoachReportView from "./CoachReportView";
 import MonthlyReportView from "./MonthlyReportView";
 import CalendarView from "./CalendarView";
+import DocumentsModal from "./DocumentsModal";
 import { usePrint } from "../hooks/usePrint";
 import LapTimeModal from "./LapTimeModal";
 import TeamRaceReport from "./TeamRaceReport";
@@ -266,6 +267,7 @@ const CoachView = (props) => {
   const [onlyPendingFeedback, setOnlyPendingFeedback] = useState(false);
   // カードを開いた時点の送り順を固定する（FB送信でフィルタから外れても 0/N に戻らないように）
   const [readingNavIds, setReadingNavIds] = useState(null);
+  const [showDocs, setShowDocs] = useState(false);
   const [readingCard, setReadingCard] = useState(null);
   const [coachFeedbackInput, setCoachFeedbackInput] = useState("");
   const [showTeamReportId, setShowTeamReportId] = useState(null);
@@ -644,6 +646,13 @@ const CoachView = (props) => {
           {/* モバイル用アイコン（右端） */}
           <div className="md:hidden flex items-center gap-1">
             <button
+              onClick={() => setShowDocs(true)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white transition-all"
+              aria-label="資料"
+            >
+              <FileText size={19} />
+            </button>
+            <button
               onClick={handleOpenNotif}
               className={`relative p-1.5 rounded-lg transition-all ${unreadCount > 0 ? "text-rose-400" : "text-slate-400"}`}
             >
@@ -689,6 +698,12 @@ const CoachView = (props) => {
           </nav>
         </div>
         <div className="hidden md:block space-y-4 mt-auto">
+          <button
+            onClick={() => setShowDocs(true)}
+            className="flex items-center gap-2 font-bold text-sm text-slate-400 hover:text-white transition-all"
+          >
+            <FileText size={18} /> 資料
+          </button>
           <button
             onClick={handleOpenNotif}
             className={`flex items-center gap-2 font-bold text-sm transition-all relative ${
@@ -4069,6 +4084,8 @@ const CoachView = (props) => {
           </div>
         </div>
       )}
+
+      <DocumentsModal open={showDocs} onClose={() => setShowDocs(false)} />
     </div>
   );
 };

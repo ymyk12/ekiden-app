@@ -38,6 +38,7 @@ import {
   Calendar,
   Bell,
   X,
+  FileText,
 } from "lucide-react";
 
 import { ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
@@ -50,6 +51,7 @@ import DiaryListItem from "./DiaryListItem";
 import RaceCardEntry from "./RaceCardEntry";
 import TeamRaceReport from "./TeamRaceReport";
 import CalendarView from "./CalendarView";
+import DocumentsModal from "./DocumentsModal";
 
 const AthleteView = (props) => {
   // App.js から渡されたデータ（Props）をすべて展開します
@@ -212,6 +214,7 @@ const AthleteView = (props) => {
   const [isQuarterExpanded, setIsQuarterExpanded] = useState(false);
   const [teamSubView, setTeamSubView] = useState("ranking");
   const [diaryDetailLog, setDiaryDetailLog] = useState(null);
+  const [showDocs, setShowDocs] = useState(false);
 
   // Esc キーで開いている最前面のモーダルを閉じる（PC操作向け）
   useEffect(() => {
@@ -583,6 +586,26 @@ const AthleteView = (props) => {
                 </div>
               </div>
             )}
+
+            <button
+              onClick={() => setShowDocs(true)}
+              className="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 flex items-center justify-between active:scale-[0.99] hover:border-blue-200 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-50 p-2.5 rounded-xl flex-shrink-0">
+                  <FileText size={18} className="text-blue-500" />
+                </div>
+                <div className="text-left">
+                  <p className="font-black text-xs uppercase tracking-widest text-slate-400">
+                    Documents
+                  </p>
+                  <p className="font-bold text-sm text-slate-700">
+                    資料・合宿のしおり
+                  </p>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-slate-300" />
+            </button>
 
             <div className="bg-white p-6 rounded-[2.5rem] shadow-md shadow-blue-900/5 border border-slate-100/80 space-y-6">
               <div>
@@ -2381,6 +2404,8 @@ const AthleteView = (props) => {
           </div>
         </div>
       )}
+
+      <DocumentsModal open={showDocs} onClose={() => setShowDocs(false)} />
     </div> //  AthleteViewの最後の閉じタグ
   );
 };
