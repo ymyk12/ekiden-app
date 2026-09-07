@@ -599,9 +599,7 @@ const AthleteView = (props) => {
                   <p className="font-black text-xs uppercase tracking-widest text-slate-400">
                     Documents
                   </p>
-                  <p className="font-bold text-sm text-slate-700">
-                    資料・合宿のしおり
-                  </p>
+                  <p className="font-bold text-sm text-slate-700">資料</p>
                 </div>
               </div>
               <ChevronRight size={18} className="text-slate-300" />
