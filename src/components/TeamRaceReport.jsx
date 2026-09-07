@@ -117,6 +117,18 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
 
   const submittedRunnerIds = new Set(reportCards.map((c) => c.runnerId));
   const unsubmittedRunners = (allRunners || []).filter((r) => !submittedRunnerIds.has(r.id));
+  // 提出済みの選手（複数日・複数種目に出た場合、追加カードを登録できるようにする）
+  const submittedRunners = (allRunners || []).filter((r) => submittedRunnerIds.has(r.id));
+  // 選手ごとの出場種目（提出済みグループに「1500m・5000m」等と表示）
+  const eventsByRunner = reportCards.reduce((m, c) => {
+    const label =
+      c.distance === "その他"
+        ? c.ekidenDistance || "その他"
+        : c.distance || c.ekidenDistance || "";
+    if (!m[c.runnerId]) m[c.runnerId] = [];
+    if (label && !m[c.runnerId].includes(label)) m[c.runnerId].push(label);
+    return m;
+  }, {});
 
   const [isOfficialResultOpen, setIsOfficialResultOpen] = useState(false);
   const [officialResultText, setOfficialResultText] = useState("");
@@ -397,11 +409,11 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
             <FileText size={20} />
           </button>
         )}
-        {canEdit && onAddCard && unsubmittedRunners.length > 0 && (
+        {canEdit && onAddCard && (allRunners || []).length > 0 && (
           <button
             onClick={() => { setAddCardInput({ ...EMPTY_ADD, date: reportTour.startDate || "" }); setIsAddingCard(true); }}
             className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors print:hidden"
-            title="未提出選手のカードを追加"
+            title="カードを追加（未提出・別日/別種目の追加とも）"
           >
             <Plus size={20} />
           </button>
@@ -913,15 +925,26 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
               <select
                 value={addCardInput.runnerId}
                 onChange={(e) => {
-                  const r = unsubmittedRunners.find((r) => r.id === e.target.value);
+                  const r = (allRunners || []).find((r) => r.id === e.target.value);
                   setAddCardInput((p) => ({ ...p, runnerId: e.target.value, runnerName: r ? `${r.lastName} ${r.firstName}` : "" }));
                 }}
                 className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
               >
                 <option value="">選手を選択...</option>
-                {unsubmittedRunners.map((r) => (
-                  <option key={r.id} value={r.id}>{r.lastName} {r.firstName}</option>
-                ))}
+                {unsubmittedRunners.length > 0 && (
+                  <optgroup label="未提出">
+                    {unsubmittedRunners.map((r) => (
+                      <option key={r.id} value={r.id}>{r.lastName} {r.firstName}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {submittedRunners.length > 0 && (
+                  <optgroup label="提出済み（別日・別種目を追加）">
+                    {submittedRunners.map((r) => (
+                      <option key={r.id} value={r.id}>{r.lastName} {r.firstName}（{(eventsByRunner[r.id] || []).join("・")}）</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
             {/* レース日 */}
