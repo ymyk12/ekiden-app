@@ -23,33 +23,15 @@ import {
 } from "lucide-react";
 import LapTimeModal from "./LapTimeModal";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
-import { timeToSeconds, analyzeLaps } from "../utils/lapUtils";
+import { timeToSeconds, secondsToTime, analyzeLaps } from "../utils/lapUtils";
 
-// SmartLapInput と同じロジックで resultTime に合わせて最終 LAP を逆算する
-const adjustLapTimesForResult = (lapTimesStr, newResultTime, raceType, distanceStr, ekidenDist) => {
-  if (!lapTimesStr || !newResultTime) return lapTimesStr;
-
-  const ts = (str) => {
-    if (!str) return 0;
-    const c = str.replace(/[()（）]/g, "");
-    const m = c.match(/(?:(\d+)')?(?:(\d+)")?(\d+)?/);
-    if (!m) return 0;
-    return parseFloat(m[1] || 0) * 60 + parseFloat(m[2] || 0) + parseFloat(m[3] || 0) / 100;
-  };
-  const st = (sec) => {
-    if (sec <= 0) return "";
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    const c = Math.round((sec % 1) * 100);
-    return m > 0 ? `${m}'${String(s).padStart(2,"0")}"${String(c).padStart(2,"0")}` : `${s}"${String(c).padStart(2,"0")}`;
-  };
-
-  // 距離を m 換算
+// 種目から区間（splitPoints）を生成する。SmartLapInput と同一ロジック。
+// 例: 1500m→[400,800,1000,1200,1500] / 3000m→400m刻み＋km / 3000mSC→1000m刻み
+const buildSplits = (raceType, distanceStr, ekidenDist) => {
   const dStr = ekidenDist ? String(ekidenDist) : distanceStr || "";
   let totalDist = parseInt(dStr.replace(/[^0-9]/g, "")) || 0;
   if (dStr.toLowerCase().includes("km")) totalDist *= 1000;
 
-  // 区間リスト生成（SmartLapInput と同一ロジック）
   let splits = [];
   const t = (raceType || "").toLowerCase();
   // SC(障害)は raceType ではなく distance 側に入るため dStr で判定する
@@ -71,6 +53,29 @@ const adjustLapTimesForResult = (lapTimesStr, newResultTime, raceType, distanceS
       if (splits[splits.length - 1] !== totalDist) splits.push(totalDist);
     }
   }
+  return splits;
+};
+
+// SmartLapInput と同じロジックで resultTime に合わせて最終 LAP を逆算する
+const adjustLapTimesForResult = (lapTimesStr, newResultTime, raceType, distanceStr, ekidenDist) => {
+  if (!lapTimesStr || !newResultTime) return lapTimesStr;
+
+  const ts = (str) => {
+    if (!str) return 0;
+    const c = str.replace(/[()（）]/g, "");
+    const m = c.match(/(?:(\d+)')?(?:(\d+)")?(\d+)?/);
+    if (!m) return 0;
+    return parseFloat(m[1] || 0) * 60 + parseFloat(m[2] || 0) + parseFloat(m[3] || 0) / 100;
+  };
+  const st = (sec) => {
+    if (sec <= 0) return "";
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    const c = Math.round((sec % 1) * 100);
+    return m > 0 ? `${m}'${String(s).padStart(2,"0")}"${String(c).padStart(2,"0")}` : `${s}"${String(c).padStart(2,"0")}`;
+  };
+
+  const splits = buildSplits(raceType, distanceStr, ekidenDist);
   if (splits.length === 0) return lapTimesStr;
 
   // 既存 lapTimes を解析
@@ -134,6 +139,12 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
   const [officialResultText, setOfficialResultText] = useState("");
   const [parsedResults, setParsedResults] = useState(null);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
+
+  // LAPタイム一括入力
+  const [isLapBatchOpen, setIsLapBatchOpen] = useState(false);
+  const [lapBatchText, setLapBatchText] = useState("");
+  const [parsedLaps, setParsedLaps] = useState(null);
+  const [isSavingLapBatch, setIsSavingLapBatch] = useState(false);
 
   // 任意形式のタイム文字列を「分'秒"コンマ秒」形式に統一する
   const normalizeTimeStr = (str) => {
@@ -248,6 +259,138 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     }
     return entries;
   };
+
+  // 手元記録のLAPタイムを一括入力する。
+  // 入力例:
+  //   男子1500m
+  //   小池
+  //   64"36
+  //   71"80 2'16"16   ← 各行「区間タイム [累積タイム]」
+  // 各ブロックのLAP行数が種目の区間数と一致すれば、順に区間へ割り当てる。
+  const parseLapText = (text) => {
+    // 全角記号を正規化。種目見出しは必ず行頭に来るよう改行を挿入
+    let norm = (text || "")
+      .replace(/　/g, " ")
+      .replace(/[Ｓｓ]/g, "S")
+      .replace(/[Ｃｃ]/g, "C")
+      .replace(/[Ｍｍ]/g, "m")
+      .replace(/[’′`´]/g, "'")
+      .replace(/[”″]/g, '"');
+    norm = norm.replace(/(男子|女子)(?=\s*\d+\s*m)/g, "\n$1");
+    const rawLines = norm.split(/\n/).map((l) => l.trim()).filter(Boolean);
+
+    const HEADER_RE = /^(男子|女子)\s*(\d+)\s*m\s*(SC)?/i;
+    const TIME_RE = /(?:\d+')?\d+"\d+/g;
+    const HAS_JP = (s) => /[぀-鿿一-龿]/.test(s);
+    const nn = (s) => (s || "").replace(/\s/g, "");
+    const cardEvent = (c) =>
+      ((c.distance === "その他" ? c.ekidenDistance : c.distance) || "")
+        .replace(/\s/g, "").toLowerCase();
+
+    // ブロック分割（1見出しの下に複数選手を並べてもOK）
+    const cleanName = (line) =>
+      line.replace(/[a-zA-Z0-9()（）\-_/\\・,.]/g, " ").replace(/\s+/g, " ").trim();
+    const blocks = [];
+    let cur = null;
+    for (const line of rawLines) {
+      const h = line.match(HEADER_RE);
+      if (h) {
+        if (cur) blocks.push(cur);
+        cur = { distanceStr: `${h[2]}m${h[3] ? "SC" : ""}`, name: "", laps: [] };
+        continue;
+      }
+      if (!cur) continue;
+      const times = line.match(TIME_RE);
+      if (times && times.length) {
+        // 各行の先頭（区間タイム）のみ読み取る。以降の累積タイムは無視して自動計算する
+        cur.laps.push({ seg: times[0] });
+        continue;
+      }
+      if (HAS_JP(line)) {
+        const nm = cleanName(line);
+        if (!nm) continue;
+        if (!cur.name) {
+          cur.name = nm;
+        } else if (cur.laps.length > 0) {
+          // 同一種目の次の選手：現ブロックを確定し、種目を引き継いで新ブロックを開始
+          blocks.push(cur);
+          cur = { distanceStr: cur.distanceStr, name: nm, laps: [] };
+        } else {
+          // 名前が連続（LAP無し）→ 上書き
+          cur.name = nm;
+        }
+      }
+    }
+    if (cur) blocks.push(cur);
+
+    // カードに自動マッチ（プレビューで選び直し・編集できるよう最小限の形で返す）
+    return blocks
+      .filter((b) => b.name && b.laps.length > 0)
+      .map((b) => {
+        const evLower = b.distanceStr.toLowerCase();
+        const card =
+          reportCards.find(
+            (c) => nn(c.runnerName).includes(nn(b.name)) && cardEvent(c) === evLower,
+          ) ||
+          reportCards.find((c) => nn(c.runnerName).includes(nn(b.name)));
+        const splits = card ? buildSplits(card.raceType, card.distance, card.ekidenDistance) : [];
+        // 各区間にデフォルトの距離を仮設定（確認画面で手修正できる）
+        const laps =
+          splits.length === b.laps.length
+            ? b.laps.map((l, i) => ({ ...l, dist: splits[i] }))
+            : b.laps.map((l) => ({ ...l, dist: "" }));
+        return { distanceStr: b.distanceStr, name: b.name, cardId: card ? card.id : "", laps };
+      });
+  };
+
+  // プレビュー行から表示・保存用の値を計算（カード選択・LAP編集のたびに再計算する）
+  const normLapTime = (t) =>
+    (t || "").replace(/[’′`´]/g, "'").replace(/[”″]/g, '"').replace(/\.\s*$/, "").replace(/\s/g, "");
+  const deriveLapEntry = (entry) => {
+    const card = reportCards.find((c) => c.id === entry.cardId) || null;
+    const defaultSplits = card ? buildSplits(card.raceType, card.distance, card.ekidenDistance) : [];
+    const laps = entry.laps || [];
+    // 累積は区間タイムの合計で自動計算する（手入力の累積は読み取らない＝入力ミスを防ぐ）
+    let run = 0;
+    const lapCumuls = laps.map((l) => {
+      run += timeToSeconds(normLapTime(l.seg));
+      return run > 0 ? secondsToTime(run) : "";
+    });
+    // 有効条件: すべての区間に有効な距離(>0・昇順)と区間タイムがある
+    const dists = laps.map((l) => parseInt(l.dist) || 0);
+    const segsValid = laps.length > 0 && laps.every((l) => timeToSeconds(normLapTime(l.seg)) > 0);
+    const distsValid =
+      dists.length > 0 && dists.every((dd, i) => dd > 0 && (i === 0 || dd > dists[i - 1]));
+    const fits = segsValid && distsValid;
+    const distsMatchDefault =
+      defaultSplits.length === laps.length && dists.every((dd, i) => dd === defaultSplits[i]);
+    let lapTimes = "";
+    let resultTime = "";
+    if (fits) {
+      let cumSec = 0;
+      lapTimes = laps
+        .map((l) => {
+          const segSec = timeToSeconds(normLapTime(l.seg));
+          cumSec += segSec;
+          return `${parseInt(l.dist)}m:${secondsToTime(segSec)}(${secondsToTime(cumSec)})`;
+        })
+        .join(" ");
+      resultTime = secondsToTime(cumSec);
+    }
+    // 既存データ（上書きになる場合の差分表示用）
+    const existingResult = (card && card.resultTime) || "";
+    const hasExistingLaps = !!(card && card.lapTimes);
+    const resultChanged =
+      !!(fits && existingResult) &&
+      Math.abs(timeToSeconds(normLapTime(existingResult)) - timeToSeconds(resultTime)) > 0.005;
+    return {
+      card, defaultSplits, distsMatchDefault, fits, lapTimes, resultTime, lapCumuls,
+      existingResult, hasExistingLaps, resultChanged,
+    };
+  };
+  const updateLapEntry = (idx, updater) =>
+    setParsedLaps((prev) => prev.map((e, i) => (i === idx ? updater(e) : e)));
+
   const [editingFullCard, setEditingFullCard] = useState(null);
   const [fullEditInput, setFullEditInput] = useState({});
   const [isSavingFull, setIsSavingFull] = useState(false);
@@ -407,6 +550,15 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
             title="公式記録を一括入力"
           >
             <FileText size={20} />
+          </button>
+        )}
+        {canEdit && onEditCard && (
+          <button
+            onClick={() => { setLapBatchText(""); setParsedLaps(null); setIsLapBatchOpen(true); }}
+            className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors print:hidden"
+            title="LAPタイムを一括入力"
+          >
+            <Timer size={20} />
           </button>
         )}
         {canEdit && onAddCard && (allRunners || []).length > 0 && (
@@ -896,6 +1048,206 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                     className="flex-1 py-2.5 rounded-2xl font-black text-sm bg-blue-600 text-white hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
                   >
                     <Save size={14} /> {isSavingBatch ? "反映中..." : `${parsedResults.filter((e) => e.card).length}件を反映`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* LAPタイム一括入力モーダル */}
+    {isLapBatchOpen && (
+      <div className="fixed inset-0 z-[300] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+        <div className="bg-white w-full max-w-lg max-h-[90dvh] rounded-[2rem] flex flex-col shadow-2xl animate-in zoom-in-95">
+          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 flex-shrink-0">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">LAP Times 一括入力</p>
+              <p className="font-black text-lg text-slate-800">{reportTour.name}</p>
+            </div>
+            <button onClick={() => setIsLapBatchOpen(false)} className="p-2 rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
+            {!parsedLaps ? (
+              <>
+                <p className="text-xs text-slate-500 font-bold leading-relaxed">
+                  種目見出し → 選手名 → 各行にLAP（区間タイム）の順で貼り付けてください。<br/>
+                  <span className="text-blue-600">同じ種目に複数の選手</span>を続けて書けます（見出しは1回でOK）。複数種目もまとめて貼り付け可。<br/>
+                  <span className="text-amber-600">累積タイムは区間の合計から自動計算</span>します（貼り付けに含まれていても読み取りません）。<br/>
+                  <span className="text-slate-400">例：</span> <span className="font-mono text-slate-400">男子1500m / 小池 / 64"36 / 71"80 … / 田沼 / 65"00 …</span>
+                </p>
+                <textarea
+                  value={lapBatchText}
+                  onChange={(e) => setLapBatchText(e.target.value)}
+                  placeholder={"男子1500m\n小池\n64\"36\n71\"80 2'16\"16\n…"}
+                  rows={8}
+                  className="w-full p-3 bg-slate-50 rounded-xl text-sm font-mono text-slate-700 outline-none border border-slate-200 focus:border-blue-400 resize-none"
+                />
+                <button
+                  onClick={() => setParsedLaps(parseLapText(lapBatchText))}
+                  disabled={!lapBatchText.trim()}
+                  className="w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 bg-slate-800 text-white hover:bg-slate-700 active:scale-95 transition-all disabled:opacity-40"
+                >
+                  解析する
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {parsedLaps.length === 0 && (
+                    <p className="text-sm text-rose-500 font-bold text-center py-4">解析できるデータが見つかりませんでした。形式を確認してください。</p>
+                  )}
+                  {parsedLaps.map((entry, i) => {
+                    const d = deriveLapEntry(entry);
+                    const ok = d.card && d.fits;
+                    return (
+                      <div key={i} className={`rounded-2xl border p-3 space-y-2 ${ok ? "bg-emerald-50 border-emerald-100" : "bg-amber-50 border-amber-200"}`}>
+                        {/* ステータス行 */}
+                        <div className="flex items-center gap-2">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${ok ? "bg-emerald-500" : "bg-amber-500"}`}>
+                            {ok ? <Check size={13} className="text-white" /> : <AlertCircle size={13} className="text-white" />}
+                          </div>
+                          <p className="text-[11px] font-bold text-slate-500 flex-1 min-w-0 truncate">
+                            解析: {entry.name}（{entry.distanceStr}）
+                          </p>
+                          <span className={`text-[10px] font-black flex-shrink-0 ${ok ? "text-emerald-600" : "text-amber-600"}`}>
+                            {!d.card
+                              ? "カード未選択"
+                              : d.fits
+                                ? `${entry.laps.length}区間 · ${d.resultTime}`
+                                : "距離・タイムを確認"}
+                          </span>
+                        </div>
+                        {/* 既存データがある場合は差分・上書き警告 */}
+                        {d.card && (d.existingResult || d.hasExistingLaps) && (
+                          <div className="text-[10px] font-bold text-amber-700 bg-amber-100/70 rounded-lg px-2 py-1.5 space-y-0.5">
+                            <p className="flex items-center gap-1">
+                              <AlertCircle size={11} className="flex-shrink-0" />
+                              既に記録あり{d.fits ? "・上書きします" : ""}
+                            </p>
+                            {d.existingResult && (
+                              <p className="font-mono pl-4">
+                                結果 {d.existingResult}
+                                {d.fits
+                                  ? d.resultChanged
+                                    ? ` → ${d.resultTime}`
+                                    : "（変更なし）"
+                                  : ""}
+                              </p>
+                            )}
+                            {d.hasExistingLaps && (
+                              <p className="pl-4">既存のLAPを{d.fits ? "置き換えます" : "保持（未反映）"}</p>
+                            )}
+                          </div>
+                        )}
+                        {/* 対象カード選択 */}
+                        <select
+                          value={entry.cardId}
+                          onChange={(e) => {
+                            const cid = e.target.value;
+                            const c = reportCards.find((x) => x.id === cid);
+                            const sp = c ? buildSplits(c.raceType, c.distance, c.ekidenDistance) : [];
+                            updateLapEntry(i, (en) => ({
+                              ...en,
+                              cardId: cid,
+                              laps:
+                                sp.length === en.laps.length
+                                  ? en.laps.map((l, k) => ({ ...l, dist: sp[k] }))
+                                  : en.laps,
+                            }));
+                          }}
+                          className="w-full p-2 bg-white rounded-lg text-xs font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
+                        >
+                          <option value="">カードを選択...</option>
+                          {reportCards.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.runnerName}（{c.distance === "その他" ? c.ekidenDistance : c.distance}）
+                            </option>
+                          ))}
+                        </select>
+                        {/* LAP 行（区間・累積を手直し／追加・削除できる） */}
+                        <div className="space-y-1">
+                          {entry.laps.map((lap, li) => (
+                            <div key={li} className="flex items-center gap-1">
+                              <input
+                                value={lap.dist ?? ""}
+                                onChange={(e) => updateLapEntry(i, (en) => ({ ...en, laps: en.laps.map((l, k) => (k === li ? { ...l, dist: e.target.value.replace(/[^0-9]/g, "") } : l)) }))}
+                                inputMode="numeric"
+                                placeholder="m"
+                                title="区間の距離(m)"
+                                className="w-12 p-1.5 bg-white rounded-lg text-[11px] font-mono text-slate-600 text-right outline-none border border-slate-200 focus:border-blue-400 flex-shrink-0"
+                              />
+                              <span className="text-[10px] text-slate-400 flex-shrink-0">m</span>
+                              <input
+                                value={lap.seg}
+                                onChange={(e) => updateLapEntry(i, (en) => ({ ...en, laps: en.laps.map((l, k) => (k === li ? { ...l, seg: e.target.value } : l)) }))}
+                                placeholder="区間"
+                                className="flex-1 min-w-0 p-1.5 bg-white rounded-lg text-xs font-mono text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
+                              />
+                              <span className="w-16 flex-shrink-0 p-1.5 text-[11px] font-mono text-slate-400 truncate text-right" title="累積（自動計算）">
+                                {d.lapCumuls[li] || ""}
+                              </span>
+                              <button
+                                onClick={() => updateLapEntry(i, (en) => ({ ...en, laps: en.laps.filter((_, k) => k !== li) }))}
+                                className="p-1 text-slate-300 hover:text-rose-500 flex-shrink-0"
+                                title="この区間を削除"
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="flex items-center gap-3 mt-1">
+                            <button
+                              onClick={() => updateLapEntry(i, (en) => ({ ...en, laps: [...en.laps, { seg: "", dist: "" }] }))}
+                              className="text-[10px] font-black text-blue-500 hover:text-blue-600 flex items-center gap-1"
+                            >
+                              <Plus size={11} /> 区間を追加
+                            </button>
+                            {d.card && d.defaultSplits.length === entry.laps.length && !d.distsMatchDefault && (
+                              <button
+                                onClick={() => updateLapEntry(i, (en) => ({ ...en, laps: en.laps.map((l, k) => ({ ...l, dist: d.defaultSplits[k] })) }))}
+                                className="text-[10px] font-black text-slate-400 hover:text-slate-600"
+                                title="距離を種目の既定値に戻す"
+                              >
+                                デフォルト距離に戻す
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button onClick={() => setParsedLaps(null)} className="flex-1 py-2.5 rounded-2xl font-black text-sm bg-slate-100 text-slate-500 hover:bg-slate-200 active:scale-95 transition-all">
+                    やり直す
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setIsSavingLapBatch(true);
+                      try {
+                        for (const entry of parsedLaps) {
+                          const d = deriveLapEntry(entry);
+                          if (!d.card || !d.fits) continue;
+                          await onEditCard(d.card.id, {
+                            lapTimes: d.lapTimes,
+                            ...(d.resultTime ? { resultTime: d.resultTime } : {}),
+                          });
+                        }
+                        setIsLapBatchOpen(false);
+                        setParsedLaps(null);
+                        setLapBatchText("");
+                      } finally {
+                        setIsSavingLapBatch(false);
+                      }
+                    }}
+                    disabled={!parsedLaps.some((e) => deriveLapEntry(e).fits) || isSavingLapBatch}
+                    className="flex-1 py-2.5 rounded-2xl font-black text-sm bg-blue-600 text-white hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    <Save size={14} /> {isSavingLapBatch ? "反映中..." : `${parsedLaps.filter((e) => deriveLapEntry(e).fits).length}件を反映`}
                   </button>
                 </div>
               </>
