@@ -276,10 +276,13 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
       .replace(/[Ｍｍ]/g, "m")
       .replace(/[’′`´]/g, "'")
       .replace(/[”″]/g, '"');
-    norm = norm.replace(/(男子|女子)(?=\s*\d+\s*m)/g, "\n$1");
+    // 性別見出し（男子/女子）が前の行末に連結しているとき改行で切り離す
+    norm = norm.replace(/(男子|女子)(?=\s*\d)/g, "\n$1");
     const rawLines = norm.split(/\n/).map((l) => l.trim()).filter(Boolean);
 
-    const HEADER_RE = /^(男子|女子)\s*(\d+)\s*m\s*(SC)?/i;
+    // 見出し: 「男子1500m」のほか、性別やmの省略、見出しと選手名が同じ行（例「800田村」）にも対応。
+    //   g1=距離 / g2=SC / g3=同じ行に続く選手名（任意）
+    const HEADER_RE = /^(?:(?:男子|女子|男|女)\s*)?(\d{3,5})\s*m?\s*(SC)?\s*(.*)$/i;
     const TIME_RE = /(?:\d+')?\d+"\d+/g;
     const HAS_JP = (s) => /[぀-鿿一-龿]/.test(s);
     const nn = (s) => (s || "").replace(/\s/g, "");
@@ -293,10 +296,13 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     const blocks = [];
     let cur = null;
     for (const line of rawLines) {
-      const h = line.match(HEADER_RE);
+      // 区間タイム（" を含む行）は見出しと誤認しない
+      const h = line.includes('"') ? null : line.match(HEADER_RE);
       if (h) {
         if (cur) blocks.push(cur);
-        cur = { distanceStr: `${h[2]}m${h[3] ? "SC" : ""}`, name: "", laps: [] };
+        cur = { distanceStr: `${h[1]}m${h[2] ? "SC" : ""}`, name: "", laps: [] };
+        const gluedName = cleanName(h[3] || "");
+        if (gluedName) cur.name = gluedName; // 「800田村」のように同じ行に選手名があるとき
         continue;
       }
       if (!cur) continue;
