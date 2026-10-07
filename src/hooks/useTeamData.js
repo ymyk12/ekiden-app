@@ -39,7 +39,7 @@ export const useTeamData = (user, role, fetchCutoff) => {
 
   useEffect(() => {
     if (!user) return; // ユーザーがいない時は何もしない
-    const timeout = setTimeout(() => setDataLoading(false), 5000);
+    const timeout = setTimeout(() => setDataLoading(false), 3000);
 
     const settingsDoc = settingsDocRef();
 
@@ -68,22 +68,31 @@ export const useTeamData = (user, role, fetchCutoff) => {
       })
       .catch((e) => console.log("Settings init error", e));
 
+    // 大量の logs 購読は初期描画・ローディング解除を遅らせるため、
+    // runners 取得後（＝画面表示が確定した後）に開始する。来ない場合は保険のタイマーで開始。
+    let unsubLogs = () => {};
+    let logsAttached = false;
+    const attachLogs = () => {
+      if (logsAttached) return;
+      logsAttached = true;
+      // 監督・管理者以外は fetchCutoff で取得範囲を制限する
+      let logsQuery = colRef("logs");
+      if (role !== ROLES.COACH && role !== ROLES.ADMIN && fetchCutoff) {
+        logsQuery = query(logsQuery, where("date", ">=", fetchCutoff));
+      }
+      unsubLogs = onSnapshot(logsQuery, (snap) => {
+        setAllLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      });
+    };
+
     // 各コレクションの監視（リアルタイムリスナー）
     const unsubRunners = onSnapshot(colRef("runners"), (snap) => {
       setAllRunners(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       setDataLoading(false);
       clearTimeout(timeout);
+      attachLogs();
     });
-
-    // 監督・管理者以外は fetchCutoff で取得範囲を制限する
-    let logsQuery = colRef("logs");
-    if (role !== ROLES.COACH && role !== ROLES.ADMIN && fetchCutoff) {
-      logsQuery = query(logsQuery, where("date", ">=", fetchCutoff));
-    }
-
-    const unsubLogs = onSnapshot(logsQuery, (snap) => {
-      setAllLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const logsTimer = setTimeout(attachLogs, 800);
 
     const unsubTournaments = onSnapshot(colRef("tournaments"), (snapshot) => {
       const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -132,6 +141,7 @@ export const useTeamData = (user, role, fetchCutoff) => {
       unsubTournaments();
       unsubRaceCards();
       clearTimeout(timeout);
+      clearTimeout(logsTimer);
     };
   }, [user, role, fetchCutoff]);
 

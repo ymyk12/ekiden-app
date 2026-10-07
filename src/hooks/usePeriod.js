@@ -140,13 +140,12 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
   }, [selectedPeriod, availablePeriods]);
 
   useEffect(() => {
-    if (targetPeriod && targetPeriod.start) {
-      setFetchCutoff((prev) => {
-        if (targetPeriod.start < prev) {
-          return targetPeriod.start;
-        }
-        return prev;
-      });
+    // 読み込み中の仮期間（fallback: start=2000-01-01）で取得範囲を全期間に
+    // 広げて固定してしまわないよう、実在の期間のときだけ cutoff を延長する
+    if (targetPeriod && targetPeriod.start && targetPeriod.id !== "fallback") {
+      setFetchCutoff((prev) =>
+        targetPeriod.start < prev ? targetPeriod.start : prev,
+      );
     }
   }, [targetPeriod, setFetchCutoff]);
 
