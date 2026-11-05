@@ -48,7 +48,6 @@ import { ROLES } from "../utils/constants";
 import { getTodayStr, getDatesInRange } from "../utils/dateUtils";
 import { analyzeLaps } from "../utils/lapUtils";
 
-import CalendarView from "./CalendarView";
 import DocumentsModal from "./DocumentsModal";
 import { usePrint } from "../hooks/usePrint";
 import LapTimeModal from "./LapTimeModal";
@@ -60,6 +59,7 @@ import CoachRaceView from "./coach/CoachRaceView";
 import CoachRosterView from "./coach/CoachRosterView";
 import CoachHomeView from "./coach/CoachHomeView";
 import CoachStatsView from "./coach/CoachStatsView";
+import CoachCalendarView from "./coach/CoachCalendarView";
 
 const CoachView = (props) => {
   const {
@@ -1220,22 +1220,13 @@ const CoachView = (props) => {
           )}
 
           {view === "coach-calendar" && (
-            <div className="animate-in fade-in">
-              {selectedRunner && (
-                <p className="text-xs font-bold text-slate-400 mb-3 px-1">
-                  {selectedRunner.lastName} {selectedRunner.firstName}{" "}
-                  の記録を表示中
-                </p>
-              )}
-              <CalendarView
-                allLogs={allLogs}
-                teamLogs={teamLogs}
-                tournaments={tournaments}
-                role="coach"
-                currentUserId={selectedRunner?.id || null}
-                onTournamentClick={(id) => setShowTeamReportId(id)}
-              />
-            </div>
+            <CoachCalendarView
+              selectedRunner={selectedRunner}
+              allLogs={allLogs}
+              teamLogs={teamLogs}
+              tournaments={tournaments}
+              setShowTeamReportId={setShowTeamReportId}
+            />
           )}
         </main>
       </div>
