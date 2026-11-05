@@ -42,7 +42,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.7.20";
+const APP_LAST_UPDATED = "6.7.21";
 
 // FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
 const FCM_VAPID_KEY =
