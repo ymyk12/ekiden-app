@@ -8,6 +8,9 @@ import {
   secondsToTime,
   formatTimeInput,
   analyzeLaps,
+  normalizeQuotes,
+  flexTimeToSeconds,
+  buildSplits,
 } from "./lapUtils";
 
 describe("timeToSeconds", () => {
@@ -64,6 +67,59 @@ describe("formatTimeInput", () => {
 
   test("区切りなしはそのまま", () => {
     expect(formatTimeInput("abc")).toBe("abc");
+  });
+});
+
+describe("normalizeQuotes", () => {
+  test("全角クォートを半角に正規化する", () => {
+    expect(normalizeQuotes("1’30”99")).toBe("1'30\"99");
+    expect(normalizeQuotes("84′46″")).toBe("84'46\"");
+  });
+  test("空文字・null は空文字", () => {
+    expect(normalizeQuotes("")).toBe("");
+    expect(normalizeQuotes(null)).toBe("");
+  });
+});
+
+describe("flexTimeToSeconds", () => {
+  test("クォート表記は timeToSeconds と同じ", () => {
+    expect(flexTimeToSeconds('90"99')).toBeCloseTo(90.99);
+    expect(flexTimeToSeconds("1'30\"99")).toBeCloseTo(90.99);
+  });
+  test("全角クォート表記も読める", () => {
+    expect(flexTimeToSeconds("1’30”99")).toBeCloseTo(90.99);
+  });
+  test("ドット2要素 = 秒.コンマ秒", () => {
+    expect(flexTimeToSeconds("37.72")).toBeCloseTo(37.72);
+  });
+  test("ドット3要素 = 分.秒.コンマ秒", () => {
+    expect(flexTimeToSeconds("1.12.84")).toBeCloseTo(72.84);
+    expect(flexTimeToSeconds("2.27.25")).toBeCloseTo(147.25);
+  });
+  test("コロン区切りも読める", () => {
+    expect(flexTimeToSeconds("1:12.84")).toBeCloseTo(72.84);
+  });
+  test("区切りの無い裸の数字・空は 0", () => {
+    expect(flexTimeToSeconds("5000")).toBe(0);
+    expect(flexTimeToSeconds("")).toBe(0);
+  });
+});
+
+describe("buildSplits", () => {
+  test("800m は 200m刻み", () => {
+    expect(buildSplits("トラック", "800m")).toEqual([200, 400, 600, 800]);
+  });
+  test("1500m は 400/800/1000/1200/1500", () => {
+    expect(buildSplits("トラック", "1500m")).toEqual([400, 800, 1000, 1200, 1500]);
+  });
+  test("3000mSC は 1000m刻み（距離側のSCで判定）", () => {
+    expect(buildSplits("トラック", "3000mSC")).toEqual([1000, 2000, 3000]);
+  });
+  test("km表記の距離は1000m刻み（×1000して解釈）", () => {
+    expect(buildSplits("駅伝", "3km")).toEqual([1000, 2000, 3000]);
+  });
+  test("距離不明は空配列", () => {
+    expect(buildSplits("トラック", "")).toEqual([]);
   });
 });
 

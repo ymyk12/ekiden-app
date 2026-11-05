@@ -7,7 +7,12 @@
  */
 import React, { useState, useEffect, useMemo } from "react";
 import { Timer } from "lucide-react";
-import { timeToSeconds, secondsToTime, formatTimeInput } from "../utils/lapUtils";
+import {
+  timeToSeconds,
+  secondsToTime,
+  formatTimeInput,
+  buildSplits,
+} from "../utils/lapUtils";
 
 const SmartLapInput = ({
   value,
@@ -24,31 +29,10 @@ const SmartLapInput = ({
     return dist;
   }, [distance]);
 
-  // 2. 種目・距離から区間リストを作成
+  // 2. 種目・距離から区間リストを作成（ロジックは lapUtils.buildSplits に集約）
   const splitPoints = useMemo(() => {
     if (!raceType || totalDist === 0) return [];
-    let splits = [];
-    const t = raceType.toLowerCase();
-    // 種目(raceType)ではなく距離(distance)側に "SC" が入るため distance で判定する
-    const d = (distance || "").toLowerCase();
-
-    if (t.includes("駅伝") || t.includes("ロード") || d.includes("sc")) {
-      for (let i = 1000; i <= totalDist; i += 1000) splits.push(i);
-      if (totalDist % 1000 !== 0) splits.push(totalDist);
-    } else if (totalDist === 800) {
-      splits = [200, 400, 600, 800];
-    } else if (totalDist === 1500) {
-      splits = [400, 800, 1000, 1200, 1500];
-    } else if (totalDist >= 3000) {
-      for (let i = 400; i <= totalDist; i += 400) {
-        splits.push(i);
-        let nextK = Math.ceil(i / 1000) * 1000;
-        if (nextK > i && nextK < i + 400 && nextK <= totalDist)
-          splits.push(nextK);
-      }
-      if (splits[splits.length - 1] !== totalDist) splits.push(totalDist);
-    }
-    return splits;
+    return buildSplits(raceType, distance);
   }, [raceType, totalDist, distance]);
 
   // 4. ステート管理

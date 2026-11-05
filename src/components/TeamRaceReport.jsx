@@ -24,57 +24,21 @@ import {
 } from "lucide-react";
 import LapTimeModal from "./LapTimeModal";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
-import { timeToSeconds, secondsToTime, analyzeLaps } from "../utils/lapUtils";
-
-// 種目から区間（splitPoints）を生成する。SmartLapInput と同一ロジック。
-// 例: 1500m→[400,800,1000,1200,1500] / 3000m→400m刻み＋km / 3000mSC→1000m刻み
-const buildSplits = (raceType, distanceStr, ekidenDist) => {
-  const dStr = ekidenDist ? String(ekidenDist) : distanceStr || "";
-  let totalDist = parseInt(dStr.replace(/[^0-9]/g, "")) || 0;
-  if (dStr.toLowerCase().includes("km")) totalDist *= 1000;
-
-  let splits = [];
-  const t = (raceType || "").toLowerCase();
-  // SC(障害)は raceType ではなく distance 側に入るため dStr で判定する
-  const dLower = dStr.toLowerCase();
-  if (totalDist > 0) {
-    if (t.includes("駅伝") || t.includes("ロード") || dLower.includes("sc")) {
-      for (let i = 1000; i <= totalDist; i += 1000) splits.push(i);
-      if (totalDist % 1000 !== 0) splits.push(totalDist);
-    } else if (totalDist === 800) {
-      splits = [200, 400, 600, 800];
-    } else if (totalDist === 1500) {
-      splits = [400, 800, 1000, 1200, 1500];
-    } else if (totalDist >= 3000) {
-      for (let i = 400; i <= totalDist; i += 400) {
-        splits.push(i);
-        const nextK = Math.ceil(i / 1000) * 1000;
-        if (nextK > i && nextK < i + 400 && nextK <= totalDist) splits.push(nextK);
-      }
-      if (splits[splits.length - 1] !== totalDist) splits.push(totalDist);
-    }
-  }
-  return splits;
-};
+import {
+  timeToSeconds,
+  secondsToTime,
+  analyzeLaps,
+  buildSplits,
+  flexTimeToSeconds,
+  normalizeQuotes,
+} from "../utils/lapUtils";
 
 // SmartLapInput と同じロジックで resultTime に合わせて最終 LAP を逆算する
 const adjustLapTimesForResult = (lapTimesStr, newResultTime, raceType, distanceStr, ekidenDist) => {
   if (!lapTimesStr || !newResultTime) return lapTimesStr;
 
-  const ts = (str) => {
-    if (!str) return 0;
-    const c = str.replace(/[()（）]/g, "");
-    const m = c.match(/(?:(\d+)')?(?:(\d+)")?(\d+)?/);
-    if (!m) return 0;
-    return parseFloat(m[1] || 0) * 60 + parseFloat(m[2] || 0) + parseFloat(m[3] || 0) / 100;
-  };
-  const st = (sec) => {
-    if (sec <= 0) return "";
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    const c = Math.round((sec % 1) * 100);
-    return m > 0 ? `${m}'${String(s).padStart(2,"0")}"${String(c).padStart(2,"0")}` : `${s}"${String(c).padStart(2,"0")}`;
-  };
+  const ts = timeToSeconds;
+  const st = secondsToTime;
 
   const splits = buildSplits(raceType, distanceStr, ekidenDist);
   if (splits.length === 0) return lapTimesStr;
@@ -270,13 +234,13 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
   // 各ブロックのLAP行数が種目の区間数と一致すれば、順に区間へ割り当てる。
   const parseLapText = (text) => {
     // 全角記号を正規化。種目見出しは必ず行頭に来るよう改行を挿入
-    let norm = (text || "")
-      .replace(/　/g, " ")
-      .replace(/[Ｓｓ]/g, "S")
-      .replace(/[Ｃｃ]/g, "C")
-      .replace(/[Ｍｍ]/g, "m")
-      .replace(/[’′`´]/g, "'")
-      .replace(/[”″]/g, '"');
+    let norm = normalizeQuotes(
+      (text || "")
+        .replace(/　/g, " ")
+        .replace(/[Ｓｓ]/g, "S")
+        .replace(/[Ｃｃ]/g, "C")
+        .replace(/[Ｍｍ]/g, "m"),
+    );
     // 性別見出し（男子/女子）が前の行末に連結しているとき改行で切り離す
     norm = norm.replace(/(男子|女子)(?=\s*\d)/g, "\n$1");
     const rawLines = norm.split(/\n/).map((l) => l.trim()).filter(Boolean);
@@ -285,19 +249,6 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     //   g1=距離 / g2=SC / g3=同じ行に続く選手名（任意）
     const HEADER_RE = /^(?:(?:男子|女子|男|女)\s*)?(\d{3,5})\s*m?\s*(SC)?\s*(.*)$/i;
     const HAS_JP = (s) => /[぀-鿿一-龿]/.test(s);
-    // タイム表記を秒に変換する（区切りは ' " . : いずれも可）
-    //   84"46 / 1'30"99 … クォート表記はそのまま
-    //   37.72 → 37.72秒 / 1.12.84 → 1分12.84秒（ドット・コロン区切り）
-    const flexTimeToSeconds = (raw) => {
-      if (!raw) return 0;
-      const t = raw.replace(/[’′`´]/g, "'").replace(/[”″]/g, '"');
-      if (t.includes('"') || t.includes("'")) return timeToSeconds(t);
-      const parts = t.split(/[.:]/).filter((x) => x !== "");
-      if (parts.length < 2 || parts.some((p) => !/^\d+$/.test(p))) return 0;
-      if (parts.length === 2) return parseInt(parts[0], 10) + parseFloat("0." + parts[1]);
-      // 3要素以上は 分.秒.コンマ秒 として扱う
-      return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + parseFloat("0." + parts[2]);
-    };
     // 先頭トークンがタイムか判定（区切り記号を含み、秒換算が正のもの）
     const segSeconds = (line) => {
       const tok = line.split(/\s+/)[0] || "";
@@ -371,7 +322,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
 
   // プレビュー行から表示・保存用の値を計算（カード選択・LAP編集のたびに再計算する）
   const normLapTime = (t) =>
-    (t || "").replace(/[’′`´]/g, "'").replace(/[”″]/g, '"').replace(/\.\s*$/, "").replace(/\s/g, "");
+    normalizeQuotes(t).replace(/\.\s*$/, "").replace(/\s/g, "");
   const deriveLapEntry = (entry) => {
     const card = reportCards.find((c) => c.id === entry.cardId) || null;
     const defaultSplits = card ? buildSplits(card.raceType, card.distance, card.ekidenDistance) : [];
