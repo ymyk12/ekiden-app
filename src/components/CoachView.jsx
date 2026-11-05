@@ -3196,6 +3196,9 @@ const CoachView = (props) => {
               updatedBy: "coach",
             });
           }}
+          onDeleteCard={async (cardId) => {
+            await deleteDoc(docRef("raceCards", cardId));
+          }}
           onOpenCard={(card) => {
             setShowTeamReportId(null);
             setSelectedTourId(card.tournamentId);

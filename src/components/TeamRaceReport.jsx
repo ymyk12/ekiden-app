@@ -20,6 +20,7 @@ import {
   FileText,
   Check,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import LapTimeModal from "./LapTimeModal";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
@@ -113,7 +114,7 @@ const BADGE_OPTIONS = [
 
 const EMPTY_ADD = { runnerId: "", raceType: RACE_TYPES.TRACK, distance: "1500m", ekidenDistance: "", date: "", status: "finish", resultTime: "", targetTime: "", dnsReason: "", dnfPoint: "" };
 
-const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit, onSaveCard, onEditCard, onOpenCard, allRunners, onAddCard }) => {
+const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit, onSaveCard, onEditCard, onDeleteCard, onOpenCard, allRunners, onAddCard }) => {
   const [editingCard, setEditingCard] = useState(null);
   const [lapInput, setLapInput] = useState("");
   const [isAddingCard, setIsAddingCard] = useState(false);
@@ -283,8 +284,26 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     // 見出し: 「男子1500m」のほか、性別やmの省略、見出しと選手名が同じ行（例「800田村」）にも対応。
     //   g1=距離 / g2=SC / g3=同じ行に続く選手名（任意）
     const HEADER_RE = /^(?:(?:男子|女子|男|女)\s*)?(\d{3,5})\s*m?\s*(SC)?\s*(.*)$/i;
-    const TIME_RE = /(?:\d+')?\d+"\d+/g;
     const HAS_JP = (s) => /[぀-鿿一-龿]/.test(s);
+    // タイム表記を秒に変換する（区切りは ' " . : いずれも可）
+    //   84"46 / 1'30"99 … クォート表記はそのまま
+    //   37.72 → 37.72秒 / 1.12.84 → 1分12.84秒（ドット・コロン区切り）
+    const flexTimeToSeconds = (raw) => {
+      if (!raw) return 0;
+      const t = raw.replace(/[’′`´]/g, "'").replace(/[”″]/g, '"');
+      if (t.includes('"') || t.includes("'")) return timeToSeconds(t);
+      const parts = t.split(/[.:]/).filter((x) => x !== "");
+      if (parts.length < 2 || parts.some((p) => !/^\d+$/.test(p))) return 0;
+      if (parts.length === 2) return parseInt(parts[0], 10) + parseFloat("0." + parts[1]);
+      // 3要素以上は 分.秒.コンマ秒 として扱う
+      return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + parseFloat("0." + parts[2]);
+    };
+    // 先頭トークンがタイムか判定（区切り記号を含み、秒換算が正のもの）
+    const segSeconds = (line) => {
+      const tok = line.split(/\s+/)[0] || "";
+      if (!/[.:'"′″]/.test(tok)) return 0; // 区切りの無い裸の数字（例 5000）は見出し扱い
+      return flexTimeToSeconds(tok);
+    };
     const nn = (s) => (s || "").replace(/\s/g, "");
     const cardEvent = (c) =>
       ((c.distance === "その他" ? c.ekidenDistance : c.distance) || "")
@@ -296,8 +315,9 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     const blocks = [];
     let cur = null;
     for (const line of rawLines) {
-      // 区間タイム（" を含む行）は見出しと誤認しない
-      const h = line.includes('"') ? null : line.match(HEADER_RE);
+      // 先頭がタイムの行（区間タイム）は見出しと誤認しない
+      const segSec = segSeconds(line);
+      const h = segSec > 0 ? null : line.match(HEADER_RE);
       if (h) {
         if (cur) blocks.push(cur);
         cur = { distanceStr: `${h[1]}m${h[2] ? "SC" : ""}`, name: "", laps: [] };
@@ -306,12 +326,10 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
         continue;
       }
       if (!cur) continue;
-      const times = line.match(TIME_RE);
-      if (times && times.length) {
+      if (segSec > 0) {
         // 各行の先頭（区間タイム）のみ読み取る。以降の累積タイムは無視して自動計算する。
-        // 秒表記（例 90"99）は分表記（1'30"99）へ正規化してから取り込む。
-        const sec = timeToSeconds(times[0]);
-        cur.laps.push({ seg: sec > 0 ? secondsToTime(sec) : times[0] });
+        // 秒・ドット表記（90"99 / 37.72 / 1.12.84）はすべて分表記（1'30"99）へ正規化。
+        cur.laps.push({ seg: secondsToTime(segSec) });
         continue;
       }
       if (HAS_JP(line)) {
@@ -402,6 +420,8 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
   const [editingFullCard, setEditingFullCard] = useState(null);
   const [fullEditInput, setFullEditInput] = useState({});
   const [isSavingFull, setIsSavingFull] = useState(false);
+  const [confirmDeleteCard, setConfirmDeleteCard] = useState(false);
+  const [isDeletingCard, setIsDeletingCard] = useState(false);
 
   const openEdit = (card) => {
     setEditingCard({ ...card });
@@ -410,6 +430,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
 
   const openFullEdit = (card) => {
     setEditingFullCard(card);
+    setConfirmDeleteCard(false);
     setFullEditInput({
       date: card.date || "",
       status: card.status || "finish",
@@ -446,6 +467,18 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
       setEditingFullCard(null);
     } finally {
       setIsSavingFull(false);
+    }
+  };
+
+  const deleteFullCard = async () => {
+    if (!onDeleteCard || !editingFullCard) return;
+    setIsDeletingCard(true);
+    try {
+      await onDeleteCard(editingFullCard.id);
+      setEditingFullCard(null);
+      setConfirmDeleteCard(false);
+    } finally {
+      setIsDeletingCard(false);
     }
   };
 
@@ -846,7 +879,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">カード編集</p>
               <p className="font-black text-lg text-slate-800">{editingFullCard.runnerName}</p>
             </div>
-            <button onClick={() => setEditingFullCard(null)} className="p-2 rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">
+            <button onClick={() => { setEditingFullCard(null); setConfirmDeleteCard(false); }} className="p-2 rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -926,11 +959,36 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
               </div>
             </div>
           </div>
-          <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
-            <button onClick={saveFullEdit} disabled={isSavingFull}
-              className="w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700 shadow-md">
-              <Save size={16} /> {isSavingFull ? "保存中..." : "保存する"}
-            </button>
+          <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0 space-y-3">
+            {confirmDeleteCard ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 space-y-2">
+                <p className="text-xs font-bold text-rose-600 flex items-center gap-1.5">
+                  <AlertCircle size={13} className="flex-shrink-0" />
+                  このカードを削除します。元に戻せません。
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirmDeleteCard(false)} disabled={isDeletingCard}
+                    className="flex-1 py-2.5 rounded-xl font-black text-xs bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 active:scale-95 transition-all disabled:opacity-50">
+                    やめる
+                  </button>
+                  <button onClick={deleteFullCard} disabled={isDeletingCard}
+                    className="flex-1 py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 bg-rose-600 text-white hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50">
+                    <Trash2 size={14} /> {isDeletingCard ? "削除中..." : "削除する"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={saveFullEdit} disabled={isSavingFull}
+                className="w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700 shadow-md">
+                <Save size={16} /> {isSavingFull ? "保存中..." : "保存する"}
+              </button>
+            )}
+            {onDeleteCard && !confirmDeleteCard && (
+              <button onClick={() => setConfirmDeleteCard(true)} disabled={isSavingFull}
+                className="w-full py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 text-rose-500 hover:bg-rose-50 active:scale-95 transition-all disabled:opacity-50">
+                <Trash2 size={13} /> このカードを削除
+              </button>
+            )}
           </div>
         </div>
       </div>
