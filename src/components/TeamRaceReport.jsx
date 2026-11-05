@@ -308,8 +308,10 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
       if (!cur) continue;
       const times = line.match(TIME_RE);
       if (times && times.length) {
-        // 各行の先頭（区間タイム）のみ読み取る。以降の累積タイムは無視して自動計算する
-        cur.laps.push({ seg: times[0] });
+        // 各行の先頭（区間タイム）のみ読み取る。以降の累積タイムは無視して自動計算する。
+        // 秒表記（例 90"99）は分表記（1'30"99）へ正規化してから取り込む。
+        const sec = timeToSeconds(times[0]);
+        cur.laps.push({ seg: sec > 0 ? secondsToTime(sec) : times[0] });
         continue;
       }
       if (HAS_JP(line)) {
