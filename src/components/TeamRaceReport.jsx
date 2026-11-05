@@ -552,19 +552,21 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
         {canEdit && onEditCard && (
           <button
             onClick={() => { setOfficialResultText(""); setParsedResults(null); setIsOfficialResultOpen(true); }}
-            className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors print:hidden"
-            title="公式記録を一括入力"
+            className="flex items-center gap-1 pl-2 pr-3 py-1.5 bg-white/10 rounded-full hover:bg-white/20 transition-colors print:hidden"
+            title="公式記録（順位・公式タイム）を一括入力"
           >
-            <FileText size={20} />
+            <FileText size={18} />
+            <span className="text-xs font-semibold">公式記録</span>
           </button>
         )}
         {canEdit && onEditCard && (
           <button
             onClick={() => { setLapBatchText(""); setParsedLaps(null); setIsLapBatchOpen(true); }}
-            className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors print:hidden"
-            title="LAPタイムを一括入力"
+            className="flex items-center gap-1 pl-2 pr-3 py-1.5 bg-white/10 rounded-full hover:bg-white/20 transition-colors print:hidden"
+            title="手元で計測したLAP（区間タイム）を一括入力"
           >
-            <Timer size={20} />
+            <Timer size={18} />
+            <span className="text-xs font-semibold">LAP</span>
           </button>
         )}
         {canEdit && onAddCard && (allRunners || []).length > 0 && (
