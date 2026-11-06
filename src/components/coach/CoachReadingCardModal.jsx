@@ -46,6 +46,16 @@ const isPostIncomplete = (card) =>
     isBlank(card.teammateGoodPoints) ||
     isBlank(card.nextGoal));
 
+// レース結果マーク（レース実施済みのときだけ表示）：Resultあり / DNS / DNF
+const cardResultBadge = (card) => {
+  if (!isRaceDone(card)) return null;
+  if (card.status === "dns")
+    return { label: "DNS", cls: "text-rose-600 bg-rose-50 border-rose-100" };
+  if (card.status === "dnf")
+    return { label: "DNF", cls: "text-amber-600 bg-amber-50 border-amber-100" };
+  return { label: "Resultあり", cls: "text-emerald-600 bg-emerald-50 border-emerald-100" };
+};
+
 // 提出カードの「今どの段階か」を1つだけ示すバッジ。
 // 監督が対応済み(FB済/FB不要)を優先し、未対応なら次に必要な段階を順に表示する：
 //   PRE未記入 → レース前 → POST未記入 → FB未
@@ -744,6 +754,14 @@ const CoachReadingCardModal = ({
                               </div>
                               <div className="flex items-center gap-2">
                                 <div className="flex flex-col items-end gap-1">
+                                  {(() => {
+                                    const r = cardResultBadge(card);
+                                    return r ? (
+                                      <span className={`text-[9px] font-black px-2 py-1 rounded-lg border ${r.cls}`}>
+                                        {r.label}
+                                      </span>
+                                    ) : null;
+                                  })()}
                                   {(() => {
                                     const s = cardStageBadge(card);
                                     const Icon = s.Icon;
