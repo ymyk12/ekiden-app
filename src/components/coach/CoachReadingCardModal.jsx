@@ -30,6 +30,22 @@ import { updateDoc } from "firebase/firestore";
 import { docRef } from "../../utils/firestore";
 import { analyzeLaps } from "../../utils/lapUtils";
 
+// 記入状況の判定ヘルパー（フィードバックは選手の記入があって初めて意味があるため）
+const isBlank = (v) => v === undefined || v === null || String(v).trim() === "";
+// レース実施済み（結果あり / DNS / DNF）か。レース前はPOST未記入でも自然なので判定対象外にする。
+const isRaceDone = (card) =>
+  !!card.resultTime || ["finish", "dns", "dnf"].includes(card.status);
+// PRE-RACE の記入不足：目標タイム・W-UP計画・レースプランのいずれかが空
+const isPreIncomplete = (card) =>
+  isBlank(card.targetTime) || isBlank(card.wupPlan) || isBlank(card.racePlan);
+// POST-RACE の記入不足：レース実施済みで、良かった点・課題・仲間の良かった点・次の目標のいずれかが空
+const isPostIncomplete = (card) =>
+  isRaceDone(card) &&
+  (isBlank(card.goodPoints) ||
+    isBlank(card.issues) ||
+    isBlank(card.teammateGoodPoints) ||
+    isBlank(card.nextGoal));
+
 const CoachReadingCardModal = ({
   selectedTourId,
   setSelectedTourId,
@@ -739,6 +755,16 @@ const CoachReadingCardModal = ({
                                   ) : (
                                     <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex items-center gap-1">
                                       <MessageSquare size={9} /> FB未
+                                    </span>
+                                  )}
+                                  {isPreIncomplete(card) && (
+                                    <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200 flex items-center gap-1">
+                                      <Edit size={9} /> PRE未記入
+                                    </span>
+                                  )}
+                                  {isPostIncomplete(card) && (
+                                    <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200 flex items-center gap-1">
+                                      <Edit size={9} /> POST未記入
                                     </span>
                                   )}
                                 </div>
