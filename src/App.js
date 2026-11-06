@@ -1,28 +1,23 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { signInAnonymously, onAuthStateChanged, signOut } from "firebase/auth";
-import {
-  setDoc,
-  addDoc,
-  deleteDoc,
-  updateDoc,
-  getDoc,
-  query,
-  where,
-  getDocs,
-  writeBatch,
-} from "firebase/firestore";
-import { colRef, docRef } from "./utils/firestore";
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { setDoc, updateDoc } from "firebase/firestore";
+import { docRef } from "./utils/firestore";
 
 import { Toaster, toast } from "react-hot-toast";
 
 import { ROLES } from "./utils/constants";
-import { getTodayStr, extractGoalInputs } from "./utils/dateUtils";
+import { getTodayStr } from "./utils/dateUtils";
 
 import { auth, db, appId } from "./firebaseConfig";
 // appId は子コンポーネントへの props 渡しで使用
 import { useTeamData } from "./hooks/useTeamData";
 import { usePeriod } from "./hooks/usePeriod";
 import { useStats } from "./hooks/useStats";
+import { useAuthHandlers } from "./hooks/useAuthHandlers";
+import { useLogHandlers } from "./hooks/useLogHandlers";
+import { useRaceHandlers } from "./hooks/useRaceHandlers";
+import { useGoalReview } from "./hooks/useGoalReview";
+import { useRunnerManagement } from "./hooks/useRunnerManagement";
 
 import { getToken } from "firebase/messaging";
 import { messaging } from "./firebaseConfig";
@@ -42,7 +37,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.7.33";
+const APP_LAST_UPDATED = "6.7.34";
 
 // FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
 const FCM_VAPID_KEY =
@@ -60,7 +55,6 @@ const App = () => {
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingLogId, setEditingLogId] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
     message: "",
@@ -71,21 +65,10 @@ const App = () => {
 
   // ─── 監督専用の操作状態 ───
   const [selectedRunner, setSelectedRunner] = useState(null);
-  const [coachEditFormData, setCoachEditFormData] = useState({});
   const [previewRunner, setPreviewRunner] = useState(null);
   const [isPrintPreview, setIsPrintPreview] = useState(false);
   const [checkDate, setCheckDate] = useState(getTodayStr());
-  const [isCoachEditModalOpen, setIsCoachEditModalOpen] = useState(false);
-  const [isAthleteEditModalOpen, setIsAthleteEditModalOpen] = useState(false);
   const [isPainAlertModalOpen, setIsPainAlertModalOpen] = useState(false);
-  const [coachGoalInput, setCoachGoalInput] = useState({
-    monthly: "",
-    period: "",
-    q1: "",
-    q2: "",
-    q3: "",
-    q4: "",
-  });
 
   const [demoMode, setDemoMode] = useState(null); // "manager" か "admin" か null
   const handleExitDemo = () => {
@@ -101,46 +84,7 @@ const App = () => {
   };
 
   // ─── 入力フォームのデータ ───
-  const [reviewComment, setReviewComment] = useState("");
-  const [coachFeedbackComment, setCoachFeedbackComment] = useState("");
-
-  const [logInput, setLogInput] = useState({
-    date: getTodayStr(),
-    distance: "",
-    category: "",
-    menuDetail: "",
-    rpe: 1,
-    pain: 1,
-    achieved: true,
-  });
-
-  const [authInput, setAuthInput] = useState({
-    lastName: "",
-    firstName: "",
-    memberCode: "",
-    teamPass: "",
-    personalPin: "",
-    gender: "",
-    isManager: false,
-  });
-
   const [menuInput, setMenuInput] = useState({ date: getTodayStr(), text: "" });
-  const [goalInput, setGoalInput] = useState({
-    monthly: "",
-    period: "",
-    q1: "",
-    q2: "",
-    q3: "",
-    q4: "",
-  });
-
-  const [mergeInput, setMergeInput] = useState({ sourceId: "", targetId: "" });
-
-  const [newTournamentInput, setNewTournamentInput] = useState({
-    name: "",
-    startDate: "",
-    endDate: "",
-  });
 
   // fetchCutoff: データ取得の下限日（初期値3ヶ月前）。usePeriod が選択期間に合わせて延長する
   const [fetchCutoff, setFetchCutoff] = useState(() => {
@@ -278,6 +222,119 @@ const App = () => {
     checkDate,
   });
 
+  // ─── ハンドラ群（ドメイン別カスタムフック）───
+  const {
+    authInput,
+    setAuthInput,
+    handleRegister,
+    handleLogin,
+    handleStartPreview,
+    handleLogout,
+  } = useAuthHandlers({
+    user,
+    appSettings,
+    previewRunner,
+    setPreviewRunner,
+    setProfile,
+    setRole,
+    setView,
+    setErrorMsg,
+    setIsSubmitting,
+    setIsMenuOpen,
+  });
+
+  const {
+    logInput,
+    setLogInput,
+    editingLogId,
+    setEditingLogId,
+    isCoachEditModalOpen,
+    setIsCoachEditModalOpen,
+    isAthleteEditModalOpen,
+    setIsAthleteEditModalOpen,
+    resetForm,
+    handleEditLog,
+    handleAthleteUpdateLog,
+    openCoachEditModal,
+    handleCoachUpdateLog,
+    handleCoachDeleteLog,
+    handleSaveLog,
+    handleDeleteLog,
+    handleRestRegister,
+  } = useLogHandlers({
+    currentUserId,
+    currentProfile,
+    setView,
+    setIsSubmitting,
+    setConfirmDialog,
+  });
+
+  const {
+    newTournamentInput,
+    setNewTournamentInput,
+    editingRaceCardId,
+    setEditingRaceCardId,
+    raceCardInput,
+    setRaceCardInput,
+    handleSaveTournament,
+    handleDeleteTournament,
+    handleSaveRaceCard,
+    handleDeleteRaceCard,
+    handleSaveRaceCardFeedback,
+  } = useRaceHandlers({
+    currentUserId,
+    currentProfile,
+    tournaments,
+    setView,
+    setIsSubmitting,
+    setConfirmDialog,
+  });
+
+  const {
+    goalInput,
+    setGoalInput,
+    reviewComment,
+    setReviewComment,
+    coachFeedbackComment,
+    setCoachFeedbackComment,
+    updateGoals,
+    handleSaveReview,
+    handleSaveCoachFeedback,
+    getRunnerFeedback,
+  } = useGoalReview({
+    currentUserId,
+    currentProfile,
+    targetPeriod,
+    allFeedbacks,
+    view,
+    setView,
+    setIsSubmitting,
+  });
+
+  const {
+    coachEditFormData,
+    setCoachEditFormData,
+    coachGoalInput,
+    setCoachGoalInput,
+    mergeInput,
+    setMergeInput,
+    handleCoachEditRunner,
+    handleCoachSaveProfile,
+    handleCoachChangeRole,
+    handleCoachSaveGoals,
+    handleMergeRunners,
+  } = useRunnerManagement({
+    role,
+    selectedRunner,
+    setSelectedRunner,
+    targetPeriod,
+    allRunners,
+    setView,
+    setIsSubmitting,
+    setConfirmDialog,
+    setCoachFeedbackComment,
+  });
+
   // プッシュ通知の許可と FCM トークン保存
   // 必ずログイン本人（profile）のドキュメントにのみ保存する。
   // プレビュー中は currentProfile が選手側に変わるため、それを使うと
@@ -333,708 +390,7 @@ const App = () => {
     registerCoachDevice();
   }, [role]);
 
-  useEffect(() => {
-    if (role === ROLES.COACH && selectedRunner && targetPeriod) {
-      const inputs = extractGoalInputs(
-        selectedRunner,
-        targetPeriod.id,
-        targetPeriod.type,
-      );
-      setCoachGoalInput({
-        ...inputs,
-        // custom期間でHelperが0を返す場合のフォールバック
-        monthly: inputs.monthly || selectedRunner.goalMonthly || "",
-      });
-    }
-  }, [role, selectedRunner, targetPeriod]);
-
-  // 目標設定画面を開いたとき、現在の目標値をフォームに反映する
-  useEffect(() => {
-    if (view === "goal" && currentProfile && targetPeriod) {
-      setGoalInput(
-        extractGoalInputs(currentProfile, targetPeriod.id, targetPeriod.type),
-      );
-    }
-  }, [view, currentProfile, targetPeriod]);
-
-  // ─── 認証 ───
-  // 新規ユーザーを登録し、Firestore に選手情報を保存する
-  const handleRegister = async () => {
-    setErrorMsg("");
-    if (
-      !authInput.lastName.trim() ||
-      !authInput.firstName.trim() ||
-      authInput.memberCode.length !== 5
-    ) {
-      setErrorMsg("名前と5桁の選手番号を入力してください。");
-      return;
-    }
-
-    if (authInput.teamPass !== appSettings.teamPass) {
-      setErrorMsg("チームパスコードが間違っています。");
-      return;
-    }
-    if (!authInput.personalPin || !/^\d{4}$/.test(authInput.personalPin)) {
-      setErrorMsg("個人パスコードは4桁の数字で設定してください。");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const targetId = authInput.memberCode.trim();
-      const runnersRef = colRef("runners");
-
-      const runnerDoc = docRef("runners", targetId);
-      const docSnap = await getDoc(runnerDoc);
-
-      if (docSnap.exists()) {
-        setErrorMsg(
-          `選手番号 ${targetId} は既に登録されています。「ログイン」してください。`,
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      const q = query(runnersRef, where("memberCode", "==", targetId));
-      const qSnap = await getDocs(q);
-
-      if (!qSnap.empty) {
-        setErrorMsg(
-          `選手番号 ${targetId} は既に使用されています（旧データ等）。管理者に連絡してください。`,
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      const newProfile = {
-        id: targetId,
-        memberCode: targetId,
-        lastName: authInput.lastName.trim(),
-        firstName: authInput.firstName.trim(),
-        role: authInput.isManager ? ROLES.MANAGER : "athlete",
-        gender: authInput.gender || "",
-        goalMonthly: 0,
-        goalPeriod: 0,
-        status: "active",
-        pin: authInput.personalPin,
-        registeredAt: new Date().toISOString(),
-        lastLoginUid: user.uid,
-      };
-
-      await setDoc(runnerDoc, newProfile);
-
-      setProfile(newProfile);
-      setRole(ROLES.RUNNER);
-      setView("menu");
-      toast.success("登録が完了しました！");
-    } catch (e) {
-      console.error(e);
-      setErrorMsg("登録エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 選手番号でログインし、ロールを確定する
-  const handleLogin = async () => {
-    setErrorMsg("");
-    if (authInput.memberCode.length !== 5) {
-      setErrorMsg("5桁の選手番号を入力してください。");
-      return;
-    }
-    if (!authInput.personalPin) {
-      setErrorMsg("パスコードを入力してください。");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const targetId = authInput.memberCode.trim();
-      const runnersRef = colRef("runners");
-      const runnerDoc = docRef("runners", targetId);
-      const docSnap = await getDoc(runnerDoc);
-
-      if (!docSnap.exists()) {
-        const q = query(runnersRef, where("memberCode", "==", targetId));
-        const qSnap = await getDocs(q);
-
-        if (!qSnap.empty) {
-          const oldDoc = qSnap.docs[0];
-          const oldData = oldDoc.data();
-
-          if (oldData.pin !== authInput.personalPin) {
-            setErrorMsg("パスコードが違います。");
-            setIsSubmitting(false);
-            return;
-          }
-
-          await setDoc(runnerDoc, {
-            ...oldData,
-            id: targetId,
-            lastLoginUid: user.uid,
-            migratedAt: new Date().toISOString(),
-          });
-
-          const logsRef = colRef("logs");
-          const logsQ = query(logsRef, where("runnerId", "==", oldDoc.id));
-          const logsSnap = await getDocs(logsQ);
-          const batch = writeBatch(db);
-
-          logsSnap.forEach((l) => {
-            batch.update(docRef("logs", l.id), { runnerId: targetId });
-          });
-
-          const fbsRef = colRef("feedbacks");
-          const fbsQ = query(fbsRef, where("runnerId", "==", oldDoc.id));
-          const fbsSnap = await getDocs(fbsQ);
-
-          fbsSnap.forEach((f) => {
-            const oldFbId = f.id;
-            const newFbId = oldFbId.replace(oldDoc.id, targetId);
-            if (oldFbId !== newFbId) {
-              batch.set(docRef("feedbacks", newFbId), {
-                ...f.data(),
-                runnerId: targetId,
-              });
-              batch.delete(docRef("feedbacks", oldFbId));
-            }
-          });
-
-          batch.delete(docRef("runners", oldDoc.id));
-          await batch.commit();
-
-          setProfile({ ...oldData, id: targetId, lastLoginUid: user.uid });
-          setRole(ROLES.RUNNER);
-          setView("menu");
-          toast.success("システム更新: データを移行しました");
-          return;
-        }
-
-        setErrorMsg("データが見つかりません。");
-        setIsSubmitting(false);
-        return;
-      }
-
-      const profileData = docSnap.data();
-      if (profileData.pin !== authInput.personalPin) {
-        setErrorMsg("パスコードが違います。");
-        setIsSubmitting(false);
-        return;
-      }
-
-      await updateDoc(runnerDoc, {
-        lastLoginUid: user.uid,
-      });
-
-      setProfile(profileData);
-      setRole(ROLES.RUNNER);
-      setView("menu");
-      toast.success(`ログインしました！`);
-    } catch (e) {
-      console.error(e);
-      setErrorMsg("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // ─── 練習記録 ───
-  const resetForm = () => {
-    setLogInput({
-      date: getTodayStr(),
-      distance: "",
-      category: "",
-      menuDetail: "",
-      rpe: 1,
-      pain: 1,
-      achieved: true,
-    });
-    setEditingLogId(null);
-  };
-
-  const handleEditLog = (log) => {
-    setLogInput({
-      date: log.date,
-      distance: log.distance,
-      category: log.category,
-      menuDetail: log.menuDetail || "",
-      rpe: log.rpe,
-      pain: log.pain,
-      achieved: log.achieved,
-    });
-    setEditingLogId(log.id);
-    setIsAthleteEditModalOpen(true);
-  };
-
-  // 選手が自分の練習記録を修正・保存する
-  const handleAthleteUpdateLog = async () => {
-    if (!editingLogId) return;
-    if (!logInput.category) {
-      toast.error("区分を選択してください");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await updateDoc(docRef("logs", editingLogId), {
-        date: logInput.date,
-        distance: parseFloat(logInput.distance),
-        category: logInput.category,
-        menuDetail: logInput.menuDetail,
-        rpe: parseInt(logInput.rpe, 10),
-        pain: parseInt(logInput.pain, 10),
-        achieved: logInput.achieved,
-        updatedAt: new Date().toISOString(),
-      });
-      toast.success("記録を更新しました");
-      setIsAthleteEditModalOpen(false);
-      setEditingLogId(null);
-      resetForm();
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // ─── 監督による記録修正 ───
-  const openCoachEditModal = (log) => {
-    setLogInput({
-      date: log.date,
-      distance: log.distance,
-      category: log.category,
-      menuDetail: log.menuDetail || "",
-      rpe: log.rpe,
-      pain: log.pain,
-      achieved: log.achieved,
-    });
-    setEditingLogId(log.id);
-    setIsCoachEditModalOpen(true);
-  };
-
-  // 監督が選手の練習記録を修正・上書きする
-  const handleCoachUpdateLog = async () => {
-    if (!editingLogId) return;
-    if (!logInput.category) {
-      toast.error("区分を選択してください");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await updateDoc(docRef("logs", editingLogId), {
-        date: logInput.date,
-        distance: parseFloat(logInput.distance),
-        category: logInput.category,
-        menuDetail: logInput.menuDetail,
-        rpe: parseInt(logInput.rpe, 10),
-        pain: parseInt(logInput.pain, 10),
-        updatedBy: ROLES.COACH,
-      });
-      toast.success("記録を修正しました");
-      setIsCoachEditModalOpen(false);
-      setEditingLogId(null);
-      resetForm();
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleCoachDeleteLog = () => {
-    if (!editingLogId) return;
-
-    setConfirmDialog({
-      isOpen: true,
-      message: "この記録を完全に削除しますか？（元に戻せません）",
-      onConfirm: async () => {
-        try {
-          await deleteDoc(docRef("logs", editingLogId));
-          toast.success("記録を削除しました");
-          setIsCoachEditModalOpen(false);
-          setEditingLogId(null);
-          resetForm();
-          setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
-        } catch (e) {
-          toast.error("エラー: " + e.message);
-        }
-      },
-    });
-  };
-
-  const handleCoachEditRunner = (runner) => {
-    setSelectedRunner(runner);
-    setCoachEditFormData({
-      lastName: runner.lastName,
-      firstName: runner.firstName,
-      pin: runner.pin || "",
-      gender: runner.gender || "",
-    });
-    setCoachFeedbackComment("");
-    setView("coach-runner-detail");
-  };
-
-  // ─── プロフィール・目標値 ───
-  // 選手のプロフィール（名前・暗証番号）を更新する
-  const handleCoachSaveProfile = async () => {
-    if (!selectedRunner) return;
-    setIsSubmitting(true);
-    try {
-      await updateDoc(docRef("runners", selectedRunner.id), {
-        lastName: coachEditFormData.lastName,
-        firstName: coachEditFormData.firstName,
-        pin: coachEditFormData.pin,
-        gender: coachEditFormData.gender || "",
-      });
-      toast.success("プロフィールを更新しました");
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 監督が選手/マネージャーのロールを切り替える
-  const handleCoachChangeRole = (runner, newRole) => {
-    const roleLabel = newRole === ROLES.MANAGER ? "マネージャー" : "選手";
-    setConfirmDialog({
-      isOpen: true,
-      message: `${runner.lastName} ${runner.firstName} のロールを「${roleLabel}」に変更しますか？\n次回ログイン時から適用されます。`,
-      onConfirm: async () => {
-        try {
-          await updateDoc(docRef("runners", runner.id), { role: newRole });
-          toast.success(`ロールを「${roleLabel}」に変更しました`);
-          setView("coach-roster");
-        } catch (e) {
-          toast.error("エラー: " + e.message);
-        } finally {
-          setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
-        }
-      },
-    });
-  };
-
-  // 監督が選手の目標距離・目標タイムを設定する
-  const handleCoachSaveGoals = async () => {
-    if (!selectedRunner) return;
-    setIsSubmitting(true);
-    const updates = {};
-    const pType = targetPeriod.type;
-    const pId = targetPeriod.id;
-
-    if (pType === "global") {
-      if (coachGoalInput.monthly !== "")
-        updates.goalMonthly = parseFloat(coachGoalInput.monthly);
-      if (coachGoalInput.period !== "")
-        updates.goalPeriod = parseFloat(coachGoalInput.period);
-      if (coachGoalInput.q1 !== "")
-        updates.goalQ1 = parseFloat(coachGoalInput.q1);
-      if (coachGoalInput.q2 !== "")
-        updates.goalQ2 = parseFloat(coachGoalInput.q2);
-      if (coachGoalInput.q3 !== "")
-        updates.goalQ3 = parseFloat(coachGoalInput.q3);
-      if (coachGoalInput.q4 !== "")
-        updates.goalQ4 = parseFloat(coachGoalInput.q4);
-    } else if (pType === "custom") {
-      if (coachGoalInput.period !== "")
-        updates[`periodGoals.${pId}.total`] = parseFloat(coachGoalInput.period);
-      if (coachGoalInput.q1 !== "")
-        updates[`periodGoals.${pId}.q1`] = parseFloat(coachGoalInput.q1);
-      if (coachGoalInput.q2 !== "")
-        updates[`periodGoals.${pId}.q2`] = parseFloat(coachGoalInput.q2);
-      if (coachGoalInput.q3 !== "")
-        updates[`periodGoals.${pId}.q3`] = parseFloat(coachGoalInput.q3);
-      if (coachGoalInput.q4 !== "")
-        updates[`periodGoals.${pId}.q4`] = parseFloat(coachGoalInput.q4);
-      if (coachGoalInput.monthly !== "")
-        updates.goalMonthly = parseFloat(coachGoalInput.monthly);
-    } else {
-      if (coachGoalInput.monthly !== "")
-        updates.goalMonthly = parseFloat(coachGoalInput.monthly);
-    }
-
-    try {
-      await updateDoc(docRef("runners", selectedRunner.id), updates);
-      toast.success("目標値を保存しました");
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 練習記録を Firestore に保存する（新規・上書き両対応）
-  const handleSaveLog = async () => {
-    if (!logInput.distance) return;
-    if (!logInput.category) {
-      toast.error("区分を選択してください");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const dataToSave = {
-        date: logInput.date,
-        distance: parseFloat(logInput.distance),
-        category: logInput.category,
-        menuDetail: logInput.menuDetail,
-        rpe: parseInt(logInput.rpe, 10),
-        pain: parseInt(logInput.pain, 10),
-        achieved: logInput.achieved,
-        runnerId: currentUserId,
-        runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
-      };
-      if (editingLogId) {
-        await updateDoc(docRef("logs", editingLogId), {
-          ...dataToSave,
-          updatedAt: new Date().toISOString(),
-        });
-        toast.success("記録を更新しました！");
-      } else {
-        await addDoc(colRef("logs"), {
-          ...dataToSave,
-          createdAt: new Date().toISOString(),
-        });
-        toast.success("記録を保存しました！");
-      }
-      resetForm();
-      setView("diary");
-    } catch (e) {
-      console.error(e);
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // ─── 大会・振り返りノート ───
-  // 大会情報を新規作成または更新する
-  const handleSaveTournament = async () => {
-    if (
-      !newTournamentInput.name ||
-      !newTournamentInput.startDate ||
-      !newTournamentInput.endDate
-    ) {
-      toast.error("大会名と期間（開始・終了）をすべて入力してください");
-      return;
-    }
-    if (newTournamentInput.startDate > newTournamentInput.endDate) {
-      toast.error("終了日は開始日以降の日付を指定してください");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const tournamentId = `tour_${Date.now()}`;
-      const newTournament = {
-        id: tournamentId,
-        name: newTournamentInput.name,
-        startDate: newTournamentInput.startDate,
-        endDate: newTournamentInput.endDate,
-        createdAt: new Date().toISOString(),
-      };
-
-      await setDoc(docRef("tournaments", tournamentId), newTournament);
-
-      setNewTournamentInput({ name: "", startDate: "", endDate: "" });
-      toast.success("新しい大会を登録しました！");
-    } catch (error) {
-      console.error("Error saving tournament:", error);
-      toast.error("保存に失敗しました");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 大会情報を削除する
-  const handleDeleteTournament = (tournamentId) => {
-    setConfirmDialog({
-      isOpen: true,
-      message: "この大会を削除しますか？\n※選手の振り返りシートも影響を受けます",
-      onConfirm: async () => {
-        setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
-        setIsSubmitting(true);
-        try {
-          await deleteDoc(docRef("tournaments", tournamentId));
-          toast.success("大会を削除しました");
-        } catch (error) {
-          console.error("Error deleting tournament:", error);
-          toast.error("削除に失敗しました");
-        } finally {
-          setIsSubmitting(false);
-        }
-      },
-    });
-  };
-
-  const [editingRaceCardId, setEditingRaceCardId] = useState(null);
-  const [raceCardInput, setRaceCardInput] = useState({
-    tournamentId: "",
-    raceType: "",
-    distance: "",
-    startTime: "",
-    ekidenDistance: "",
-    targetTime: "",
-    wupPlan: "",
-    racePlan: "",
-    condition: "",
-    weather: "",
-    wind: "",
-    temp: "",
-    humidity: "",
-    resultTime: "",
-    lapTimes: "",
-    goodPoints: "",
-    issues: "",
-    teammateGoodPoints: "",
-    nextGoal: "",
-  });
-
-  // 大会振り返りノートを保存する
-  const handleSaveRaceCard = async () => {
-    if (!raceCardInput.tournamentId) {
-      toast.error("エラー：大会が選択されていません");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      // 出場日が未入力なら大会開始日で補完する（フォームは表示のみ
-      // フォールバックしており、未操作だと date が保存されないため）
-      const tour = tournaments.find((t) => t.id === raceCardInput.tournamentId);
-      const dataToSave = {
-        ...raceCardInput,
-        date: raceCardInput.date || tour?.startDate || "",
-        runnerId: currentUserId,
-        runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (editingRaceCardId) {
-        await updateDoc(docRef("raceCards", editingRaceCardId), dataToSave);
-        toast.success("大会ノートを更新しました！");
-      } else {
-        dataToSave.createdAt = new Date().toISOString();
-        await addDoc(colRef("raceCards"), dataToSave);
-        toast.success("新しい種目シートを作成しました！");
-      }
-      setEditingRaceCardId(null);
-      setView("race");
-    } catch (e) {
-      console.error(e);
-      toast.error("保存に失敗しました");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteRaceCard = (cardId) => {
-    setConfirmDialog({
-      isOpen: true,
-      message: "このシートを削除しますか？",
-      onConfirm: async () => {
-        setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
-        try {
-          await deleteDoc(docRef("raceCards", cardId));
-          toast.success("シートを削除しました");
-        } catch (e) {
-          console.error(e);
-          toast.error("削除に失敗しました");
-        }
-      },
-    });
-  };
-
-  const handleSaveRaceCardFeedback = async (cardId, feedbackText) => {
-    setIsSubmitting(true);
-    try {
-      await updateDoc(docRef("raceCards", cardId), {
-        coachFeedback: feedbackText,
-        coachFeedbackAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        updatedBy: "coach",
-      });
-      toast.success("フィードバックを送信しました！");
-    } catch (e) {
-      console.error(e);
-      toast.error("送信に失敗しました");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 練習記録を削除する
-  const handleDeleteLog = (targetId = null) => {
-    const idToDelete = targetId || editingLogId;
-    if (!idToDelete) return;
-
-    setConfirmDialog({
-      isOpen: true,
-      message: "この記録を削除しますか？",
-      onConfirm: async () => {
-        try {
-          await deleteDoc(docRef("logs", idToDelete));
-          toast.success("記録を削除しました");
-          setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
-
-          if (idToDelete === editingLogId) {
-            setEditingLogId(null);
-            resetForm();
-          }
-        } catch (e) {
-          console.error(e);
-          toast.error("エラー: " + e.message);
-        }
-      },
-    });
-  };
-
-  const handleRestRegister = async () => {
-    setIsSubmitting(true);
-    try {
-      const dataToSave = {
-        date: logInput.date,
-        distance: 0,
-        category: "完全休養",
-        menuDetail: "オフ",
-        rpe: 1,
-        pain: 1,
-        achieved: true,
-        runnerId: currentUserId,
-        runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
-      };
-      await addDoc(colRef("logs"), {
-        ...dataToSave,
-        createdAt: new Date().toISOString(),
-      });
-      toast.success("休養を記録しました");
-      resetForm();
-      setView("menu");
-    } catch (e) {
-      console.error(e);
-      toast.error("エラーが発生しました");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleStartPreview = (runner) => {
-    setPreviewRunner(runner);
-    setView("menu");
-    window.scrollTo(0, 0);
-  };
-
-  const handleLogout = async () => {
-    if (previewRunner) {
-      setPreviewRunner(null);
-      return;
-    }
-    await signOut(auth);
-    setRole(null);
-    setProfile(null);
-    setView("menu");
-    setIsMenuOpen(false);
-    toast.success("ログアウトしました");
-  };
-
-  // ─── データ出力・選手統合 ───
+  // ─── データ出力 ───
   const exportCSV = () => {
     const headers = [
       "日付",
@@ -1055,7 +411,7 @@ const App = () => {
       l.pain,
     ]);
     const csvContent = [headers, ...rows].map((e) => e.join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], {
+    const blob = new Blob(["﻿" + csvContent], {
       type: "text/csv;charset=utf-8;",
     });
     const link = document.createElement("a");
@@ -1063,175 +419,6 @@ const App = () => {
     link.download = `ekiden_team_data.csv`;
     link.click();
     toast.success("CSVをダウンロードしました");
-  };
-
-  // ─── 目標・振り返り・フィードバック ───
-  // 選手の目標距離・目標タイムを保存する
-  const updateGoals = async () => {
-    setIsSubmitting(true);
-    try {
-      const updates = {};
-      const pType = targetPeriod.type;
-      const pId = targetPeriod.id;
-      if (pType === "global") {
-        if (goalInput.monthly)
-          updates.goalMonthly = parseFloat(goalInput.monthly);
-        if (goalInput.period) updates.goalPeriod = parseFloat(goalInput.period);
-        if (goalInput.q1) updates.goalQ1 = parseFloat(goalInput.q1);
-        if (goalInput.q2) updates.goalQ2 = parseFloat(goalInput.q2);
-        if (goalInput.q3) updates.goalQ3 = parseFloat(goalInput.q3);
-        if (goalInput.q4) updates.goalQ4 = parseFloat(goalInput.q4);
-      } else if (pType === "custom") {
-        if (goalInput.period)
-          updates[`periodGoals.${pId}.total`] = parseFloat(goalInput.period);
-        if (goalInput.q1)
-          updates[`periodGoals.${pId}.q1`] = parseFloat(goalInput.q1);
-        if (goalInput.q2)
-          updates[`periodGoals.${pId}.q2`] = parseFloat(goalInput.q2);
-        if (goalInput.q3)
-          updates[`periodGoals.${pId}.q3`] = parseFloat(goalInput.q3);
-        if (goalInput.q4)
-          updates[`periodGoals.${pId}.q4`] = parseFloat(goalInput.q4);
-        if (goalInput.monthly)
-          updates.goalMonthly = parseFloat(goalInput.monthly);
-      } else {
-        if (goalInput.monthly)
-          updates.goalMonthly = parseFloat(goalInput.monthly);
-      }
-      await updateDoc(docRef("runners", currentUserId), updates);
-      toast.success("目標を保存しました！");
-      setView("menu");
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 選手が自分の振り返りコメントを保存する
-  const handleSaveReview = async () => {
-    if (!reviewComment.trim()) return;
-    setIsSubmitting(true);
-    try {
-      const feedbackId = `${targetPeriod.id}_${currentUserId}`;
-      await setDoc(
-        docRef("feedbacks", feedbackId),
-        {
-          periodId: targetPeriod.id,
-          periodName: targetPeriod.name,
-          runnerId: currentUserId,
-          runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
-          runnerComment: reviewComment,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true },
-      );
-      toast.success("振り返りを保存しました！📝");
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 監督のフィードバックコメントを保存する
-  const handleSaveCoachFeedback = async (runnerId) => {
-    if (!coachFeedbackComment.trim()) return;
-    setIsSubmitting(true);
-    try {
-      const feedbackId = `${targetPeriod.id}_${runnerId}`;
-      await setDoc(
-        docRef("feedbacks", feedbackId),
-        {
-          coachComment: coachFeedbackComment,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true },
-      );
-      toast.success("フィードバックを送りました！");
-      setCoachFeedbackComment("");
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const getRunnerFeedback = (rId) => {
-    if (!rId || !targetPeriod) return null;
-    const feedbackId = `${targetPeriod.id}_${rId}`;
-    return allFeedbacks.find((f) => f.id === feedbackId);
-  };
-
-  // 重複した選手データを 1 件に統合する
-  const handleMergeRunners = async () => {
-    const { sourceId, targetId } = mergeInput;
-    if (!targetId || !sourceId) {
-      toast.error("両方の選手を選択してください。");
-      return;
-    }
-    if (targetId === sourceId) {
-      toast.error("同じ選手は選択できません。");
-      return;
-    }
-
-    const targetRunner = allRunners.find((r) => r.id === targetId);
-    const sourceRunner = allRunners.find((r) => r.id === sourceId);
-
-    if (!targetRunner || !sourceRunner) return;
-
-    setConfirmDialog({
-      isOpen: true,
-      message: `【重要警告】\n「${sourceRunner.lastName} ${sourceRunner.firstName}」の記録をすべて\n「${targetRunner.lastName} ${targetRunner.firstName}」に移動し、元のデータを削除します。\nこの操作は元に戻せません。実行しますか？`,
-      onConfirm: async () => {
-        setIsSubmitting(true);
-        try {
-          const batch = writeBatch(db);
-
-          const logsQ = query(
-            colRef("logs"),
-            where("runnerId", "==", sourceId),
-          );
-          const logsSnap = await getDocs(logsQ);
-          logsSnap.forEach((l) => {
-            batch.update(docRef("logs", l.id), {
-              runnerId: targetId,
-              runnerName: `${targetRunner.lastName} ${targetRunner.firstName}`,
-            });
-          });
-
-          const fbsQ = query(
-            colRef("feedbacks"),
-            where("runnerId", "==", sourceId),
-          );
-          const fbsSnap = await getDocs(fbsQ);
-          fbsSnap.forEach((f) => {
-            const data = f.data();
-            const newFbId = f.id.replace(sourceId, targetId);
-            if (f.id !== newFbId) {
-              batch.set(docRef("feedbacks", newFbId), {
-                ...data,
-                runnerId: targetId,
-                runnerName: `${targetRunner.lastName} ${targetRunner.firstName}`,
-              });
-              batch.delete(docRef("feedbacks", f.id));
-            }
-          });
-
-          batch.delete(docRef("runners", sourceId));
-          await batch.commit();
-
-          toast.success("選手の統合が完了しました");
-          setMergeInput({ sourceId: "", targetId: "" });
-          setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
-        } catch (e) {
-          console.error(e);
-          toast.error("統合エラー: " + e.message);
-        } finally {
-          setIsSubmitting(false);
-        }
-      },
-    });
   };
 
   // 各ビューに渡す props
