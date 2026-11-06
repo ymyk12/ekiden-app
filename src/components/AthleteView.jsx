@@ -16,41 +16,33 @@ import {
   LogOut,
   Filter,
   Activity,
-  AlertTriangle,
   BookOpen,
-  MapPin,
-  Dumbbell,
-  ArrowLeft,
-  Save,
   Users,
-  MessageSquare,
-  HeartPulse,
   Trash2,
   ChevronRight,
-  ChevronDown,
   Home,
   Plus,
   Edit,
-  AlertCircle,
   Loader2,
   Flag,
   Calendar,
   Bell,
   X,
-  FileText,
 } from "lucide-react";
 
-import { ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
-
 import { ROLES, CATEGORY } from "../utils/constants";
-
-import { getGoalValue, getTodayStr, getDatesInRange } from "../utils/dateUtils";
 
 import RaceCardEntry from "./RaceCardEntry";
 import TeamRaceReport from "./TeamRaceReport";
 import CalendarView from "./CalendarView";
 import DocumentsModal from "./DocumentsModal";
 import AthleteTeamStatusView from "./athlete/AthleteTeamStatusView";
+import AthleteMenuView from "./athlete/AthleteMenuView";
+import AthleteEntryView from "./athlete/AthleteEntryView";
+import AthleteMyLogView from "./athlete/AthleteMyLogView";
+import AthleteReviewView from "./athlete/AthleteReviewView";
+import AthleteGoalView from "./athlete/AthleteGoalView";
+import AthleteRaceView from "./athlete/AthleteRaceView";
 
 const AthleteView = (props) => {
   // App.js から渡されたデータ（Props）をすべて展開します
@@ -114,9 +106,8 @@ const AthleteView = (props) => {
   // 画面（view）が切り替わるたびに、スクロールを一番上（0, 0）に戻す
   useEffect(() => {
     window.scrollTo(0, 0);
-    if (view === "menu") {
-      setIsQuarterExpanded(false);
-    }
+    // menu の四半期開閉トグルは AthleteMenuView が自前で保持し、
+    // menu へ戻るたびに再マウントされて自然に閉じた状態に戻る。
   }, [view]);
 
   const isPreview = role === ROLES.COACH && previewRunner;
@@ -209,8 +200,6 @@ const AthleteView = (props) => {
     n.id.startsWith("fb_period_"),
   );
   const [showTeamReportId, setShowTeamReportId] = useState(null);
-  const [raceMonthFilter, setRaceMonthFilter] = useState("all");
-  const [isQuarterExpanded, setIsQuarterExpanded] = useState(false);
   const [diaryDetailLog, setDiaryDetailLog] = useState(null);
   const [showDocs, setShowDocs] = useState(false);
 
@@ -469,1011 +458,75 @@ const AthleteView = (props) => {
 
       <main className="px-5 space-y-6 relative z-20 max-w-md mx-auto">
         {view === "menu" && (
-          <>
-            {(() => {
-              const currentGoal = getGoalValue(
-                currentProfile,
-                targetPeriod.id,
-                targetPeriod.type,
-                "goalPeriod",
-              );
-              const today = new Date().toISOString().slice(0, 10);
-              const isCustomPeriod = targetPeriod.type === "custom";
-              const isActive = today >= targetPeriod.start && today <= targetPeriod.end;
-              if ((!currentGoal || currentGoal === 0) && isCustomPeriod && isActive) {
-                return (
-                  <div
-                    onClick={() => setView("goal")}
-                    className="bg-rose-500 text-white p-4 rounded-2xl shadow-lg mb-6 flex items-center justify-between cursor-pointer active:scale-95 transition-transform animate-in slide-in-from-top-2"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="bg-white/20 p-2 rounded-full">
-                        <Target size={20} className="text-white" />
-                      </div>
-                      <div>
-                        <p className="font-black text-xs uppercase tracking-widest opacity-90">
-                          Action Required
-                        </p>
-                        <p className="font-bold text-sm">
-                          目標が設定されていません
-                        </p>
-                      </div>
-                    </div>
-                    <div className="bg-white text-rose-600 px-3 py-1.5 rounded-lg text-xs font-black shadow-sm">
-                      設定する
-                    </div>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
-            {missingDates.length > 0 && (
-              <div className="mb-6 animate-in slide-in-from-top-4">
-                <div className="flex items-center justify-between mb-2 px-2">
-                  <p className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
-                    <AlertTriangle size={14} /> Missing Reports (
-                    {missingDates.length})
-                  </p>
-                </div>
-                <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
-                  {missingDates.map((dateStr) => {
-                    const d = new Date(dateStr);
-                    return (
-                      <div
-                        key={dateStr}
-                        onClick={() => {
-                          setLogInput({ ...logInput, date: dateStr });
-                          setView("entry");
-                        }}
-                        className="bg-amber-400 text-slate-900 py-2 px-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer active:scale-95 transition-transform border border-slate-900/10"
-                      >
-                        <div className="flex items-center gap-3">
-                          <AlertTriangle size={16} className="text-slate-800" />
-                          <div className="flex items-baseline gap-2">
-                            <span className="font-black text-sm">
-                              {d.getMonth() + 1}/{d.getDate()}
-                            </span>
-                            <span className="text-xs font-bold opacity-70">
-                              未入力
-                            </span>
-                          </div>
-                        </div>
-                        <div className="bg-white/90 text-slate-900 px-2.5 py-1 rounded text-xs font-black min-w-[44px] text-center">
-                          入力
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {missingDates.length > 3 && (
-                  <p className="text-center text-[11px] text-slate-500 font-bold mt-2">
-                    ↑ スクロールして過去分も確認できます
-                  </p>
-                )}
-                {missingDates.length >= 2 && (
-                  <p className="text-center text-[11px] text-slate-500 font-bold">
-                    休みだった場合も「完全休養」として記録しましょう！
-                  </p>
-                )}
-              </div>
-            )}
-
-            {hasUnreadReview && (
-              <div
-                onClick={() => safeChangeView("review")}
-                className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-4 rounded-2xl shadow-lg mb-6 flex items-center justify-between cursor-pointer active:scale-95 transition-transform animate-in slide-in-from-top-2"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 p-2 rounded-full flex-shrink-0">
-                    <MessageSquare size={20} className="text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-black text-xs uppercase tracking-widest opacity-90">
-                      Coach Feedback
-                    </p>
-                    <p className="font-bold text-sm truncate">
-                      {currentFeedback?.coachComment
-                        ? `「${currentFeedback.coachComment.slice(0, 20)}${currentFeedback.coachComment.length > 20 ? "…" : ""}」`
-                        : "監督からフィードバックが届いています"}
-                    </p>
-                  </div>
-                </div>
-                <div className="bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-black shadow-sm flex-shrink-0 ml-2">
-                  確認する
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowDocs(true)}
-              className="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 flex items-center justify-between active:scale-[0.99] hover:border-blue-200 transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-50 p-2.5 rounded-xl flex-shrink-0">
-                  <FileText size={18} className="text-blue-500" />
-                </div>
-                <div className="text-left">
-                  <p className="font-black text-xs uppercase tracking-widest text-slate-400">
-                    Documents
-                  </p>
-                  <p className="font-bold text-sm text-slate-700">資料</p>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-slate-300" />
-            </button>
-
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-md shadow-blue-900/5 border border-slate-100/80 space-y-6">
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-widest">
-                    {targetPeriod.type === "year"
-                      ? "Yearly Mileage"
-                      : targetPeriod.type === "custom"
-                        ? "Period Mileage"
-                        : "Monthly Mileage"}
-                  </h3>
-                </div>
-                <div className="flex justify-between items-end mb-2">
-                  <span className="text-3xl font-black text-blue-600 tracking-tighter">
-                    {targetPeriod.type === "month"
-                      ? personalStats.monthly
-                      : personalStats.period}
-                    <span className="text-xs font-normal text-slate-400">
-                      km
-                    </span>
-                  </span>
-                  <span className="text-xs font-bold text-slate-400 pb-1">
-                    /{" "}
-                    {getGoalValue(
-                      currentProfile,
-                      targetPeriod.id,
-                      targetPeriod.type,
-                      "goalPeriod",
-                    )}{" "}
-                    km
-                  </span>
-                </div>
-                {getGoalValue(
-                  currentProfile,
-                  targetPeriod.id,
-                  targetPeriod.type,
-                  "goalPeriod",
-                ) > 0 && (
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-1000"
-                      style={{
-                        width: `${Math.min(100, ((targetPeriod.type === "month" ? personalStats.monthly : personalStats.period) / getGoalValue(currentProfile, targetPeriod.id, targetPeriod.type, "goalPeriod")) * 100)}%`,
-                      }}
-                    ></div>
-                  </div>
-                )}
-                <p className="text-[9px] text-right text-slate-400 font-bold mt-1">
-                  {targetPeriod.name}
-                </p>
-              </div>
-
-              {activeQuarters &&
-                activeQuarters.length > 0 &&
-                targetPeriod.type !== "month" && (
-                  <div className="pt-4 border-t border-slate-100">
-                    <button
-                      onClick={() => setIsQuarterExpanded((v) => !v)}
-                      className="w-full flex items-center justify-between"
-                    >
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                        <Target size={12} /> Quarterly Progress
-                      </h4>
-                      <ChevronDown
-                        size={14}
-                        className={`text-slate-400 transition-transform duration-200 ${isQuarterExpanded ? "rotate-180" : ""}`}
-                      />
-                    </button>
-                    {isQuarterExpanded && (
-                      <div className="mt-3 space-y-2 animate-in fade-in">
-                        {activeQuarters.map((q, idx) => {
-                          const qKey = `q${idx + 1}`;
-                          const qGoal =
-                            getGoalValue(
-                              currentProfile,
-                              targetPeriod.id,
-                              targetPeriod.type,
-                              qKey,
-                            ) || 0;
-                          let currentQVal = 0;
-                          let isActive = false;
-                          if (q.start && q.end) {
-                            const qStart = new Date(q.start);
-                            const qEnd = new Date(q.end);
-                            qEnd.setHours(23, 59, 59, 999);
-                            const qTotal = allLogs
-                              .filter((l) => l.runnerId === currentUserId)
-                              .filter((l) => {
-                                const d = new Date(l.date);
-                                return !isNaN(d) && d >= qStart && d <= qEnd;
-                              })
-                              .reduce(
-                                (sum, l) => sum + (Number(l.distance) || 0),
-                                0,
-                              );
-                            currentQVal = Math.round(qTotal * 10) / 10;
-                            const now = new Date();
-                            isActive = now >= qStart && now <= qEnd;
-                          }
-                          const progressRate =
-                            qGoal > 0
-                              ? Math.min(100, (currentQVal / qGoal) * 100)
-                              : 0;
-                          return (
-                            <div
-                              key={qKey}
-                              className={`p-3 rounded-2xl border transition-all ${isActive ? "bg-blue-50/50 border-blue-200 shadow-sm" : "bg-slate-50 border-slate-100 opacity-90"}`}
-                            >
-                              <div className="flex justify-between items-end mb-1.5">
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={`text-xs font-black ${isActive ? "text-blue-600" : "text-slate-500"}`}
-                                  >
-                                    Q{idx + 1}
-                                  </span>
-                                  {q.start && q.end && (
-                                    <span className="text-[9px] font-bold text-slate-400">
-                                      {q.start.slice(5).replace("-", "/")} -{" "}
-                                      {q.end.slice(5).replace("-", "/")}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-right">
-                                  <span
-                                    className={`text-sm font-black ${isActive ? "text-blue-600" : "text-slate-700"}`}
-                                  >
-                                    {currentQVal}
-                                  </span>
-                                  <span className="text-[9px] font-bold text-slate-400 mx-0.5">
-                                    /
-                                  </span>
-                                  <span className="text-[10px] font-bold text-slate-400">
-                                    {qGoal} km
-                                  </span>
-                                </div>
-                              </div>
-                              {qGoal > 0 ? (
-                                <div className="w-full bg-slate-200/50 h-1.5 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-1000 ${isActive ? "bg-gradient-to-r from-blue-400 to-blue-600" : "bg-slate-300"}`}
-                                    style={{ width: `${progressRate}%` }}
-                                  ></div>
-                                </div>
-                              ) : (
-                                <div className="w-full bg-slate-100 h-1.5 rounded-full flex items-center justify-center">
-                                  <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest scale-75">
-                                    No Goal
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-            </div>
-
-            {(() => {
-              const todayStr = getTodayStr();
-              const diary = teamLogs.find((l) => l.date === todayStr);
-              if (!diary) return null;
-              return (
-                <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-5 rounded-[2.5rem] text-white shadow-xl shadow-slate-900/30 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
-                  <div className="relative z-10">
-                    <div className="w-full flex items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 mb-2">
-                          <BookOpen size={12} /> Team Practice Diary
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          {diary.location && (
-                            <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                              <MapPin size={11} className="text-blue-400" />
-                              {diary.location === "その他" && diary.locationDetail
-                                ? diary.locationDetail
-                                : diary.location === "競技場" && diary.locationDetail
-                                  ? `${diary.location}(${diary.locationDetail})`
-                                  : diary.location}
-                            </span>
-                          )}
-                          {diary.startTime && (
-                            <span className="text-[10px] font-bold bg-white/10 px-2 py-0.5 rounded-lg border border-white/10">
-                              {diary.startTime}{diary.endTime ? ` - ${diary.endTime}` : ""}
-                            </span>
-                          )}
-                          {diary.weather && (
-                            <span className="text-[10px] font-bold bg-white/10 px-2 py-0.5 rounded-lg border border-white/10">
-                              {diary.weather}{diary.temp ? ` ${diary.temp}℃` : ""}
-                            </span>
-                          )}
-                        </div>
-                        <p className="font-bold text-sm leading-snug text-white/90">
-                          {diary.menu}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 space-y-3">
-                      {diary.reinforcements && diary.reinforcements.length > 0 && (
-                        <div className="bg-blue-900/30 p-3 rounded-xl border border-blue-500/20">
-                          <p className="text-[10px] font-bold text-blue-300 mb-2 flex items-center gap-1">
-                            <Dumbbell size={10} /> REINFORCEMENT
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {diary.reinforcements.map((item, i) => (
-                              <span key={i} className="text-[10px] font-bold bg-blue-500/20 text-blue-100 px-2 py-1 rounded">
-                                {item}
-                              </span>
-                            ))}
-                            {diary.reinforcements.includes("その他") && diary.reinforcementDetail && (
-                              <span className="text-[10px] font-bold text-slate-400 self-center">
-                                : {diary.reinforcementDetail}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {diary.result && (
-                        <div className="bg-white/10 p-3 rounded-xl border border-white/10">
-                          <p className="text-[10px] font-bold text-blue-300 mb-1 flex items-center gap-1">
-                            <Activity size={10} /> RESULT / NOTES
-                          </p>
-                          <p className="text-xs font-bold leading-relaxed text-slate-200 whitespace-pre-wrap">
-                            {diary.result}
-                          </p>
-                        </div>
-                      )}
-                      {diary.coachNote && (
-                        <div className="bg-amber-300/20 p-3 rounded-xl border border-amber-300/30">
-                          <p className="text-[10px] font-black text-amber-300 mb-1 flex items-center gap-1 uppercase tracking-widest">
-                            <MessageSquare size={10} /> Coach's Note
-                          </p>
-                          <p className="text-xs font-bold leading-relaxed text-amber-50 whitespace-pre-wrap">
-                            {diary.coachNote}
-                          </p>
-                        </div>
-                      )}
-                      <p className="text-[9px] text-slate-500 text-right">
-                        Updated by: {diary.updatedBy}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-          </>
+          <AthleteMenuView
+            currentProfile={currentProfile}
+            targetPeriod={targetPeriod}
+            setView={setView}
+            safeChangeView={safeChangeView}
+            missingDates={missingDates}
+            logInput={logInput}
+            setLogInput={setLogInput}
+            hasUnreadReview={hasUnreadReview}
+            currentFeedback={currentFeedback}
+            setShowDocs={setShowDocs}
+            personalStats={personalStats}
+            activeQuarters={activeQuarters}
+            allLogs={allLogs}
+            currentUserId={currentUserId}
+            teamLogs={teamLogs}
+          />
         )}
 
         {/* Entry View */}
         {view === "entry" && (
-          <div className="bg-white p-4 rounded-[3rem] shadow-sm space-y-3 animate-in fade-in">
-            {/* ヘッダー */}
-            <div className="flex items-center gap-2 pb-1">
-              <button
-                onClick={() => safeChangeView("menu")}
-                className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
-              >
-                <ArrowLeft size={18} />
-              </button>
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400">
-                Daily Entry
-              </h3>
-            </div>
-
-            {/* 今日・昨日クイック選択 */}
-            <div className="flex gap-2">
-              {[
-                { label: "今日", offset: 0 },
-                { label: "昨日", offset: 1 },
-              ].map(({ label, offset }) => {
-                const d = new Date();
-                d.setDate(d.getDate() - offset);
-                const dateStr = d.toLocaleDateString("sv-SE");
-                const isSelected = logInput.date === dateStr;
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => setLogInput({ ...logInput, date: dateStr })}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${isSelected ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Date + Type */}
-            {/* フォントは16px(text-base)未満にしない: iOS Safariがフォーカス時に自動ズームするため */}
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="date"
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 text-base"
-                value={logInput.date}
-                onChange={(e) => setLogInput({ ...logInput, date: e.target.value })}
-              />
-              <select
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 text-base appearance-none"
-                value={logInput.category}
-                onChange={(e) => {
-                  const cat = e.target.value;
-                  const next = { ...logInput, category: cat };
-                  if (cat === CATEGORY.REST) {
-                    next.distance = "0";
-                  } else if (
-                    logInput.category === CATEGORY.REST &&
-                    logInput.distance === "0"
-                  ) {
-                    next.distance = "";
-                  }
-                  setLogInput(next);
-                }}
-              >
-                <option value="" disabled>
-                  区分を選択
-                </option>
-                {Object.values(CATEGORY).map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Distance */}
-            <div className="space-y-1">
-              <div className="relative">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.1"
-                  placeholder="0.0"
-                  disabled={logInput.category === CATEGORY.REST}
-                  className="w-full p-3 pr-14 bg-blue-50/40 border border-blue-100 rounded-2xl font-black text-3xl text-blue-600 text-center outline-none focus:ring-2 ring-blue-500 disabled:bg-slate-50 disabled:border-slate-200 disabled:text-slate-300"
-                  value={logInput.distance}
-                  onChange={(e) => setLogInput({ ...logInput, distance: e.target.value })}
-                />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-blue-400">km</span>
-              </div>
-              <p className="text-[11px] text-slate-500 font-bold text-center">
-                {logInput.category === CATEGORY.REST
-                  ? "完全休養日として 0km で記録されます"
-                  : "アップ・ダウンを含めた距離を入力してください"}
-              </p>
-            </div>
-
-            {/* Menu Detail */}
-            <textarea
-              placeholder="メニューの内容、タイムなど"
-              className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 outline-none focus:ring-2 ring-blue-500 text-base resize-none min-h-[120px]"
-              value={logInput.menuDetail}
-              onChange={(e) => setLogInput({ ...logInput, menuDetail: e.target.value })}
-            />
-
-            {/* RPE + Pain 横並び */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-slate-50 px-3 py-2.5 rounded-2xl space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">RPE 強度</label>
-                  <span className={`text-lg font-black ${logInput.rpe >= 7 ? "text-rose-500" : logInput.rpe >= 4 ? "text-amber-500" : "text-emerald-600"}`}>{logInput.rpe}</span>
-                </div>
-                <input
-                  type="range" min="1" max="10" step="1"
-                  className={`w-full ${logInput.rpe >= 7 ? "accent-rose-500" : logInput.rpe >= 4 ? "accent-amber-500" : "accent-emerald-500"}`}
-                  value={logInput.rpe}
-                  onChange={(e) => setLogInput({ ...logInput, rpe: parseInt(e.target.value, 10) })}
-                />
-                <div className="flex justify-between text-[10px] font-bold text-slate-400 leading-none">
-                  <span>楽</span>
-                  <span>限界</span>
-                </div>
-              </div>
-              <div className="bg-slate-50 px-3 py-2.5 rounded-2xl space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Pain 痛み</label>
-                  <span className={`text-lg font-black ${logInput.pain >= 3 ? "text-rose-500" : "text-slate-700"}`}>{logInput.pain}</span>
-                </div>
-                <input
-                  type="range" min="1" max="5" step="1"
-                  className="w-full accent-rose-500"
-                  value={logInput.pain}
-                  onChange={(e) => setLogInput({ ...logInput, pain: parseInt(e.target.value, 10) })}
-                />
-                <div className="flex justify-between text-[10px] font-bold text-slate-400 leading-none">
-                  <span>なし</span>
-                  <span>強い</span>
-                </div>
-              </div>
-            </div>
-
-            {/* ボタン群 */}
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={handleSaveLog}
-                disabled={isSubmitting || !logInput.distance}
-                className={`w-full py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${isSubmitting || !logInput.distance ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-500/30 active:scale-95"}`}
-              >
-                {isSubmitting ? (
-                  <><Loader2 size={16} className="animate-spin" /> {editingLogId ? "更新中..." : "保存中..."}</>
-                ) : (
-                  <><Save size={16} /> {editingLogId ? "更新する" : "保存する"}</>
-                )}
-              </button>
-              {editingLogId && (
-                <button
-                  onClick={() => { setEditingLogId(null); resetForm(); }}
-                  disabled={isSubmitting}
-                  className="w-full py-2.5 bg-slate-100 text-slate-500 rounded-2xl font-bold text-sm active:scale-95 transition-all"
-                >
-                  キャンセル
-                </button>
-              )}
-              {!logInput.distance && !editingLogId && (
-                <button
-                  onClick={handleRestRegister}
-                  disabled={isSubmitting}
-                  className="w-full py-2.5 bg-emerald-50 text-emerald-600 rounded-2xl font-bold text-sm active:scale-95 transition-all"
-                >
-                  完全休養として記録
-                </button>
-              )}
-            </div>
-          </div>
+          <AthleteEntryView
+            safeChangeView={safeChangeView}
+            logInput={logInput}
+            setLogInput={setLogInput}
+            handleSaveLog={handleSaveLog}
+            isSubmitting={isSubmitting}
+            editingLogId={editingLogId}
+            setEditingLogId={setEditingLogId}
+            resetForm={resetForm}
+            handleRestRegister={handleRestRegister}
+          />
         )}
 
         {/* MY LOG */}
         {view === "diary" && (
-          <div className="bg-white rounded-[3rem] shadow-sm animate-in fade-in flex flex-col h-[calc(100dvh-290px)]">
-            {/* サブヘッダー（固定） */}
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0 border-b border-slate-100">
-              <button onClick={() => safeChangeView("menu")} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200">
-                <ArrowLeft size={20} />
-              </button>
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">My Log</h3>
-              <div className="w-9" />
-            </div>
-            {/* スクロールエリア */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 pb-8 space-y-3">
-              {periodLogs.length === 0 ? (
-                <p className="text-center text-xs text-slate-300 py-8 font-bold">
-                  この期間の記録はありません
-                </p>
-              ) : (
-                periodLogs
-                  .slice()
-                  .sort((a, b) => b.date.localeCompare(a.date))
-                  .map((log) => {
-                    const isRest = log.category === "完全休養";
-                    return (
-                      <button
-                        key={log.id}
-                        onClick={() => setDiaryDetailLog(log)}
-                        className="w-full bg-slate-50 rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3 active:scale-[0.98] hover:bg-slate-100 transition-all text-left"
-                      >
-                        <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center text-white flex-shrink-0 ${isRest ? "bg-emerald-400" : "bg-blue-500"}`}>
-                          {isRest ? (
-                            <span className="text-base">💤</span>
-                          ) : (
-                            <>
-                              <span className="text-[11px] font-black leading-none">{log.distance}</span>
-                              <span className="text-[8px] font-bold leading-none mt-0.5">km</span>
-                            </>
-                          )}
-                        </div>
-                        <div className="text-left min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-1 mb-0.5">
-                            <p className="text-[11px] font-bold text-slate-500">
-                              {log.date.slice(5).replace("-", "/")}
-                            </p>
-                            {!isRest && (
-                              <span className="text-[10px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                {log.category}
-                              </span>
-                            )}
-                            {log.rpe > 0 && (
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${log.rpe >= 8 ? "bg-rose-100 text-rose-600 border-rose-200" : log.rpe >= 5 ? "bg-orange-100 text-orange-600 border-orange-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
-                                RPE {log.rpe}
-                              </span>
-                            )}
-                            {log.pain > 1 && (
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${log.pain >= 4 ? "bg-purple-100 text-purple-600 border-purple-200" : log.pain >= 3 ? "bg-rose-100 text-rose-600 border-rose-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>
-                                Pain {log.pain}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm font-black text-slate-700 truncate">
-                            {isRest ? "完全休養" : (log.menuDetail || "—")}
-                          </p>
-                        </div>
-                        <ChevronRight size={18} className="text-slate-300 flex-shrink-0" />
-                      </button>
-                    );
-                  })
-              )}
-            </div>{/* /スクロールエリア */}
-          </div>
+          <AthleteMyLogView
+            safeChangeView={safeChangeView}
+            periodLogs={periodLogs}
+            setDiaryDetailLog={setDiaryDetailLog}
+          />
         )}
 
         {/* Review View */}
         {view === "review" && (
-          <div className="bg-white rounded-[3rem] shadow-sm animate-in fade-in flex flex-col h-[calc(100dvh-290px)]">
-            {/* サブヘッダー（固定） */}
-            <div className="flex items-center gap-2 px-6 pt-6 pb-4 flex-shrink-0 border-b border-slate-100">
-              <button onClick={() => safeChangeView("diary")} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200">
-                <ArrowLeft size={20} />
-              </button>
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">Period Review</h3>
-            </div>
-            {/* スクロールエリア */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 pb-8 space-y-8">
-
-            <div className="bg-slate-50 p-6 rounded-3xl relative overflow-hidden">
-              <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 text-center">
-                Goal Achievement ({targetPeriod.name})
-              </h4>
-              {(() => {
-                const goalVal = getGoalValue(
-                  currentProfile,
-                  targetPeriod.id,
-                  targetPeriod.type,
-                  "goalPeriod",
-                );
-                const currentVal = personalStats.period;
-                const rate =
-                  goalVal > 0 ? Math.round((currentVal / goalVal) * 100) : 0;
-                const chartData = [
-                  { name: "Achieved", value: currentVal },
-                  {
-                    name: "Remaining",
-                    value: Math.max(0, goalVal - currentVal),
-                  },
-                ];
-                return (
-                  <div className="flex flex-col items-center justify-center relative">
-                    <div className="w-full h-48 relative z-10">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={chartData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            startAngle={90}
-                            endAngle={-270}
-                            dataKey="value"
-                            stroke="none"
-                          >
-                            <Cell fill="#3b82f6" />
-                            <Cell fill="#e2e8f0" />
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-4xl font-black text-slate-800 tracking-tighter">
-                          {rate}
-                          <span className="text-sm">%</span>
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-400">
-                          {currentVal} / {goalVal} km
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="bg-white border border-slate-100 p-6 rounded-3xl space-y-4">
-              <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <Activity size={16} /> Training Intensity
-              </h4>
-              {(() => {
-                const counts = { low: 0, mid: 0, high: 0 };
-                periodLogs.forEach((l) => {
-                  if (l.rpe >= 8) counts.high++;
-                  else if (l.rpe >= 5) counts.mid++;
-                  else counts.low++;
-                });
-                const total = periodLogs.length || 1;
-                return (
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
-                        <span className="text-rose-500 flex items-center gap-1">
-                          <AlertCircle size={10} /> Hard (RPE 8-10)
-                        </span>
-                        <span>
-                          {counts.high}回 (
-                          {Math.round((counts.high / total) * 100)}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-rose-500 h-full rounded-full transition-all duration-1000"
-                          style={{ width: `${(counts.high / total) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
-                        <span className="text-orange-400">
-                          Moderate (RPE 5-7)
-                        </span>
-                        <span>
-                          {counts.mid}回 (
-                          {Math.round((counts.mid / total) * 100)}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-orange-400 h-full rounded-full transition-all duration-1000"
-                          style={{ width: `${(counts.mid / total) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
-                        <span className="text-emerald-500">
-                          Easy / Recovery (RPE 1-4)
-                        </span>
-                        <span>
-                          {counts.low}回 (
-                          {Math.round((counts.low / total) * 100)}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-emerald-500 h-full rounded-full transition-all duration-1000"
-                          style={{ width: `${(counts.low / total) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="bg-white border border-slate-100 p-6 rounded-3xl space-y-4">
-              <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <HeartPulse size={16} /> Physical Condition Map
-              </h4>
-              {(() => {
-                const dates = getDatesInRange(
-                  targetPeriod.start,
-                  targetPeriod.end,
-                );
-                const painMap = {};
-                periodLogs.forEach((l) => {
-                  if (!painMap[l.date] || painMap[l.date] < l.pain)
-                    painMap[l.date] = l.pain;
-                });
-                return (
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      {dates.map((date) => {
-                        const pain = painMap[date];
-                        const day = parseInt(date.split("-")[2], 10);
-                        let bgClass = "bg-slate-100 text-slate-300";
-                        if (pain === 1)
-                          bgClass = "bg-emerald-300 text-emerald-800";
-                        if (pain === 2)
-                          bgClass = "bg-yellow-300 text-yellow-800";
-                        if (pain === 3) bgClass = "bg-orange-400 text-white";
-                        if (pain === 4) bgClass = "bg-rose-500 text-white";
-                        if (pain === 5) bgClass = "bg-purple-600 text-white";
-                        return (
-                          <div
-                            key={date}
-                            title={`${date}: Pain ${pain || "-"}`}
-                            className={`w-8 h-8 rounded-lg ${bgClass} flex items-center justify-center text-[10px] font-black shadow-sm transition-all hover:scale-110`}
-                          >
-                            {day}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex justify-between items-center px-2 pt-2 border-t border-slate-50">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-emerald-300 rounded-full"></div>
-                          <span className="text-[9px] font-bold text-slate-400">
-                            Good
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                          <span className="text-[9px] font-bold text-slate-400">
-                            Pain
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
-                          <span className="text-[9px] font-bold text-slate-400">
-                            Danger
-                          </span>
-                        </div>
-                      </div>
-                      <span className="text-[9px] font-bold text-slate-300">
-                        {dates.length} Days
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                Self Review
-              </label>
-              <textarea
-                className="w-full p-5 bg-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500 min-h-[150px] text-sm leading-relaxed resize-none"
-                placeholder="今期の振り返り、次期の目標など"
-                defaultValue={currentFeedback?.runnerComment || ""}
-                onChange={(e) => setReviewComment(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={handleSaveReview}
-              disabled={isSubmitting}
-              className={`w-full py-5 rounded-3xl font-black flex items-center justify-center gap-2 transition-all ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-gradient-to-br from-slate-800 to-slate-950 text-white shadow-lg shadow-slate-900/20 active:scale-95"}`}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" /> 保存中...
-                </>
-              ) : (
-                <>
-                  <Save size={18} /> 振り返りを保存
-                </>
-              )}
-            </button>
-
-            <div className="bg-emerald-50 p-6 rounded-3xl space-y-4 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-12 bg-white/20 rounded-full -mr-6 -mt-6 blur-2xl"></div>
-              <div className="relative z-10">
-                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1">
-                  <MessageSquare size={12} /> Coach Feedback
-                </p>
-                {currentFeedback && currentFeedback.coachComment ? (
-                  <p className="text-sm font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">
-                    {currentFeedback.coachComment}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-400 italic font-bold">
-                    まだフィードバックはありません
-                  </p>
-                )}
-              </div>
-            </div>
-            </div>{/* /スクロールエリア */}
-          </div>
+          <AthleteReviewView
+            safeChangeView={safeChangeView}
+            targetPeriod={targetPeriod}
+            currentProfile={currentProfile}
+            personalStats={personalStats}
+            periodLogs={periodLogs}
+            currentFeedback={currentFeedback}
+            setReviewComment={setReviewComment}
+            handleSaveReview={handleSaveReview}
+            isSubmitting={isSubmitting}
+          />
         )}
 
         {/* Goal View */}
         {view === "goal" && (
-          <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in">
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => safeChangeView("menu")}
-                className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
-              >
-                <ArrowLeft size={20} />
-              </button>
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">
-                Target Setting
-              </h3>
-              <div className="w-9" />
-            </div>
-
-            <div className="bg-slate-50 p-6 rounded-3xl space-y-6 border border-slate-100">
-              <div className="space-y-4">
-                <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2">
-                  <Target size={18} className="text-blue-500" />{" "}
-                  {targetPeriod.name} の目標
-                </h4>
-                {targetPeriod.type === "month" && (
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      月間目標走行距離 (km)
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="例: 200"
-                      className="w-full p-4 bg-white rounded-2xl font-black text-xl text-slate-700 outline-none border-2 border-transparent focus:border-blue-500 transition-all shadow-sm"
-                      value={goalInput.monthly}
-                      onChange={(e) =>
-                        setGoalInput({ ...goalInput, monthly: e.target.value })
-                      }
-                    />
-                    <p className="text-[10px] text-slate-400 font-bold ml-1">
-                      ※この期間の各月の目標値です
-                    </p>
-                  </div>
-                )}
-                {/* 期間合計目標の保存対象は custom/global のみ（App.js updateGoals）。
-                    year/month では保存されず無言で破棄されるため入力欄を出さない。 */}
-                {(targetPeriod.type === "custom" ||
-                  targetPeriod.type === "global") && (
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      期間合計目標 (km)
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="例: 1000"
-                      className="w-full p-4 bg-white rounded-2xl font-black text-xl text-emerald-600 outline-none border-2 border-transparent focus:border-emerald-500 transition-all shadow-sm"
-                      value={goalInput.period}
-                      onChange={(e) =>
-                        setGoalInput({ ...goalInput, period: e.target.value })
-                      }
-                    />
-                  </div>
-                )}
-                {activeQuarters.length > 0 && (
-                  <div className="space-y-3 pt-4 border-t border-slate-200">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      期間内訳 (Quarterly Goals)
-                    </p>
-                    <div className="grid grid-cols-2 gap-4">
-                      {activeQuarters.map((q, idx) => (
-                        <div key={idx} className="space-y-1">
-                          <label className="flex items-baseline gap-1.5">
-                            <span className="text-[9px] font-bold text-slate-400">
-                              Q{idx + 1}
-                            </span>
-                            {q.start && q.end && (
-                              <span className="text-[9px] font-bold text-slate-400">
-                                {q.start.slice(5).replace("-", "/")}-
-                                {q.end.slice(5).replace("-", "/")}
-                              </span>
-                            )}
-                          </label>
-                          <input
-                            type="number"
-                            className="w-full p-3 bg-white rounded-xl font-bold text-slate-700 outline-none border-2 border-transparent focus:border-blue-500 shadow-sm"
-                            value={goalInput[`q${idx + 1}`]}
-                            onChange={(e) =>
-                              setGoalInput({
-                                ...goalInput,
-                                [`q${idx + 1}`]: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="space-y-3">
-              <button
-                onClick={updateGoals}
-                disabled={isSubmitting}
-                className={`w-full py-5 rounded-3xl font-black flex items-center justify-center gap-2 transition-all ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-500/30 active:scale-95"}`}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" /> 保存中...
-                  </>
-                ) : (
-                  <>
-                    <Save size={18} /> 目標を保存
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          <AthleteGoalView
+            safeChangeView={safeChangeView}
+            targetPeriod={targetPeriod}
+            goalInput={goalInput}
+            setGoalInput={setGoalInput}
+            activeQuarters={activeQuarters}
+            updateGoals={updateGoals}
+            isSubmitting={isSubmitting}
+          />
         )}
 
         {/* Team Status View */}
@@ -1492,190 +545,16 @@ const AthleteView = (props) => {
 
         {/* RACE HUB */}
         {view === "race" && (
-          <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in pb-24">
-            <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={() => safeChangeView("menu")}
-                className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
-              >
-                <ArrowLeft size={20} />
-              </button>
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
-                Race Cards
-              </h3>
-              <div className="w-9" />
-            </div>
-
-            <div className="space-y-4">
-              {tournaments.length > 0 && (() => {
-                const months = [...new Set(tournaments.map(t => t.startDate?.slice(0, 7)).filter(Boolean))].sort().reverse();
-                return (
-                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                    {["all", ...months].map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setRaceMonthFilter(m)}
-                        className={`flex-none px-3 py-1 rounded-full text-[10px] font-black transition-all ${raceMonthFilter === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                      >
-                        {m === "all" ? "すべて" : m.replace("-", "/")}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })()}
-              <div className="space-y-6 overflow-y-auto max-h-[calc(100dvh-400px)] pr-1">
-              {tournaments.length === 0 ? (
-                <div className="text-center py-10">
-                  <Flag size={40} className="mx-auto text-slate-200 mb-3" />
-                  <p className="text-xs font-bold text-slate-400">
-                    予定されている大会はありません
-                  </p>
-                </div>
-              ) : (
-                tournaments.filter(t => raceMonthFilter === "all" || t.startDate?.slice(0, 7) === raceMonthFilter).map((tour) => {
-                  const myCards = raceCards.filter(
-                    (c) =>
-                      c.tournamentId === tour.id &&
-                      c.runnerId === currentUserId,
-                  );
-                  const now = new Date().toISOString().slice(0, 10);
-                  const isOngoing =
-                    now >= tour.startDate && now <= tour.endDate;
-                  return (
-                    <div
-                      key={tour.id}
-                      className={`p-5 rounded-3xl border transition-all ${isOngoing ? "bg-blue-50/30 border-blue-200 shadow-md" : "bg-slate-50 border-slate-100"}`}
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="font-black text-slate-800">
-                            {tour.name}
-                          </h4>
-                          <p className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1">
-                            <Calendar size={12} />{" "}
-                            {tour.startDate.replace(/-/g, "/")} 〜{" "}
-                            {tour.endDate.replace(/-/g, "/")}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        {myCards.map((card) => (
-                          <div
-                            key={card.id}
-                            onClick={() => {
-                              setRaceCardInput(card);
-                              setEditingRaceCardId(card.id);
-                              setView("race-entry");
-                            }}
-                            className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer active:scale-95 transition-all group"
-                          >
-                            <div className="flex justify-between items-center mb-2">
-                              <div className="flex items-center gap-2">
-                                <span className="bg-slate-800 text-white text-[10px] font-black px-2 py-1 rounded-lg">
-                                  {card.raceType}
-                                </span>
-                                {/* 達成バッジ */}
-                                {(card.badges || []).map((badge) => (
-                                  <span
-                                    key={badge}
-                                    className={`text-[9px] font-black px-2 py-1 rounded-lg text-white ${
-                                      badge === "自己ベスト"
-                                        ? "bg-orange-500"
-                                        : badge === "組1位"
-                                          ? "bg-blue-500"
-                                          : "bg-emerald-500"
-                                    }`}
-                                  >
-                                    {badge}
-                                  </span>
-                                ))}
-                                {/* フィードバックがあれば通知バッジを表示 */}
-                                {card.coachFeedback && (
-                                  <span className="bg-indigo-500 text-white text-[9px] font-black px-2 py-1 rounded-full animate-pulse flex items-center gap-1 shadow-sm">
-                                    <MessageSquare size={10} /> コメントあり
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-xs font-black text-slate-400 group-hover:text-blue-500 flex items-center gap-1">
-                                編集 <ChevronRight size={14} />
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-end">
-                              <div>
-                                <p className="font-black text-lg text-slate-700">
-                                  {card.distance === "その他"
-                                    ? card.ekidenDistance
-                                    : card.raceType === "駅伝"
-                                      ? `${card.distance}(${card.ekidenDistance}km)`
-                                      : card.distance}
-                                </p>
-                                <p className="text-[10px] font-bold text-slate-400 mt-1">
-                                  目標: {card.targetTime || "未設定"}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                {card.resultTime ? (
-                                  <>
-                                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
-                                      Result
-                                    </p>
-                                    <p className="font-black text-emerald-600">
-                                      {card.resultTime}
-                                    </p>
-                                  </>
-                                ) : (
-                                  <span className="text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-1 rounded">
-                                    レース前
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        <button
-                          onClick={() => {
-                            setEditingRaceCardId(null);
-                            setRaceCardInput({
-                              tournamentId: tour.id,
-                              raceType: "トラック",
-                              distance: "1500m",
-                              ekidenDistance: "",
-                              targetTime: "",
-                              wupPlan: "",
-                              racePlan: "",
-                              condition: 3,
-                              weather: "",
-                              wind: "",
-                              temp: "",
-                              humidity: "",
-                              resultTime: "",
-                              lapTimes: "",
-                              goodPoints: "",
-                              issues: "",
-                              teammateGoodPoints: "",
-                              nextGoal: "",
-                            });
-                            setView("race-entry");
-                          }}
-                          className="w-full py-3 border-2 border-dashed border-blue-200 text-blue-500 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors"
-                        >
-                          <Plus size={16} /> 出場種目を追加
-                        </button>
-                        {/* チームレポートを開くボタン */}
-                        <button
-                          onClick={() => setShowTeamReportId(tour.id)}
-                          className="w-full py-3 mt-4 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl font-black text-sm hover:bg-indigo-100 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
-                        >
-                          <Users size={18} /> 今大会のチームレポートを見る
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              </div>
-            </div>
-          </div>
+          <AthleteRaceView
+            safeChangeView={safeChangeView}
+            tournaments={tournaments}
+            raceCards={raceCards}
+            currentUserId={currentUserId}
+            setRaceCardInput={setRaceCardInput}
+            setEditingRaceCardId={setEditingRaceCardId}
+            setView={setView}
+            setShowTeamReportId={setShowTeamReportId}
+          />
         )}
 
         {/* RACE ENTRY  */}
