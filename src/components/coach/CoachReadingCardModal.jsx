@@ -59,18 +59,20 @@ const cardResultBadge = (card) => {
 // 提出カードの「今どの段階か」を1つだけ示すバッジ。
 // 監督が対応済み(FB済/FB不要)を優先し、未対応なら次に必要な段階を順に表示する：
 //   PRE未記入 → レース前 → POST未記入 → FB未
+// PRE → POST → FB の順に進むほど青を濃くする（青の濃淡で進捗を表現）。
+// レース前（レース待ち）と FB不要（対象外）は進行段階ではないので中立のグレー。
 const cardStageBadge = (card) => {
   if (card.coachFeedback)
-    return { label: "FB済", cls: "text-indigo-600 bg-indigo-50 border-indigo-200", Icon: MessageSquare };
+    return { label: "FB済", cls: "text-white bg-blue-800 border-blue-800", Icon: MessageSquare };
   if (card.feedbackSkipped)
     return { label: "FB不要", cls: "text-slate-500 bg-slate-100 border-slate-200", Icon: Check };
   if (isPreIncomplete(card))
-    return { label: "PRE未記入", cls: "text-orange-600 bg-orange-50 border-orange-200", Icon: Edit };
+    return { label: "PRE未記入", cls: "text-blue-600 bg-blue-50 border-blue-200", Icon: Edit };
   if (!isRaceDone(card))
     return { label: "レース前", cls: "text-slate-500 bg-slate-100 border-slate-200", Icon: Timer };
   if (isPostIncomplete(card))
-    return { label: "POST未記入", cls: "text-orange-600 bg-orange-50 border-orange-200", Icon: Edit };
-  return { label: "FB未", cls: "text-amber-600 bg-amber-50 border-amber-200", Icon: MessageSquare };
+    return { label: "POST未記入", cls: "text-blue-700 bg-blue-100 border-blue-300", Icon: Edit };
+  return { label: "FB未", cls: "text-white bg-blue-500 border-blue-500", Icon: MessageSquare };
 };
 
 const CoachReadingCardModal = ({
