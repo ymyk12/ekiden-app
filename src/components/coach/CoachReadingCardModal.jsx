@@ -46,6 +46,23 @@ const isPostIncomplete = (card) =>
     isBlank(card.teammateGoodPoints) ||
     isBlank(card.nextGoal));
 
+// 提出カードの「今どの段階か」を1つだけ示すバッジ。
+// 監督が対応済み(FB済/FB不要)を優先し、未対応なら次に必要な段階を順に表示する：
+//   PRE未記入 → レース前 → POST未記入 → FB未
+const cardStageBadge = (card) => {
+  if (card.coachFeedback)
+    return { label: "FB済", cls: "text-indigo-600 bg-indigo-50 border-indigo-200", Icon: MessageSquare };
+  if (card.feedbackSkipped)
+    return { label: "FB不要", cls: "text-slate-500 bg-slate-100 border-slate-200", Icon: Check };
+  if (isPreIncomplete(card))
+    return { label: "PRE未記入", cls: "text-orange-600 bg-orange-50 border-orange-200", Icon: Edit };
+  if (!isRaceDone(card))
+    return { label: "レース前", cls: "text-slate-500 bg-slate-100 border-slate-200", Icon: Timer };
+  if (isPostIncomplete(card))
+    return { label: "POST未記入", cls: "text-orange-600 bg-orange-50 border-orange-200", Icon: Edit };
+  return { label: "FB未", cls: "text-amber-600 bg-amber-50 border-amber-200", Icon: MessageSquare };
+};
+
 const CoachReadingCardModal = ({
   selectedTourId,
   setSelectedTourId,
@@ -727,46 +744,15 @@ const CoachReadingCardModal = ({
                               </div>
                               <div className="flex items-center gap-2">
                                 <div className="flex flex-col items-end gap-1">
-                                  {card.resultTime || card.status === "finish" ? (
-                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                                      Resultあり
-                                    </span>
-                                  ) : card.status === "dns" ? (
-                                    <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">
-                                      DNS
-                                    </span>
-                                  ) : card.status === "dnf" ? (
-                                    <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
-                                      DNF
-                                    </span>
-                                  ) : (
-                                    <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
-                                      レース前
-                                    </span>
-                                  )}
-                                  {card.coachFeedback ? (
-                                    <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200 flex items-center gap-1">
-                                      <MessageSquare size={9} /> FB済
-                                    </span>
-                                  ) : card.feedbackSkipped ? (
-                                    <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
-                                      <Check size={9} /> FB不要
-                                    </span>
-                                  ) : (
-                                    <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex items-center gap-1">
-                                      <MessageSquare size={9} /> FB未
-                                    </span>
-                                  )}
-                                  {isPreIncomplete(card) && (
-                                    <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200 flex items-center gap-1">
-                                      <Edit size={9} /> PRE未記入
-                                    </span>
-                                  )}
-                                  {isPostIncomplete(card) && (
-                                    <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200 flex items-center gap-1">
-                                      <Edit size={9} /> POST未記入
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    const s = cardStageBadge(card);
+                                    const Icon = s.Icon;
+                                    return (
+                                      <span className={`text-[9px] font-black px-2 py-1 rounded-lg border flex items-center gap-1 ${s.cls}`}>
+                                        <Icon size={9} /> {s.label}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                                 <ChevronRight
                                   size={16}
