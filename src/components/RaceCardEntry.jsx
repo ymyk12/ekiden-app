@@ -25,6 +25,11 @@ import {
 } from "lucide-react";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
 import { formatTimeInput } from "../utils/lapUtils";
+import {
+  getTournamentLegs,
+  legsLabels,
+  legsDistance,
+} from "../data/ekidenPresets";
 
 const RaceCardEntry = ({
   setView,
@@ -38,6 +43,7 @@ const RaceCardEntry = ({
   handleDeleteRaceCard,
   raceCards,
   currentUserId,
+  gender,
 }) => {
   const [isRaceFeedbackOpen, setIsRaceFeedbackOpen] = useState(false);
   const [isPrevCardOpen, setIsPrevCardOpen] = useState(false);
@@ -65,6 +71,16 @@ const RaceCardEntry = ({
   const currentTour = tournaments.find(
     (t) => t.id === raceCardInput.tournamentId,
   );
+
+  // 駅伝プリセット（大会に区間距離が設定されていれば自動反映）
+  const ekidenLegs = getTournamentLegs(currentTour);
+  const isEkiden = raceCardInput.raceType === RACE_TYPES.EKIDEN;
+  const presetLegLabels = isEkiden ? legsLabels(ekidenLegs, gender) : null;
+  const usingPreset = !!presetLegLabels;
+  const distanceOptions = usingPreset
+    ? presetLegLabels
+    : RACE_DISTANCES[raceCardInput.raceType];
+
   const tourName = currentTour ? currentTour.name : "大会情報読み込み中...";
   const tourDates = currentTour
     ? `${currentTour.startDate.replace(/-/g, "/")} 〜 ${currentTour.endDate.replace(/-/g, "/")}`
@@ -227,6 +243,28 @@ const RaceCardEntry = ({
 
       {/* 種目選択 */}
       <div className="space-y-4 bg-slate-50 p-5 rounded-3xl border border-slate-100">
+        {Array.isArray(currentTour?.teams) && currentTour.teams.length > 0 && (
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase">
+              出場チーム
+            </label>
+            <select
+              className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500"
+              value={raceCardInput.teamId || ""}
+              onChange={(e) =>
+                setRaceCardInput({ ...raceCardInput, teamId: e.target.value })
+              }
+            >
+              <option value="">チームを選択...</option>
+              {currentTour.teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.category ? `（${t.category}）` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase">
@@ -235,16 +273,25 @@ const RaceCardEntry = ({
             <select
               className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500"
               value={raceCardInput.raceType}
-              onChange={(e) =>
+              onChange={(e) => {
+                const newType = e.target.value;
+                // 駅伝＋プリセット大会なら最初の区間の距離を自動反映
+                const presetLegs =
+                  newType === RACE_TYPES.EKIDEN
+                    ? legsLabels(ekidenLegs, gender)
+                    : null;
+                const firstLeg = presetLegs
+                  ? presetLegs[0]
+                  : RACE_DISTANCES[newType][0];
                 setRaceCardInput({
                   ...raceCardInput,
-                  raceType: e.target.value,
-                  // 区分を変えたら、自動的にその区分の最初の種目にセット
-                  distance: RACE_DISTANCES[e.target.value][0],
-                  // リセット
-                  ekidenDistance: "",
-                })
-              }
+                  raceType: newType,
+                  distance: firstLeg,
+                  ekidenDistance: presetLegs
+                    ? String(legsDistance(ekidenLegs, gender, firstLeg) ?? "")
+                    : "",
+                });
+              }}
             >
               {Object.values(RACE_TYPES).map((type) => (
                 <option key={type} value={type}>
@@ -260,19 +307,21 @@ const RaceCardEntry = ({
             <select
               className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500"
               value={raceCardInput.distance}
-              onChange={(e) =>
+              onChange={(e) => {
+                const val = e.target.value;
                 setRaceCardInput({
                   ...raceCardInput,
-                  distance: e.target.value,
-                  // 「その他」を選んだ瞬間に詳細枠をリセット
-                  ekidenDistance:
-                    e.target.value === "その他"
+                  distance: val,
+                  // プリセット駅伝は区間距離を自動反映。「その他」は詳細枠をリセット。
+                  ekidenDistance: usingPreset
+                    ? String(legsDistance(ekidenLegs, gender, val) ?? "")
+                    : val === "その他"
                       ? ""
                       : raceCardInput.ekidenDistance,
-                })
-              }
+                });
+              }}
             >
-              {RACE_DISTANCES[raceCardInput.raceType].map((dist) => (
+              {distanceOptions.map((dist) => (
                 <option key={dist} value={dist}>
                   {dist}
                 </option>
@@ -287,16 +336,19 @@ const RaceCardEntry = ({
             <label className="text-[10px] font-black text-slate-400 uppercase">
               {raceCardInput.distance === "その他"
                 ? "種目名 (手入力)"
-                : "区間距離 (km)"}
+                : usingPreset
+                  ? "区間距離 (km) ※自動反映"
+                  : "区間距離 (km)"}
             </label>
             <input
               type="text"
+              readOnly={usingPreset}
               placeholder={
                 raceCardInput.distance === "その他"
                   ? "例: 100m、走幅跳など"
                   : "例: 3.0"
               }
-              className="w-full p-3 bg-white rounded-xl font-bold text-sm outline-none focus:ring-2 ring-blue-500 border border-slate-100"
+              className={`w-full p-3 rounded-xl font-bold text-sm outline-none border border-slate-100 ${usingPreset ? "bg-slate-100 text-slate-500 cursor-not-allowed" : "bg-white focus:ring-2 ring-blue-500"}`}
               value={raceCardInput.ekidenDistance} // 保存場所は ekidenDistance をそのまま再利用します
               onChange={(e) =>
                 setRaceCardInput({
@@ -305,6 +357,11 @@ const RaceCardEntry = ({
                 })
               }
             />
+            {usingPreset && (
+              <p className="text-[9px] font-bold text-blue-500 ml-1">
+                {currentTour?.name} のプリセットから自動入力（{gender}子）
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -327,7 +384,7 @@ const RaceCardEntry = ({
                 date: e.target.value,
               })
             }
-            className="w-full p-4 bg-indigo-50/30 rounded-2xl font-black text-sm text-indigo-700 outline-none border border-indigo-100 focus:border-indigo-400 shadow-sm"
+            className="block w-full min-w-0 max-w-full appearance-none box-border p-4 bg-indigo-50/30 rounded-2xl font-black text-sm text-indigo-700 outline-none border border-indigo-100 focus:border-indigo-400 shadow-sm"
           />
         </div>
         <div className="space-y-1">
@@ -709,8 +766,22 @@ const RaceCardEntry = ({
                   />
                 </div>
               </div>
+            ) : raceCardInput.raceType === "駅伝" ? (
+              /* 駅伝はLAP入力なし：結果タイムのみ */
+              <input
+                type="text"
+                value={raceCardInput.resultTime || ""}
+                onChange={(e) =>
+                  setRaceCardInput((prev) => ({
+                    ...prev,
+                    resultTime: e.target.value,
+                  }))
+                }
+                placeholder={`結果タイム（例：32'30"）`}
+                className="w-full p-4 bg-slate-50 rounded-2xl font-mono font-black text-sm text-slate-700 outline-none border border-slate-100 focus:border-indigo-400"
+              />
             ) : (
-              /* それ以外（長距離・中距離・駅伝）の時はSmartLapInputを表示 */
+              /* それ以外（長距離・中距離）の時はSmartLapInputを表示 */
               <SmartLapInput
                 value={raceCardInput.lapTimes || ""}
                 onChange={(newValue) =>
@@ -742,7 +813,8 @@ const RaceCardEntry = ({
             {[
               { label: "自己ベスト", color: "bg-orange-500" },
               { label: "組1位", color: "bg-blue-500" },
-              { label: "県大会出場！", color: "bg-emerald-500" },
+              { label: "学校記録", color: "bg-rose-500" },
+              { label: "県大会出場", color: "bg-emerald-500" },
             ].map((b) => (
               <button
                 key={b.label}

@@ -37,7 +37,7 @@ const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.7.34";
+const APP_LAST_UPDATED = "6.7.51";
 
 // FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
 const FCM_VAPID_KEY =
@@ -281,10 +281,12 @@ const App = () => {
     handleSaveRaceCard,
     handleDeleteRaceCard,
     handleSaveRaceCardFeedback,
+    handleSaveEkidenPresets,
   } = useRaceHandlers({
     currentUserId,
     currentProfile,
     tournaments,
+    appSettings,
     setView,
     setIsSubmitting,
     setConfirmDialog,
@@ -565,6 +567,7 @@ const App = () => {
     handleSaveTournament,
     handleDeleteTournament,
     handleSaveRaceCardFeedback,
+    handleSaveEkidenPresets,
   };
 
   // ─── 画面切り替えロジック ───

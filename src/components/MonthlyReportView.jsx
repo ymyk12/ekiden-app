@@ -317,17 +317,18 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
     <div
       className={`bg-white rounded-[2rem] print:rounded-none shadow-sm print:shadow-none p-6 print:p-0 space-y-4 print:space-y-3 ${isFirst ? "" : "page-break"}`}
     >
-      {/* ヘッダー */}
-      <div className="flex items-end justify-between border-b-2 border-slate-800 pb-2 print:pb-1">
+      {/* ヘッダー。スマホ幅では max-sm で字を詰めて、タイトル・氏名とも1行に収める
+          （A4印刷は print: 指定で従来どおり。max-sm は画面が狭いときだけ効く） */}
+      <div className="flex items-end justify-between gap-2 border-b-2 border-slate-800 pb-2 print:pb-1">
         <div>
           <p className="text-[10px] print:text-[8px] font-black text-slate-400 uppercase tracking-widest">
             Monthly Training Report
           </p>
-          <h2 className="text-xl print:text-base font-black text-slate-800">
+          <h2 className="text-xl max-sm:text-base print:text-base font-black text-slate-800 whitespace-nowrap">
             {monthLabel} 月間レポート
           </h2>
         </div>
-        <p className="text-lg print:text-base font-black text-slate-800">
+        <p className="text-lg max-sm:text-sm print:text-base font-black text-slate-800 whitespace-nowrap flex-shrink-0">
           {runner.lastName} {runner.firstName}
         </p>
       </div>
@@ -454,7 +455,7 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
         </div>
       </div>
 
-      {/* 週別距離 + 区分内訳 */}
+      {/* 週別距離 + 区分内訳（A4 1枚に収めるため2カラム） */}
       <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-4">
         <div className="border border-slate-200 rounded-xl p-3 print:p-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
@@ -508,27 +509,58 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
         </div>
       </div>
 
-      {/* 大会結果（当月分があるときのみ） */}
+      {/* 大会結果（当月分があるときのみ）
+          1行目=日付・大会名 / 2行目=種目・記録・バッジ（スマホでも崩れにくい2段組み） */}
       {d.races.length > 0 && (
         <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-3">
           <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5 flex items-center gap-1">
             <Trophy size={11} /> 今月の大会結果
           </p>
-          <div className="space-y-1">
-            {d.races.map((r, i) => (
-              <p key={i} className="text-[11px] font-bold text-slate-700">
-                {r.date?.slice(5).replace("-", "/")} {r.name}　{r.distKey}{" "}
-                <span className="font-black">{r.resultTime || "—"}</span>
-                {r.badges.map((badge) => (
-                  <span
-                    key={badge}
-                    className={`ml-1 text-[9px] font-black text-white px-1.5 py-0.5 rounded ${badge === "自己ベスト" ? "bg-orange-500" : badge === "組1位" ? "bg-blue-500" : "bg-emerald-500"}`}
-                  >
-                    {badge}
-                  </span>
-                ))}
-              </p>
-            ))}
+          <div className="space-y-2 print:space-y-1">
+            {d.races.map((r, i) => {
+              const dateStr = r.date?.slice(5).replace("-", "/");
+              const badgeEls = r.badges.map((badge) => (
+                <span
+                  key={badge}
+                  className={`text-[9px] font-black text-white px-1.5 py-0.5 rounded ${badge === "自己ベスト" ? "bg-orange-500" : badge === "組1位" ? "bg-blue-500" : badge === "学校記録" ? "bg-rose-500" : "bg-emerald-500"}`}
+                >
+                  {badge}
+                </span>
+              ));
+              return (
+                <div key={i}>
+                  {/* 画面表示: 1行目=日付・大会名 / 2行目=種目・記録・バッジ */}
+                  <div className="print:hidden text-[11px] font-bold text-slate-700">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-slate-500 flex-shrink-0">
+                        {dateStr}
+                      </span>
+                      <span className="min-w-0">{r.name}</span>
+                    </div>
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-0.5">
+                      <span className="text-slate-600">{r.distKey}</span>
+                      <span className="font-black text-slate-800">
+                        {r.resultTime || "—"}
+                      </span>
+                      {badgeEls}
+                    </div>
+                  </div>
+                  {/* 印刷(PDF)表示: 従来どおり1行にまとめる */}
+                  <p className="hidden print:block text-[10px] font-bold text-slate-700">
+                    {dateStr} {r.name}　{r.distKey}{" "}
+                    <span className="font-black">{r.resultTime || "—"}</span>
+                    {r.badges.map((badge) => (
+                      <span
+                        key={badge}
+                        className={`ml-1 text-[9px] font-black text-white px-1.5 py-0.5 rounded ${badge === "自己ベスト" ? "bg-orange-500" : badge === "組1位" ? "bg-blue-500" : badge === "学校記録" ? "bg-rose-500" : "bg-emerald-500"}`}
+                      >
+                        {badge}
+                      </span>
+                    ))}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -643,6 +675,10 @@ const MonthlyReportView = ({
   allLogs,
   raceCards,
   tournaments,
+  // 選手本人用: この選手に固定し、選手セレクタを隠す（監督フローは未指定で従来どおり）
+  lockedRunnerId = null,
+  // 「全選手（一括）」オプションを出すか（選手本人用では false）
+  allowAll = true,
 }) => {
   // 既定は「先月」（月初に前月分を配る運用を想定）
   const [month, setMonth] = useState(() => {
@@ -650,19 +686,26 @@ const MonthlyReportView = ({
     d.setMonth(d.getMonth() - 1);
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
   });
-  const [runnerId, setRunnerId] = useState("all");
+  // lockedRunnerId 指定時はその選手を初期選択。未指定かつ全選手不可なら空。
+  const [runnerId, setRunnerId] = useState(
+    lockedRunnerId || (allowAll ? "all" : ""),
+  );
 
   const athletes = (activeRunners || []).filter(
     (r) => r.role !== ROLES.MANAGER,
   );
+  // lockedRunnerId が指定されていれば常にその選手に固定（他者データは出さない）
+  const effectiveRunnerId = lockedRunnerId || runnerId;
   const targets =
-    runnerId === "all" ? athletes : athletes.filter((r) => r.id === runnerId);
+    effectiveRunnerId === "all"
+      ? athletes
+      : athletes.filter((r) => r.id === effectiveRunnerId);
 
   const [y, m] = month.split("-").map(Number);
   const monthLabel = `${y}年${m}月`;
 
   const printName =
-    runnerId === "all"
+    effectiveRunnerId === "all"
       ? `月間レポート_${month}_全選手`
       : `月間レポート_${month}_${targets[0] ? `${targets[0].lastName}${targets[0].firstName}` : ""}`;
 
@@ -679,18 +722,22 @@ const MonthlyReportView = ({
           onChange={(e) => e.target.value && setMonth(e.target.value)}
           className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500"
         />
-        <select
-          value={runnerId}
-          onChange={(e) => setRunnerId(e.target.value)}
-          className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-        >
-          <option value="all">全選手（一括 {athletes.length}名）</option>
-          {athletes.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.lastName} {r.firstName}
-            </option>
-          ))}
-        </select>
+        {!lockedRunnerId && (
+          <select
+            value={runnerId}
+            onChange={(e) => setRunnerId(e.target.value)}
+            className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+          >
+            {allowAll && (
+              <option value="all">全選手（一括 {athletes.length}名）</option>
+            )}
+            {athletes.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.lastName} {r.firstName}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           onClick={() => handlePrint(printName)}
           className="ml-auto bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 active:scale-95 transition-all shadow-md shadow-blue-200"

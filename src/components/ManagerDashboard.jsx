@@ -6,7 +6,7 @@
  * デモモード時は isDemoMode フラグで保存処理を抑制する。
  */
 import React, { useState, useEffect } from "react";
-import { setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { updateDoc } from "firebase/firestore";
 import { docRef } from "../utils/firestore";
 import {
   LogOut,
@@ -14,8 +14,6 @@ import {
   ClipboardList,
   BarChart2,
   X,
-  Sparkles,
-  Loader2,
   Flag,
   CalendarDays,
   FileText,
@@ -23,7 +21,8 @@ import {
 
 // Utilsから読み込む
 import { ROLES } from "../utils/constants";
-import { getTodayStr } from "../utils/dateUtils";
+import { getTodayStr, getMonthRange, countMissingDays } from "../utils/dateUtils";
+import { buildSubmissionRow } from "../utils/submission";
 
 // 大会LAPタイム入力
 import LapTimeModal from "./LapTimeModal";
@@ -35,10 +34,10 @@ import CalendarView from "./CalendarView";
 import DocumentsModal from "./DocumentsModal";
 import ManagerCheckView from "./manager/ManagerCheckView";
 import ManagerStatusView from "./manager/ManagerStatusView";
-import ManagerDiaryView from "./manager/ManagerDiaryView";
 import ManagerRaceView from "./manager/ManagerRaceView";
+import TeamDiaryView from "./shared/TeamDiaryView";
+import { useTeamDiary } from "../hooks/useTeamDiary";
 
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "react-hot-toast";
 
 // --- Manager Dashboard Component ---
@@ -58,31 +57,6 @@ const ManagerDashboard = ({
   const [currentView, setCurrentView] = useState("check");
   const [checkDate, setCheckDate] = useState(getTodayStr());
 
-  // 日誌関連のステート
-  const [diaryMode, setDiaryMode] = useState("list");
-  const [listMonth, setListMonth] = useState(new Date());
-  const [diaryInput, setDiaryInput] = useState({
-    isRestDay: false,
-    weather: "",
-    temp: "",
-    wind: 1,
-    humidity: "",
-    startTime: "15:50",
-    endTime: "18:30",
-    location: "",
-    locationDetail: "",
-    reinforcements: [],
-    reinforcementDetail: "",
-    menu: "",
-    result: "",
-  });
-
-  // AIアシスタント関連のステート
-  const [showAIModal, setShowAIModal] = useState(false);
-  const [aiImage, setAiImage] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
   // 詳細モーダル関連のステート
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -99,85 +73,38 @@ const ManagerDashboard = ({
   const [showTeamReportId, setShowTeamReportId] = useState(null);
   const [showDocs, setShowDocs] = useState(false);
 
-  const reinforcementOptions = [
-    "コア",
-    "腹筋",
-    "脚部",
-    "フォーム",
-    "ウェイト",
-    "DM腹背",
-    "DM投げ",
-    "スタビライゼーション",
-    "その他",
-  ];
-
-  // 曜日・季節からデフォルト練習時間を自動判定する
-  const getDefaultTimes = (dateString) => {
-    const d = new Date(dateString);
-    const day = d.getDay(); // 0:日, 1:月, 2:火, 3:水, 4:木, 5:金, 6:土
-    const month = d.getMonth() + 1; // 1〜12月
-
-    // パターン1：土日
-    if (day === 0 || day === 6) {
-      return { startTime: "09:00", endTime: "12:00" };
-    }
-
-    // パターン2：夏
-    if (month === 7 || month === 8 || month === 9) {
-      return { startTime: "07:00", endTime: "10:00" };
-    }
-
-    // パターン3：学期末、冬・春休み
-    if (month === 12 || month === 3) {
-      return { startTime: "09:00", endTime: "10:00" };
-    }
-
-    // パターン4：基本の平日
-    return { startTime: "15:50", endTime: "18:30" };
-  };
-  //
-
-  const existingLog = React.useMemo(() => {
-    return teamLogs.find((l) => l.date === checkDate);
-  }, [teamLogs, checkDate]);
-
-  React.useEffect(() => {
-    const defaultTimes = getDefaultTimes(checkDate);
-
-    if (existingLog) {
-      setDiaryInput({
-        isRestDay: existingLog.isRestDay || false,
-        weather: existingLog.weather || "晴れ",
-        temp: existingLog.temp || "",
-        wind: existingLog.wind || 1,
-        humidity: existingLog.humidity || "",
-        startTime: existingLog.startTime || defaultTimes.startTime,
-        endTime: existingLog.endTime || defaultTimes.endTime,
-        location: existingLog.location || "1.53kmコース",
-        locationDetail: existingLog.locationDetail || "",
-        reinforcements: existingLog.reinforcements || [],
-        reinforcementDetail: existingLog.reinforcementDetail || "",
-        menu: existingLog.menu || "",
-        result: existingLog.result || "",
-      });
-    } else {
-      setDiaryInput({
-        isRestDay: false,
-        weather: "晴れ",
-        temp: "",
-        wind: 1,
-        humidity: "",
-        startTime: defaultTimes.startTime,
-        endTime: defaultTimes.endTime,
-        location: "1.53kmコース",
-        locationDetail: "",
-        reinforcements: [],
-        reinforcementDetail: "",
-        menu: "",
-        result: "",
-      });
-    }
-  }, [checkDate, existingLog]);
+  // チーム練習日誌（監督・マネージャー共通フック）。対象日は checkDate を使う。
+  const {
+    diaryMode,
+    setDiaryMode,
+    listMonth,
+    shiftMonth,
+    isSaving,
+    diaryInput,
+    setDiaryInput,
+    showAIModal,
+    setShowAIModal,
+    aiImage,
+    setAiImage,
+    isGenerating,
+    reinforcementOptions,
+    existingLog,
+    monthlyLogs,
+    openDiary,
+    toggleReinforcement,
+    saveDiary,
+    handleRestRegister,
+    deleteDiary,
+    generateDiaryWithAI,
+  } = useTeamDiary({
+    role: ROLES.MANAGER,
+    profile,
+    diaryDate: checkDate,
+    setDiaryDate: setCheckDate,
+    teamLogs,
+    isDemoMode,
+    setConfirmDialog,
+  });
 
   const shiftDate = (days) => {
     const d = new Date(checkDate);
@@ -219,33 +146,6 @@ const ManagerDashboard = ({
     checkDate,
   ]);
 
-  const shiftMonth = (months) => {
-    const d = new Date(listMonth);
-    d.setMonth(d.getMonth() + months);
-    setListMonth(d);
-  };
-
-  const monthlyLogs = React.useMemo(() => {
-    const year = listMonth.getFullYear();
-    const month = listMonth.getMonth() + 1;
-    const prefix = `${year}-${String(month).padStart(2, "0")}`;
-
-    return teamLogs
-      .filter((l) => l.date.startsWith(prefix))
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [teamLogs, listMonth]);
-
-  const toggleReinforcement = (item) => {
-    setDiaryInput((prev) => {
-      const current = prev.reinforcements;
-      if (current.includes(item)) {
-        return { ...prev, reinforcements: current.filter((i) => i !== item) };
-      } else {
-        return { ...prev, reinforcements: [...current, item] };
-      }
-    });
-  };
-
   const monthlyTotals = React.useMemo(() => {
     const targetMonthPrefix = checkDate.slice(0, 7);
     const totals = {};
@@ -258,50 +158,34 @@ const ManagerDashboard = ({
     return totals;
   }, [allLogs, checkDate]);
 
+  // 提出状況は監督基準に統一（共通ロジック）。付加情報（月間km等）はマネージャーでは表示しない。
   const submissionStatusList = React.useMemo(() => {
-    const targetDateStr = checkDate;
     return allRunners
       .filter((runner) => runner.role !== ROLES.MANAGER)
-      .map((runner) => {
-        const targetLog = allLogs.find(
-          (log) => log.runnerId === runner.id && log.date === targetDateStr,
-        );
-        const monthTotal = monthlyTotals[runner.id] || 0;
-
-        let status = "unsubmitted";
-        let label = "未";
-        if (targetLog) {
-          const isRest = targetLog.category === "完全休養";
-          if (targetLog.distance > 0) {
-            status = "submitted";
-            label = `${targetLog.distance}km`;
-          } else if (isRest) {
-            status = "rest";
-            label = "休養";
-          } else {
-            status = "rest";
-            label = "0km";
-          }
-        }
-        return {
-          ...runner,
-          status,
-          label,
-          monthTotal: Math.round(monthTotal * 10) / 10,
-        };
-      });
-  }, [allRunners, allLogs, checkDate, monthlyTotals]);
+      .map((runner) => ({
+        ...runner,
+        ...buildSubmissionRow(runner, allLogs, checkDate),
+      }));
+  }, [allRunners, allLogs, checkDate]);
 
   const rankingData = React.useMemo(() => {
+    // 未入力日数は当月（checkDate の月）の月初〜前日まで
+    const { start: monthStart, end: monthEnd } = getMonthRange(checkDate);
     return allRunners
       .filter((runner) => runner.role !== ROLES.MANAGER)
-      .map((r) => ({
-        name: `${r.lastName} ${r.firstName}`,
-        id: r.id,
-        total: Math.round((monthlyTotals[r.id] || 0) * 10) / 10,
-      }))
+      .map((r) => {
+        const logDateSet = new Set(
+          allLogs.filter((l) => l.runnerId === r.id).map((l) => l.date),
+        );
+        return {
+          name: `${r.lastName} ${r.firstName}`,
+          id: r.id,
+          total: Math.round((monthlyTotals[r.id] || 0) * 10) / 10,
+          missingCount: countMissingDays(logDateSet, monthStart, monthEnd),
+        };
+      })
       .sort((a, b) => b.total - a.total);
-  }, [allRunners, monthlyTotals]);
+  }, [allRunners, allLogs, monthlyTotals, checkDate]);
 
   const teamActivityLogs = React.useMemo(() => {
     const today = new Date();
@@ -327,221 +211,6 @@ const ManagerDashboard = ({
   }, [allLogs, allRunners]);
 
   // --- Functions ---
-  const saveDiary = async () => {
-    if (!diaryInput.menu) return toast.error("メニュー内容は必須です");
-    if (isDemoMode) {
-      toast.success(
-        existingLog
-          ? "【デモ】日誌を更新しました"
-          : "【デモ】日誌を保存しました",
-      );
-      return;
-    }
-    setIsSaving(true);
-    try {
-      await setDoc(docRef("team_logs", checkDate), {
-        ...diaryInput,
-        date: checkDate,
-        updatedBy: `${profile.lastName} (MG)`,
-        updatedAt: new Date().toISOString(),
-      });
-      await setDoc(docRef("menus", checkDate), {
-        date: checkDate,
-        text: diaryInput.menu,
-      });
-      toast.success(
-        existingLog ? "日誌を更新しました！" : "日誌を保存しました！",
-      );
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // ワンタップで休養日を保存する
-  const handleRestRegister = async () => {
-    // 既存の入力状態（天気など）を引き継ぎつつ、休養日データを作る
-    const restData = {
-      ...diaryInput,
-      isRestDay: true,
-      menu: "休養日",
-      startTime: "",
-      endTime: "",
-      location: "なし",
-      result: "",
-    };
-
-    if (isDemoMode) {
-      toast.success("【デモ】休養日を記録しました");
-      setDiaryMode("list");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await setDoc(docRef("team_logs", checkDate), {
-        ...restData,
-        date: checkDate,
-        updatedBy: `${profile.lastName} (MG)`,
-        updatedAt: new Date().toISOString(),
-      });
-      await setDoc(docRef("menus", checkDate), {
-        date: checkDate,
-        text: restData.menu,
-      });
-      toast.success(`${checkDate} を休養日として保存しました！☕`);
-      setDiaryMode("list"); // 保存したらすぐに一覧画面に戻る！
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const deleteDiary = () => {
-    setConfirmDialog({
-      isOpen: true,
-      message: `${checkDate} の日誌を削除しますか？`,
-      onConfirm: () => {
-        setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
-        executeDeleteDiary();
-      },
-    });
-  };
-
-  const executeDeleteDiary = async () => {
-    if (isDemoMode) {
-      toast.success("【デモ】日誌を削除しました");
-      setDiaryMode("list");
-      return;
-    }
-    try {
-      await deleteDoc(docRef("team_logs", checkDate));
-      await deleteDoc(docRef("menus", checkDate));
-      toast.success("日誌を削除しました🗑️");
-      setDiaryInput({
-        weather: "晴れ",
-        temp: "",
-        wind: 1,
-        startTime: "15:50",
-        endTime: "18:30",
-        location: "1.53kmコース",
-        locationDetail: "",
-        reinforcements: [],
-        reinforcementDetail: "",
-        menu: "",
-        result: "",
-      });
-      setDiaryMode("list");
-    } catch (e) {
-      toast.error("削除エラー: " + e.message);
-    }
-  };
-
-  const generateDiaryWithAI = async () => {
-    if (!aiImage) return toast.error("練習記録表の画像を選択してください");
-
-    setIsGenerating(true);
-    try {
-      const prompt = `添付された画像（陸上競技の練習記録表）から情報を読み取り、以下の【ルール】と【出力フォーマット】に厳密に従ってテキストデータとして出力してください。
-
-【読み取りのルール】
-1. **練習メニューの展開**:
-- 画像中段の「チーム」と「練習メニュー」の対応を読み取ってください。
-- 「〃」などの省略記号は、直上または該当する内容を補完し、完全な文字列として出力してください。
-
-2. **メンバーの抽出と振り分け（重要）**:
-- 画像右側の「メンバー」欄からメンバーの名前を抽出しますが、以下の例外ルールを必ず適用してください。
-- **グループ変更**: 名前の付近（上など）に左記とは違うグループ名が示唆されている場合は、推察されるグループのメンバーとして含めてください。
-- **別メニュー組**: 名前に「（ ）」がついている者は「別メニュー組」としてまとめてください。
-- **欠席者**: 名前の付近に「欠」とある者は「欠席者」としてまとめてください。
-
-3. **記録データの抽出**:
-- 画像下段の「記録」セクションから、各グループの「LAP」、「PACE」（または「LAP(1000)」）、および「TOTAL」の数値を抽出してください。
-- 「TOTAL」の列に記載がある場合は抽出し、記録の末尾に単純な丸括弧書きで \`(XX'XX"XX)\` のように追記してください（Totalという文字は不要）。
-- 「LAP(1000)」や「PACE」の列に記載がある場合は、角括弧書きで \`[1km: XX'XX"XX]\` や \`[pace: XX'XX"XX]\` のように明記して追記してください。
-- 記録表内にリカバリータイムがある場合は抽出し、記録の末尾に \`(r: XX"XX)\` のように追記してください。
-- 各メンバー名の下にある丸印や矢印などは出力から除外してください。
-
-【出力フォーマット】
-「練習メニュー」と「練習記録」をそれぞれワンクリックでコピーできるように、別々のテキストコードブロック（\`\`\`text と \`\`\` で囲む形式）に分けて出力してください。
-
-### 練習メニュー
-\`\`\`text
-快調走（またはその日のメインメニュー名）
-■男子A・B ([メンバー名]・[メンバー名]...)
-[距離] [メニュー名] ([設定ペース])...
-■別メニュー組：[メンバー名]・[メンバー名]...
-■欠席者：[メンバー名]・[メンバー名]...
-\`\`\`
-
-### 練習記録
-\`\`\`text
-■[記録のグループ名]
-• [周回数または距離]：[LAPタイム] ([TOTALタイム]) [1km:[タイム] または pace:[タイム]]
-\`\`\``;
-
-      const base64EncodedDataPromise = new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(",")[1]);
-        reader.readAsDataURL(aiImage);
-      });
-      const base64Data = await base64EncodedDataPromise;
-
-      const functions = getFunctions();
-      const analyzeDiaryImage = httpsCallable(functions, "analyzeDiaryImage");
-
-      const result = await analyzeDiaryImage({
-        prompt: prompt,
-        base64Image: base64Data,
-        mimeType: aiImage.type,
-      });
-
-      const generatedText = result.data.text;
-
-      let extractedMenu = "";
-      let extractedResult = "";
-
-      try {
-        const parts = generatedText.split("### 練習記録");
-        if (parts.length === 2) {
-          extractedMenu = parts[0]
-            .replace(/### 練習メニュー/g, "")
-            .replace(/```text/g, "")
-            .replace(/```/g, "")
-            .trim();
-          extractedResult = parts[1]
-            .replace(/```text/g, "")
-            .replace(/```/g, "")
-            .trim();
-        } else {
-          extractedResult = generatedText
-            .replace(/```text/g, "")
-            .replace(/```/g, "")
-            .trim();
-        }
-      } catch (e) {
-        extractedResult = generatedText;
-      }
-
-      setDiaryInput({
-        ...diaryInput,
-        menu: extractedMenu || diaryInput.menu,
-        result: extractedResult,
-      });
-
-      toast.success("✨ メニューと記録の自動振り分けが完了しました！");
-      setShowAIModal(false);
-      setAiImage(null);
-    } catch (error) {
-      toast.error("生成に失敗しました: " + error.message);
-      console.error(error);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   const saveLapTime = async () => {
     if (!editingCard) return;
     try {
@@ -648,24 +317,31 @@ const ManagerDashboard = ({
           />
         )}
         {currentView === "diary" && (
-          <ManagerDiaryView
+          <TeamDiaryView
+            accent="indigo"
+            diaryDate={checkDate}
+            setDiaryDate={setCheckDate}
             diaryMode={diaryMode}
             setDiaryMode={setDiaryMode}
             listMonth={listMonth}
             shiftMonth={shiftMonth}
-            checkDate={checkDate}
-            setCheckDate={setCheckDate}
             monthlyLogs={monthlyLogs}
             existingLog={existingLog}
-            deleteDiary={deleteDiary}
-            handleRestRegister={handleRestRegister}
-            isSaving={isSaving}
             diaryInput={diaryInput}
             setDiaryInput={setDiaryInput}
+            isSaving={isSaving}
             reinforcementOptions={reinforcementOptions}
+            showAIModal={showAIModal}
+            setShowAIModal={setShowAIModal}
+            aiImage={aiImage}
+            setAiImage={setAiImage}
+            isGenerating={isGenerating}
+            openDiary={openDiary}
             toggleReinforcement={toggleReinforcement}
             saveDiary={saveDiary}
-            setShowAIModal={setShowAIModal}
+            handleRestRegister={handleRestRegister}
+            deleteDiary={deleteDiary}
+            generateDiaryWithAI={generateDiaryWithAI}
           />
         )}
 
@@ -695,70 +371,6 @@ const ManagerDashboard = ({
         )}
       </main>
 
-      {/* AI作成ポップアップ */}
-      {showAIModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
-            <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
-              <h3 className="font-black flex items-center gap-2">
-                <Sparkles size={18} /> AI 記録表読み取り
-              </h3>
-              <button
-                onClick={() => {
-                  setShowAIModal(false);
-                  setAiImage(null);
-                }}
-                className="hover:bg-white/20 p-1 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <p className="text-xs font-bold text-slate-500">
-                練習記録表（ホワイトボードやノート）の写真をアップロードしてください。AIが画像からメニュー、メンバー、タイムを自動で読み取りテキスト化します。
-              </p>
-
-              <div className="border-2 border-dashed border-indigo-200 rounded-xl p-6 text-center bg-slate-50 hover:bg-indigo-50 transition-colors">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setAiImage(e.target.files[0])}
-                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowAIModal(false);
-                    setAiImage(null);
-                  }}
-                  className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
-                >
-                  キャンセル
-                </button>
-                <button
-                  onClick={generateDiaryWithAI}
-                  disabled={isGenerating || !aiImage}
-                  className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-black shadow-md hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />{" "}
-                      読み取り中...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={18} /> 文字起こしを実行
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* // 大会LAPタイム入力 */}
       <LapTimeModal

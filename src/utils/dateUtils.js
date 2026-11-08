@@ -67,6 +67,35 @@ export const getDatesInRange = (startDate, endDate) => {
   return dates;
 };
 
+// 未入力日数を数える: start〜min(end, 前日) の各日のうち、logDateSet に無い日数。
+// 当日は入力猶予として数えない（＝「前日まで」で確定）。完全休養もログ扱い（logDateSet に含まれる）。
+// ランキングの「未入力◯日」や本人用 missingDates と同じ基準で使う。
+export const countMissingDays = (logDateSet, startStr, endStr) => {
+  if (!startStr) return 0;
+  const current = new Date(startStr);
+  current.setHours(0, 0, 0, 0);
+
+  const periodEnd = new Date(endStr || "2100-12-31");
+  periodEnd.setHours(0, 0, 0, 0);
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setHours(0, 0, 0, 0);
+
+  const checkEnd = periodEnd < yesterday ? periodEnd : yesterday;
+  if (isNaN(current.getTime()) || current > checkEnd) return 0;
+
+  let count = 0;
+  let safety = 0;
+  while (current <= checkEnd && safety < 370) {
+    const dateStr = current.toLocaleDateString("sv-SE");
+    if (!logDateSet.has(dateStr)) count++;
+    current.setDate(current.getDate() + 1);
+    safety++;
+  }
+  return count;
+};
+
 export const getMonthRange = (dateStr) => {
   const date = new Date(dateStr);
   const year = date.getFullYear();

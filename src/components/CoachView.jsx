@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 
 import { setDoc, updateDoc, deleteDoc } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { docRef } from "../utils/firestore";
 import { ROLES } from "../utils/constants";
 import { getTodayStr, getDatesInRange } from "../utils/dateUtils";
@@ -30,7 +29,8 @@ import DocumentsModal from "./DocumentsModal";
 import { usePrint } from "../hooks/usePrint";
 import LapTimeModal from "./LapTimeModal";
 import TeamRaceReport from "./TeamRaceReport";
-import CoachDiaryView from "./coach/CoachDiaryView";
+import TeamDiaryView from "./shared/TeamDiaryView";
+import { useTeamDiary } from "../hooks/useTeamDiary";
 import CoachSettingsView from "./coach/CoachSettingsView";
 import CoachRunnerDetailView from "./coach/CoachRunnerDetailView";
 import CoachRaceView from "./coach/CoachRaceView";
@@ -117,6 +117,7 @@ const CoachView = (props) => {
     handleSaveTournament,
     handleDeleteTournament,
     handleSaveRaceCardFeedback,
+    handleSaveEkidenPresets,
     allFeedbacks,
   } = props;
 
@@ -244,55 +245,37 @@ const CoachView = (props) => {
   const [reassignTourId, setReassignTourId] = useState("");
   const [isEditingReadingCard, setIsEditingReadingCard] = useState(false);
   const [readingCardEditInput, setReadingCardEditInput] = useState({});
-  const [diaryMode, setDiaryMode] = useState("list");
-  const [listMonth, setListMonth] = useState(new Date());
-  const [isDiarySaving, setIsDiarySaving] = useState(false);
-
-  // 日誌フルフォーム用 state
-  const [diaryInput, setDiaryInput] = useState({
-    isRestDay: false,
-    weather: "晴れ",
-    temp: "",
-    wind: 1,
-    humidity: "",
-    startTime: "15:50",
-    endTime: "18:30",
-    location: "1.53kmコース",
-    locationDetail: "",
-    reinforcements: [],
-    reinforcementDetail: "",
-    menu: "",
-    result: "",
+  // チーム練習日誌（監督・マネージャー共通フック）。対象日は menuInput.date を使う。
+  const {
+    diaryMode,
+    setDiaryMode,
+    listMonth,
+    shiftMonth,
+    isSaving,
+    diaryInput,
+    setDiaryInput,
+    showAIModal,
+    setShowAIModal,
+    aiImage,
+    setAiImage,
+    isGenerating,
+    reinforcementOptions,
+    existingLog,
+    monthlyLogs,
+    openDiary,
+    toggleReinforcement,
+    saveDiary,
+    handleRestRegister,
+    deleteDiary,
+    generateDiaryWithAI,
+  } = useTeamDiary({
+    role: ROLES.COACH,
+    profile: null,
+    diaryDate: menuInput.date,
+    setDiaryDate: (d) => setMenuInput({ ...menuInput, date: d }),
+    teamLogs,
+    setConfirmDialog,
   });
-
-  const reinforcementOptions = [
-    "コア",
-    "腹筋",
-    "脚部",
-    "フォーム",
-    "ウェイト",
-    "DM腹背",
-    "DM投げ",
-    "スタビライゼーション",
-    "その他",
-  ];
-
-  const getDefaultTimes = (dateString) => {
-    const d = new Date(dateString);
-    const day = d.getDay();
-    const month = d.getMonth() + 1;
-    if (day === 0 || day === 6) return { startTime: "09:00", endTime: "12:00" };
-    if (month === 7 || month === 8 || month === 9)
-      return { startTime: "07:00", endTime: "10:00" };
-    if (month === 12 || month === 3)
-      return { startTime: "09:00", endTime: "10:00" };
-    return { startTime: "15:50", endTime: "18:30" };
-  };
-
-  const coachExistingLog = useMemo(
-    () => teamLogs?.find((l) => l.date === menuInput.date),
-    [teamLogs, menuInput.date],
-  );
 
   const missingListText = useMemo(() => {
     const dates = getDatesInRange(missingStart, missingEnd);
@@ -315,139 +298,6 @@ const CoachView = (props) => {
     return `【${startLabel}〜${endLabel} 未入力選手リスト】\n${lines.join("\n")}`;
   }, [missingStart, missingEnd, allLogs, activeRunners]);
 
-  useEffect(() => {
-    const defaultTimes = getDefaultTimes(menuInput.date);
-    if (coachExistingLog) {
-      setDiaryInput({
-        isRestDay: coachExistingLog.isRestDay || false,
-        weather: coachExistingLog.weather || "晴れ",
-        temp: coachExistingLog.temp || "",
-        wind: coachExistingLog.wind || 1,
-        humidity: coachExistingLog.humidity || "",
-        startTime: coachExistingLog.startTime || defaultTimes.startTime,
-        endTime: coachExistingLog.endTime || defaultTimes.endTime,
-        location: coachExistingLog.location || "1.53kmコース",
-        locationDetail: coachExistingLog.locationDetail || "",
-        reinforcements: coachExistingLog.reinforcements || [],
-        reinforcementDetail: coachExistingLog.reinforcementDetail || "",
-        menu: coachExistingLog.menu || "",
-        result: coachExistingLog.result || "",
-      });
-    } else {
-      setDiaryInput({
-        isRestDay: false,
-        weather: "晴れ",
-        temp: "",
-        wind: 1,
-        humidity: "",
-        startTime: defaultTimes.startTime,
-        endTime: defaultTimes.endTime,
-        location: "1.53kmコース",
-        locationDetail: "",
-        reinforcements: [],
-        reinforcementDetail: "",
-        menu: "",
-        result: "",
-      });
-    }
-  }, [menuInput.date, coachExistingLog]);
-
-  const toggleCoachReinforcement = (item) => {
-    setDiaryInput((prev) => {
-      const current = prev.reinforcements;
-      return current.includes(item)
-        ? { ...prev, reinforcements: current.filter((i) => i !== item) }
-        : { ...prev, reinforcements: [...current, item] };
-    });
-  };
-
-  const saveCoachDiary = async () => {
-    if (!diaryInput.menu) {
-      const { toast } = await import("react-hot-toast");
-      return toast.error("メニュー内容は必須です");
-    }
-    setIsDiarySaving(true);
-    try {
-      await setDoc(docRef("team_logs", menuInput.date), {
-        ...diaryInput,
-        date: menuInput.date,
-        updatedBy: "監督",
-        updatedAt: new Date().toISOString(),
-      });
-      await setDoc(docRef("menus", menuInput.date), {
-        date: menuInput.date,
-        text: diaryInput.menu,
-      });
-      const { toast } = await import("react-hot-toast");
-      toast.success(
-        coachExistingLog ? "日誌を更新しました！" : "日誌を保存しました！",
-      );
-    } catch (e) {
-      const { toast } = await import("react-hot-toast");
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsDiarySaving(false);
-    }
-  };
-
-  const handleCoachRestRegister = async () => {
-    const restData = {
-      ...diaryInput,
-      isRestDay: true,
-      menu: "【完全休養】本日はオフです。",
-      startTime: "",
-      endTime: "",
-      location: "なし",
-      result: "",
-    };
-    setIsDiarySaving(true);
-    try {
-      await setDoc(docRef("team_logs", menuInput.date), {
-        ...restData,
-        date: menuInput.date,
-        updatedBy: "監督",
-        updatedAt: new Date().toISOString(),
-      });
-      await setDoc(docRef("menus", menuInput.date), {
-        date: menuInput.date,
-        text: restData.menu,
-      });
-      const { toast } = await import("react-hot-toast");
-      toast.success(`${menuInput.date} を休養日として保存しました！`);
-      setDiaryMode("list");
-    } catch (e) {
-      const { toast } = await import("react-hot-toast");
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsDiarySaving(false);
-    }
-  };
-
-  const deleteCoachDiary = () => {
-    setConfirmDialog({
-      isOpen: true,
-      message: `${menuInput.date} の日誌を削除しますか？`,
-      onConfirm: async () => {
-        setConfirmDialog({ isOpen: false, message: "", onConfirm: null });
-        try {
-          await deleteDoc(docRef("team_logs", menuInput.date));
-          await deleteDoc(docRef("menus", menuInput.date));
-          const { toast } = await import("react-hot-toast");
-          toast.success("日誌を削除しました");
-          setDiaryMode("list");
-        } catch (e) {
-          const { toast } = await import("react-hot-toast");
-          toast.error("削除エラー: " + e.message);
-        }
-      },
-    });
-  };
-
-  // AI アシスタント
-  const [showAIModal, setShowAIModal] = useState(false);
-  const [aiImage, setAiImage] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-
   // Esc キーで開いている最前面のモーダルを閉じる（PC操作向け）
   useEffect(() => {
     const onKey = (e) => {
@@ -463,6 +313,7 @@ const CoachView = (props) => {
     return () => window.removeEventListener("keydown", onKey);
   }, [
     showAIModal,
+    setShowAIModal,
     showTeamReportId,
     isNotifOpen,
     confirmDialog,
@@ -471,120 +322,6 @@ const CoachView = (props) => {
     setIsCoachEditModalOpen,
   ]);
 
-  const generateCoachDiaryWithAI = async () => {
-    if (!aiImage) {
-      const { toast } = await import("react-hot-toast");
-      return toast.error("練習記録表の画像を選択してください");
-    }
-    setIsGenerating(true);
-    try {
-      const prompt = `添付された画像（陸上競技の練習記録表）から情報を読み取り、以下の【ルール】と【出力フォーマット】に厳密に従ってテキストデータとして出力してください。
-
-【読み取りのルール】
-1. **練習メニューの展開**:
-- 画像中段の「チーム」と「練習メニュー」の対応を読み取ってください。
-- 「〃」などの省略記号は、直上または該当する内容を補完し、完全な文字列として出力してください。
-
-2. **メンバーの抽出と振り分け（重要）**:
-- 画像右側の「メンバー」欄からメンバーの名前を抽出しますが、以下の例外ルールを必ず適用してください。
-- **グループ変更**: 名前の付近（上など）に左記とは違うグループ名が示唆されている場合は、推察されるグループのメンバーとして含めてください。
-- **別メニュー組**: 名前に「（ ）」がついている者は「別メニュー組」としてまとめてください。
-- **欠席者**: 名前の付近に「欠」とある者は「欠席者」としてまとめてください。
-
-3. **記録データの抽出**:
-- 画像下段の「記録」セクションから、各グループの「LAP」「TOTAL」「PACE」（または「LAP(1000)」）の数値を抽出してください。
-- 各グループの記録表に個人名の列がある場合、各行の個人ごとのマーク（○・↓・△・X）やタイムなどの注記もすべて抽出してください。
-- 記録表が左右に分割されている場合（同じグループの追加周回が右側に続けて記載されている場合）は、一つの表として周回を連続させてまとめてください。
-- 記録表内にリカバリータイムがある場合は抽出し、該当行の末尾に \`(r: XX"XX)\` のように追記してください。
-
-【出力フォーマット】
-「練習メニュー」と「練習記録」をそれぞれワンクリックでコピーできるように、別々のテキストコードブロック（\`\`\`text と \`\`\` で囲む形式）に分けて出力してください。
-
-### 練習メニュー
-\`\`\`text
-快調走（またはその日のメインメニュー名）
-■男子A・B ([メンバー名]・[メンバー名]...)
-[距離] [メニュー名] ([設定ペース])...
-■別メニュー組：[メンバー名]・[メンバー名]...
-■欠席者：[メンバー名]・[メンバー名]...
-\`\`\`
-
-### 練習記録
-手書き表の構造をパイプ（|）区切りの表形式で再現してください。各グループを以下のルールで出力してください。
-
-- 各セルを | で区切る。1行目はヘッダー行（周回|LAP|TOTAL|PACE|個人名...）
-- 各周の行: 「1周目」「2〃」「3〃」... の形式
-- TOTALが記載されていない行はその欄を空欄（||）にする
-- 個人列のマーク: ○（参加確認）・↓（継続）・△（部分参加）・X（欠走/失敗）を各行に記入。↓は継続する各行すべてに記入する
-- 個人列に通常のマーク以外の注記（タイムや距離など）がある場合はそのまま記載する
-- 最終行に400m（またはその他の距離）の計測がある場合、「400m|」行として各個人列にタイムを記入する
-
-\`\`\`text
-■[グループ名]
-周回|LAP|TOTAL|PACE|[名前1]|[名前2]|[名前3]
-1周目|X'XX"XX||X'XX"XX|○|○|○
-2〃|X'XX"XX|XX'XX"XX|X'XX"XX|↓|↓|↓
-3〃|X'XX"XX|XX'XX"XX|X'XX"XX|↓|↓|↓
-400m|||XX"XX|XX"XX|XX"XX
-\`\`\``;
-
-      const base64Data = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(",")[1]);
-        reader.readAsDataURL(aiImage);
-      });
-
-      const functions = getFunctions();
-      const analyzeDiaryImage = httpsCallable(functions, "analyzeDiaryImage");
-      const result = await analyzeDiaryImage({
-        prompt,
-        base64Image: base64Data,
-        mimeType: aiImage.type,
-      });
-
-      const generatedText = result.data.text;
-      let extractedMenu = "";
-      let extractedResult = "";
-
-      try {
-        const parts = generatedText.split("### 練習記録");
-        if (parts.length === 2) {
-          extractedMenu = parts[0]
-            .replace(/### 練習メニュー/g, "")
-            .replace(/```text/g, "")
-            .replace(/```/g, "")
-            .trim();
-          extractedResult = parts[1]
-            .replace(/```text/g, "")
-            .replace(/```/g, "")
-            .trim();
-        } else {
-          extractedResult = generatedText
-            .replace(/```text/g, "")
-            .replace(/```/g, "")
-            .trim();
-        }
-      } catch {
-        extractedResult = generatedText;
-      }
-
-      setDiaryInput((prev) => ({
-        ...prev,
-        menu: extractedMenu || prev.menu,
-        result: extractedResult,
-      }));
-
-      const { toast } = await import("react-hot-toast");
-      toast.success("✨ メニューと記録の自動振り分けが完了しました！");
-      setShowAIModal(false);
-      setAiImage(null);
-    } catch (error) {
-      const { toast } = await import("react-hot-toast");
-      toast.error("生成に失敗しました: " + error.message);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   return (
     <div className="h-[100dvh] bg-slate-50 overflow-hidden print:bg-white print:h-auto flex flex-col md:flex-row">
@@ -820,31 +557,34 @@ const CoachView = (props) => {
             />
           )}
 
-          <CoachDiaryView
-            view={view}
-            listMonth={listMonth}
-            setListMonth={setListMonth}
-            teamLogs={teamLogs}
-            diaryMode={diaryMode}
-            setDiaryMode={setDiaryMode}
-            menuInput={menuInput}
-            setMenuInput={setMenuInput}
-            diaryInput={diaryInput}
-            setDiaryInput={setDiaryInput}
-            coachExistingLog={coachExistingLog}
-            isDiarySaving={isDiarySaving}
-            reinforcementOptions={reinforcementOptions}
-            showAIModal={showAIModal}
-            setShowAIModal={setShowAIModal}
-            aiImage={aiImage}
-            setAiImage={setAiImage}
-            isGenerating={isGenerating}
-            deleteCoachDiary={deleteCoachDiary}
-            handleCoachRestRegister={handleCoachRestRegister}
-            toggleCoachReinforcement={toggleCoachReinforcement}
-            saveCoachDiary={saveCoachDiary}
-            generateCoachDiaryWithAI={generateCoachDiaryWithAI}
-          />
+          {view === "coach-diary" && (
+            <TeamDiaryView
+              accent="blue"
+              diaryDate={menuInput.date}
+              setDiaryDate={(d) => setMenuInput({ ...menuInput, date: d })}
+              diaryMode={diaryMode}
+              setDiaryMode={setDiaryMode}
+              listMonth={listMonth}
+              shiftMonth={shiftMonth}
+              monthlyLogs={monthlyLogs}
+              existingLog={existingLog}
+              diaryInput={diaryInput}
+              setDiaryInput={setDiaryInput}
+              isSaving={isSaving}
+              reinforcementOptions={reinforcementOptions}
+              showAIModal={showAIModal}
+              setShowAIModal={setShowAIModal}
+              aiImage={aiImage}
+              setAiImage={setAiImage}
+              isGenerating={isGenerating}
+              openDiary={openDiary}
+              toggleReinforcement={toggleReinforcement}
+              saveDiary={saveDiary}
+              handleRestRegister={handleRestRegister}
+              deleteDiary={deleteDiary}
+              generateDiaryWithAI={generateDiaryWithAI}
+            />
+          )}
 
           {view === "coach-race" && (
             <CoachRaceView
@@ -858,6 +598,8 @@ const CoachView = (props) => {
               setShowTeamReportId={setShowTeamReportId}
               setSelectedTourId={setSelectedTourId}
               setOnlyPendingFeedback={setOnlyPendingFeedback}
+              ekidenPresets={appSettings?.ekidenPresets || []}
+              handleSaveEkidenPresets={handleSaveEkidenPresets}
             />
           )}
 
@@ -981,6 +723,16 @@ const CoachView = (props) => {
               ...fields,
               updatedAt: new Date().toISOString(),
               updatedBy: "coach",
+            });
+          }}
+          onSaveConditions={async (dateKey, data) => {
+            await updateDoc(docRef("tournaments", showTeamReportId), {
+              [`conditions.${dateKey}`]: data,
+            });
+          }}
+          onSaveTeamResult={async (key, data) => {
+            await updateDoc(docRef("tournaments", showTeamReportId), {
+              [`teamResults.${key}`]: data,
             });
           }}
           onDeleteCard={async (cardId) => {

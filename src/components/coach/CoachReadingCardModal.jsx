@@ -434,7 +434,7 @@ const CoachReadingCardModal = ({
                             {readingCard.badges.map((badge) => (
                               <span
                                 key={badge}
-                                className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${badge === "自己ベスト" ? "bg-orange-500" : badge === "組1位" ? "bg-blue-500" : "bg-emerald-500"}`}
+                                className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${badge === "自己ベスト" ? "bg-orange-500" : badge === "組1位" ? "bg-blue-500" : badge === "学校記録" ? "bg-rose-500" : "bg-emerald-500"}`}
                               >
                                 {badge}
                               </span>
@@ -850,10 +850,10 @@ const CoachReadingCardModal = ({
                         <input type="text" value={readingCardEditInput.resultTime} onChange={(e) => setReadingCardEditInput((p) => ({ ...p, resultTime: e.target.value }))} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
                       </div>
                     </div>
-                    <div>
+                    {readingCard?.raceType !== "駅伝" && <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">ラップタイム</label>
                       <textarea value={readingCardEditInput.lapTimes} onChange={(e) => setReadingCardEditInput((p) => ({ ...p, lapTimes: e.target.value }))} rows={4} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-mono font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 resize-none" />
-                    </div>
+                    </div>}
                     {[
                       { key: "racePlan", label: "レースプラン" },
                       { key: "wupPlan", label: "W-UP計画" },
@@ -873,7 +873,8 @@ const CoachReadingCardModal = ({
                         {[
                           { label: "自己ベスト", color: "bg-orange-500" },
                           { label: "組1位", color: "bg-blue-500" },
-                          { label: "県大会出場！", color: "bg-emerald-500" },
+                          { label: "学校記録", color: "bg-rose-500" },
+                          { label: "県大会出場", color: "bg-emerald-500" },
                         ].map((b) => (
                           <button key={b.label} type="button"
                             onClick={() => setReadingCardEditInput((p) => {

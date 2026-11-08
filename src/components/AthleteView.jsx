@@ -28,6 +28,7 @@ import {
   Calendar,
   Bell,
   X,
+  FileText,
 } from "lucide-react";
 
 import { ROLES, CATEGORY } from "../utils/constants";
@@ -36,6 +37,10 @@ import RaceCardEntry from "./RaceCardEntry";
 import TeamRaceReport from "./TeamRaceReport";
 import CalendarView from "./CalendarView";
 import DocumentsModal from "./DocumentsModal";
+import MonthlyReportView from "./MonthlyReportView";
+import AnnouncementCenter from "./shared/AnnouncementCenter";
+import { usePrint } from "../hooks/usePrint";
+import { useAnnouncements } from "../hooks/useAnnouncements";
 import AthleteTeamStatusView from "./athlete/AthleteTeamStatusView";
 import AthleteMenuView from "./athlete/AthleteMenuView";
 import AthleteEntryView from "./athlete/AthleteEntryView";
@@ -111,6 +116,27 @@ const AthleteView = (props) => {
   }, [view]);
 
   const isPreview = role === ROLES.COACH && previewRunner;
+
+  // 月間レポート（選手本人用）の印刷・PDF保存
+  const { handlePrint } = usePrint();
+
+  // 新機能のお知らせ（プレビュー中の監督には出さない＝本人ログイン時のみ）
+  const announcementRole = isPreview ? "" : "athlete";
+  const {
+    forRole: roleAnnouncements,
+    pendingModal: pendingAnnouncements,
+    markShown: markAnnouncementShown,
+    markUsed: markAnnouncementUsed,
+    hasUnused: hasUnusedAnnouncement,
+    isUnusedView: isAnnouncementNewView,
+  } = useAnnouncements({ role: announcementRole, userId: currentUserId });
+
+  // 新機能の画面を開いたら、その機能を「使用済み」にして NEW バッジを消す
+  useEffect(() => {
+    roleAnnouncements.forEach((a) => {
+      if (a.cta?.view === view) markAnnouncementUsed(a.id);
+    });
+  }, [view, roleAnnouncements, markAnnouncementUsed]);
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [lastReadTime, setLastReadTime] = useState(() => {
@@ -328,6 +354,20 @@ const AthleteView = (props) => {
               <Target size={20} /> 目標設定
             </button>
             <button
+              onClick={() => {
+                safeChangeView("my-report");
+                setIsMenuOpen(false);
+              }}
+              className="relative w-full py-4 bg-slate-100 rounded-2xl font-bold text-slate-700 flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              <FileText size={20} /> 月間レポート
+              {isAnnouncementNewView("my-report") && (
+                <span className="absolute top-2 right-3 text-[9px] font-black text-white bg-rose-500 px-1.5 py-0.5 rounded-full animate-pulse">
+                  NEW
+                </span>
+              )}
+            </button>
+            <button
               onClick={handleLogout}
               className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
@@ -353,7 +393,7 @@ const AthleteView = (props) => {
             className="bg-white/20 p-2.5 rounded-2xl active:scale-90 transition-all text-white"
           >
             <Menu size={20} />
-            {hasUnreadRace && (
+            {(hasUnreadRace || hasUnusedAnnouncement("menu")) && (
               <span className="absolute -top-1 -right-1 flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-blue-600"></span>
@@ -456,7 +496,7 @@ const AthleteView = (props) => {
         )}
       </header>
 
-      <main className="px-5 space-y-6 relative z-20 max-w-md mx-auto">
+      <main className="px-5 space-y-6 relative z-20 max-w-md mx-auto print:max-w-none print:w-full print:px-0 print:mx-0 print:space-y-0 print:overflow-visible">
         {view === "menu" && (
           <AthleteMenuView
             currentProfile={currentProfile}
@@ -550,6 +590,7 @@ const AthleteView = (props) => {
             tournaments={tournaments}
             raceCards={raceCards}
             currentUserId={currentUserId}
+            gender={currentProfile.gender}
             setRaceCardInput={setRaceCardInput}
             setEditingRaceCardId={setEditingRaceCardId}
             setView={setView}
@@ -571,6 +612,7 @@ const AthleteView = (props) => {
             handleDeleteRaceCard={handleDeleteRaceCard}
             raceCards={raceCards}
             currentUserId={currentUserId}
+            gender={currentProfile.gender}
           />
         )}
 
@@ -589,6 +631,33 @@ const AthleteView = (props) => {
             }}
             onEditRequest={(log) => handleEditLog(log)}
           />
+        )}
+
+        {/* 月間レポート（選手本人用）。lockedRunnerId で本人固定・他者データは出さない */}
+        {view === "my-report" && (
+          <div className="space-y-4 print:space-y-0">
+            <div className="flex items-center justify-between no-print print:hidden">
+              <button
+                onClick={() => safeChangeView("menu")}
+                className="p-2 bg-white rounded-full text-slate-500 hover:bg-slate-100 shadow-sm"
+              >
+                <X size={20} />
+              </button>
+              <h3 className="font-black uppercase text-[10px] tracking-[0.3em] text-slate-400">
+                Monthly Report
+              </h3>
+              <div className="w-9" />
+            </div>
+            <MonthlyReportView
+              handlePrint={handlePrint}
+              activeRunners={activeRunners}
+              allLogs={allLogs}
+              raceCards={raceCards}
+              tournaments={tournaments}
+              lockedRunnerId={currentUserId}
+              allowAll={false}
+            />
+          </div>
         )}
       </main>
 
@@ -1039,6 +1108,13 @@ const AthleteView = (props) => {
       )}
 
       <DocumentsModal open={showDocs} onClose={() => setShowDocs(false)} />
+
+      {/* 新機能のお知らせ（初回ログイン時） */}
+      <AnnouncementCenter
+        pendingModal={pendingAnnouncements}
+        markShown={markAnnouncementShown}
+        onNavigate={(v) => safeChangeView(v)}
+      />
     </div> //  AthleteViewの最後の閉じタグ
   );
 };

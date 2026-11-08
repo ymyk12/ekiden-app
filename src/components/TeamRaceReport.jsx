@@ -4,7 +4,8 @@
  * チーム全員の大会振り返りシートを一覧で表示する画面。
  * 日付ごとにグループ化して並べ、印刷・PDF出力にも対応している。
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   Printer,
@@ -24,6 +25,12 @@ import {
 } from "lucide-react";
 import LapTimeModal from "./LapTimeModal";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
+import {
+  getTournamentLegs,
+  legsLabels,
+  legsDistance,
+  legIndexFromLabel,
+} from "../data/ekidenPresets";
 import {
   timeToSeconds,
   secondsToTime,
@@ -73,17 +80,107 @@ const adjustLapTimesForResult = (lapTimesStr, newResultTime, raceType, distanceS
 const BADGE_OPTIONS = [
   { label: "自己ベスト", color: "bg-orange-500" },
   { label: "組1位", color: "bg-blue-500" },
-  { label: "県大会出場！", color: "bg-emerald-500" },
+  { label: "学校記録", color: "bg-rose-500" },
+  { label: "県大会出場", color: "bg-emerald-500" },
 ];
 
-const EMPTY_ADD = { runnerId: "", raceType: RACE_TYPES.TRACK, distance: "1500m", ekidenDistance: "", date: "", status: "finish", resultTime: "", targetTime: "", dnsReason: "", dnfPoint: "" };
+const EMPTY_ADD = { runnerId: "", teamId: "", raceType: RACE_TYPES.TRACK, distance: "1500m", ekidenDistance: "", date: "", status: "finish", resultTime: "", targetTime: "", dnsReason: "", dnfPoint: "" };
 
-const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit, onSaveCard, onEditCard, onDeleteCard, onOpenCard, allRunners, onAddCard }) => {
+const BadgeChips = ({ badges }) =>
+  (badges || []).length === 0 ? null : (
+    <span className="inline-flex gap-1 align-middle">
+      {badges.map((b) => (
+        <span
+          key={b}
+          className={`text-[8px] font-black px-1.5 py-0.5 rounded-md text-white print:border print:text-slate-700 print:bg-white ${
+            b === "自己ベスト" ? "bg-orange-500" : b === "組1位" ? "bg-blue-500" : b === "学校記録" ? "bg-rose-500" : "bg-emerald-500"
+          }`}
+        >
+          {b}
+        </span>
+      ))}
+    </span>
+  );
+
+// チーム総合タイム表示＋（監督のみ）手入力の上書きと学校記録バッジ
+const TeamTotalBlock = ({ computed, result, canEdit, onSave }) => {
+  const [editing, setEditing] = useState(false);
+  const [time, setTime] = useState("");
+  const [badges, setBadges] = useState([]);
+  const shownTime = (result && result.totalTime) || computed;
+  const shownBadges = (result && result.badges) || [];
+  const open = () => {
+    setTime((result && result.totalTime) || "");
+    setBadges(shownBadges);
+    setEditing(true);
+  };
+  const save = async () => {
+    await onSave({ totalTime: time.trim(), badges });
+    setEditing(false);
+  };
+  return (
+    <div className="text-right">
+      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+        総合タイム
+        {canEdit && onSave && !editing && (
+          <button type="button" onClick={open} className="ml-2 text-indigo-500 underline print:hidden">編集</button>
+        )}
+      </p>
+      <p className="font-mono font-black text-indigo-600 text-base leading-none">{shownTime}</p>
+      {shownBadges.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-1 mt-1">
+          {shownBadges.map((b) => (
+            <span key={b} className="text-[8px] font-black px-2 py-0.5 rounded-md text-white bg-rose-500 print:border print:border-rose-500 print:text-slate-700 print:bg-white">{b}</span>
+          ))}
+        </div>
+      )}
+      {editing && (
+        <div className="mt-2 p-3 bg-white border border-slate-200 rounded-xl space-y-2 text-left print:hidden">
+          <input
+            type="text"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            placeholder={`手入力（空欄=自動 ${computed}）`}
+            className="w-full p-2 bg-slate-50 rounded-lg text-sm font-mono font-bold text-slate-700 outline-none border border-slate-200"
+          />
+          <div className="flex flex-wrap gap-2">
+            {["学校記録"].map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setBadges((p) => (p.includes(label) ? p.filter((x) => x !== label) : [...p, label]))}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-black ${badges.includes(label) ? "bg-rose-500 text-white" : "bg-slate-100 text-slate-400"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setEditing(false)} className="flex-1 py-1.5 rounded-lg bg-slate-100 text-xs font-black text-slate-500">キャンセル</button>
+            <button type="button" onClick={save} className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-xs font-black text-white">保存</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit, onSaveTeamResult, onSaveConditions, onSaveCard, onEditCard, onDeleteCard, onOpenCard, allRunners, onAddCard }) => {
   const [editingCard, setEditingCard] = useState(null);
+  const [editingCondDate, setEditingCondDate] = useState(null);
+  const [condForm, setCondForm] = useState({ weather: "", wind: "", temp: "", humidity: "" });
   const [lapInput, setLapInput] = useState("");
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [addCardInput, setAddCardInput] = useState(EMPTY_ADD);
   const [isSavingAdd, setIsSavingAdd] = useState(false);
+
+  // 印刷時にアプリ本体(#root)を隠すためのフラグを body に付与する。
+  // レポートは document.body 直下へ portal するため、背後の他画面が
+  // 印刷範囲に混入しない（他大会名の余計なページ対策）。
+  useEffect(() => {
+    document.body.classList.add("team-report-open");
+    return () => document.body.classList.remove("team-report-open");
+  }, []);
 
   const submittedRunnerIds = new Set(reportCards.map((c) => c.runnerId));
   const unsubmittedRunners = (allRunners || []).filter((r) => !submittedRunnerIds.has(r.id));
@@ -99,6 +196,19 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     if (label && !m[c.runnerId].includes(label)) m[c.runnerId].push(label);
     return m;
   }, {});
+
+  // 駅伝プリセット（カード追加フォーム用）。選手の性別＋大会プリセットで区間距離を自動反映。
+  const addRunner = (allRunners || []).find((r) => r.id === addCardInput.runnerId);
+  const addGender = addRunner?.gender;
+  const addEkidenLegs = getTournamentLegs(reportTour);
+  const addPresetLegs =
+    addCardInput.raceType === RACE_TYPES.EKIDEN
+      ? legsLabels(addEkidenLegs, addGender)
+      : null;
+  const addUsingPreset = !!addPresetLegs;
+  const addDistanceOptions = addUsingPreset
+    ? addPresetLegs
+    : RACE_DISTANCES[addCardInput.raceType];
 
   const [isOfficialResultOpen, setIsOfficialResultOpen] = useState(false);
   const [officialResultText, setOfficialResultText] = useState("");
@@ -384,6 +494,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     setConfirmDeleteCard(false);
     setFullEditInput({
       date: card.date || "",
+      teamId: card.teamId || "",
       status: card.status || "finish",
       dnsReason: card.dnsReason || "",
       dnfPoint: card.dnfPoint || "",
@@ -461,11 +572,40 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     }
   });
 
-  const conditionList = Object.values(conditionsMap).sort((a, b) => {
-    if (!a.date) return 1;
-    if (!b.date) return -1;
-    return a.date > b.date ? 1 : -1;
+  // 監督が手入力した上書き（tour.conditions[日付]）を優先
+  const condOverrides = reportTour.conditions || {};
+  Object.keys(condOverrides).forEach((d) => {
+    if (!conditionsMap[d]) conditionsMap[d] = { date: d, score: 0 };
   });
+  const conditionList = Object.values(conditionsMap)
+    .map((c) => {
+      const o = condOverrides[c.date || "single"];
+      return o ? { ...c, ...o } : c;
+    })
+    .sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date > b.date ? 1 : -1;
+    });
+  const canEditCond = !!(canEdit && onSaveConditions);
+  const openCondEdit = (cond) => {
+    setEditingCondDate(cond.date || "single");
+    setCondForm({
+      weather: cond.weather || "",
+      wind: cond.wind || "",
+      temp: cond.temp || "",
+      humidity: cond.humidity || "",
+    });
+  };
+  const saveCond = async () => {
+    await onSaveConditions(editingCondDate, {
+      weather: condForm.weather.trim(),
+      wind: condForm.wind.trim(),
+      temp: String(condForm.temp).trim(),
+      humidity: String(condForm.humidity).trim(),
+    });
+    setEditingCondDate(null);
+  };
 
   const parseMeters = (d) => {
     if (!d) return 0;
@@ -493,6 +633,28 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
   // 各日付内: 距離昇順 → 記録昇順（DNS/DNF は末尾）
   sortedDates.forEach((d) => {
     cardsByDate[d].sort((a, b) => {
+      // 駅伝: チーム順（大会のチーム登録順、未設定は末尾）→ 区順
+      const la = legIndexFromLabel(a.distance);
+      const lb = legIndexFromLabel(b.distance);
+      if (la >= 0 && lb >= 0) {
+        const teamsArr = Array.isArray(reportTour.teams) ? reportTour.teams : [];
+        const ti = (c) => {
+          const i = teamsArr.findIndex((t) => t.id === c.teamId);
+          return i < 0 ? 9999 : i;
+        };
+        const tdiff = ti(a) - ti(b);
+        if (tdiff !== 0) return tdiff;
+        // チーム未設定: 男子→女子の順に、区順
+        if (teamsArr.length === 0) {
+          const gOf = (c) => {
+            const r = (allRunners || []).find((x) => x.id === c.runnerId);
+            return r?.gender === "男" ? 0 : r?.gender === "女" ? 1 : 2;
+          };
+          const gdiff = gOf(a) - gOf(b);
+          if (gdiff !== 0) return gdiff;
+        }
+        if (la !== lb) return la - lb;
+      }
       const dm = parseMeters(a.distance) - parseMeters(b.distance);
       if (dm !== 0) return dm;
       // 記録昇順（未入力・DNS/DNF は末尾）
@@ -505,20 +667,150 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
     });
   });
 
-  return (<>
-    <div className="fixed inset-0 z-[120] bg-slate-50 flex flex-col animate-in fade-in print:absolute print:inset-auto print:top-0 print:left-0 print:w-full print:h-auto print:bg-white print:overflow-visible">
-      <div className="bg-slate-900 text-white p-4 flex items-center justify-between shadow-md pt-12 pb-6 print:hidden">
+  // ── 駅伝サマリー：区ごとの平均（完走のみ・男女別） ──
+  // プリセット駅伝大会（大会に区間距離あり）のときだけ集計する。
+  // 男女で区間距離が異なるため平均タイムが混ざらないよう性別ごとに分ける。
+  const ekidenReportLegs = getTournamentLegs(reportTour);
+  const isEkidenReport = !!ekidenReportLegs;
+  const runnerGenderById = {};
+  (allRunners || []).forEach((r) => {
+    runnerGenderById[r.id] = r.gender;
+  });
+  const legAgg = {}; // { 男: { "1区": {...} }, 女: {...} }
+  if (isEkidenReport) {
+    reportCards.forEach((c) => {
+      if (c.raceType !== RACE_TYPES.EKIDEN) return;
+      if (c.status && c.status !== "finish") return; // DNS/DNF は除外
+      const label = c.distance;
+      if (!/^\d+区$/.test(label || "")) return;
+      const sec = timeToSeconds(c.resultTime);
+      if (!sec) return;
+      const g = runnerGenderById[c.runnerId] || c.gender || "未設定";
+      let km = parseFloat(c.ekidenDistance);
+      if (!(km > 0)) km = legsDistance(ekidenReportLegs, g, label) || 0;
+      if (!legAgg[g]) legAgg[g] = {};
+      if (!legAgg[g][label]) {
+        legAgg[g][label] = {
+          leg: legIndexFromLabel(label),
+          km,
+          count: 0,
+          sumSec: 0,
+          sumPaceSec: 0,
+          paceCount: 0,
+          badges: new Set(),
+        };
+      }
+      const slot = legAgg[g][label];
+      slot.count += 1;
+      (c.badges || []).forEach((b) => slot.badges.add(b));
+      slot.sumSec += sec;
+      if (km > 0) {
+        slot.sumPaceSec += sec / km;
+        slot.paceCount += 1;
+      }
+    });
+  }
+  const legSummaryByGender = Object.keys(legAgg)
+    .sort((a, b) => (a === "男" ? -1 : b === "男" ? 1 : a > b ? 1 : -1))
+    .map((g) => ({
+      gender: g,
+      // 総合タイム = 各区の平均タイムの合計（1区1人なら実際の合計と一致）
+      totalTime: formatTotal(
+        Object.values(legAgg[g]).reduce((acc, s) => acc + s.sumSec / s.count, 0),
+      ),
+      rows: Object.values(legAgg[g])
+        .sort((a, b) => a.leg - b.leg)
+        .map((s) => ({
+          label: `${s.leg + 1}区`,
+          badges: Array.from(s.badges || []),
+          km: s.km,
+          count: s.count,
+          avgTime: fmtSecOnly(s.sumSec / s.count),
+          avgPace: s.paceCount ? fmtSecOnly(s.sumPaceSec / s.paceCount) : "-",
+        })),
+    }))
+    .filter((x) => x.rows.length > 0);
+
+  // ── 駅伝チーム成績：チーム別の区間一覧＋総合タイム ──
+  // 総合タイムは長時間になり得るため h:mm:ss で整形する。
+  // 駅伝用: 秒まで（コンマ秒なし）。m'ss" 形式に四捨五入
+  function fmtSecOnly(sec) {
+    if (!(sec > 0)) return "-";
+    const t = Math.round(sec);
+    return `${Math.floor(t / 60)}'${String(t % 60).padStart(2, "0")}"`;
+  }
+  function formatTotal(sec) {
+    if (!(sec > 0)) return "-";
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.round(sec % 60);
+    const pad = (n) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+  const hasTeams =
+    Array.isArray(reportTour.teams) && reportTour.teams.length > 0;
+  const teamSummary = hasTeams
+    ? reportTour.teams
+        .map((team) => {
+          const cards = reportCards
+            .filter((c) => c.teamId === team.id)
+            .slice()
+            .sort(
+              (a, b) => legIndexFromLabel(a.distance) - legIndexFromLabel(b.distance),
+            );
+          let totalSec = 0;
+          let finishCount = 0;
+          const legs = cards.map((c) => {
+            const isFinish = !c.status || c.status === "finish";
+            const sec = isFinish ? timeToSeconds(c.resultTime) : 0;
+            if (isFinish && sec > 0) {
+              totalSec += sec;
+              finishCount += 1;
+            }
+            return {
+              key: c.id,
+              card: c,
+              badges: c.badges || [],
+              label: c.distance || "-",
+              runnerName: c.runnerName || "",
+              km: c.ekidenDistance,
+              pace:
+                isFinish && sec > 0 && parseFloat(c.ekidenDistance) > 0
+                  ? fmtSecOnly(sec / parseFloat(c.ekidenDistance))
+                  : "-",
+              time:
+                c.status === "dns"
+                  ? `DNS`
+                  : c.status === "dnf"
+                    ? `DNF`
+                    : (timeToSeconds(c.resultTime) > 0 ? fmtSecOnly(timeToSeconds(c.resultTime)) : c.resultTime || "未入力"),
+            };
+          });
+          return {
+            team,
+            legs,
+            totalTime: formatTotal(totalSec),
+            legCount: cards.length,
+            finishCount,
+          };
+        })
+        .filter((t) => t.legs.length > 0)
+    : [];
+
+  return createPortal(<>
+    <div className="team-report-overlay fixed inset-0 z-[120] bg-slate-50 flex flex-col animate-in fade-in print:absolute print:inset-auto print:top-0 print:left-0 print:w-full print:h-auto print:bg-white print:overflow-visible">
+      <div className="bg-slate-900 text-white p-4 flex items-center justify-between gap-2 shadow-md pt-12 pb-6 print:hidden [&_button]:shrink-0 [&_button_span]:whitespace-nowrap">
         <button
           onClick={onClose}
           className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
         >
           <ArrowLeft size={20} />
         </button>
-        <div className="text-center">
-          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+        <div className="text-center min-w-0 flex-1">
+          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase whitespace-nowrap">
             Team Race Report
           </p>
-          <h2 className="font-bold text-sm">今大会チームレポート</h2>
+          <h2 className="font-bold text-sm whitespace-nowrap truncate">チームレポート</h2>
         </div>
 
         <button
@@ -545,7 +837,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
             <span className="text-xs font-semibold">公式記録</span>
           </button>
         )}
-        {canEdit && onEditCard && (
+        {canEdit && onEditCard && !isEkidenReport && (
           <button
             onClick={() => { setLapBatchText(""); setParsedLaps(null); setIsLapBatchOpen(true); }}
             className="flex items-center gap-1 pl-2 pr-3 py-1.5 bg-white/10 rounded-full hover:bg-white/20 transition-colors print:hidden"
@@ -557,7 +849,17 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
         )}
         {canEdit && onAddCard && (allRunners || []).length > 0 && (
           <button
-            onClick={() => { setAddCardInput({ ...EMPTY_ADD, date: reportTour.startDate || "" }); setIsAddingCard(true); }}
+            onClick={() => {
+              // プリセット駅伝大会なら既定を「駅伝/1区」に（区間距離は選手選択時に自動反映）
+              const isPresetEkiden = !!getTournamentLegs(reportTour);
+              setAddCardInput({
+                ...EMPTY_ADD,
+                date: reportTour.startDate || "",
+                raceType: isPresetEkiden ? RACE_TYPES.EKIDEN : EMPTY_ADD.raceType,
+                distance: isPresetEkiden ? "1区" : EMPTY_ADD.distance,
+              });
+              setIsAddingCard(true);
+            }}
             className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors print:hidden"
             title="カードを追加（未提出・別日/別種目の追加とも）"
           >
@@ -582,6 +884,15 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
               <p className="text-xs font-bold text-slate-400">
                 コンディション未入力
               </p>
+              {canEditCond && (
+                <button
+                  type="button"
+                  onClick={() => openCondEdit({ date: reportTour.startDate })}
+                  className="mt-2 text-xs font-black text-indigo-500 underline print:hidden"
+                >
+                  入力する
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
@@ -631,14 +942,198 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                       </p>
                     </div>
                   </div>
+                  {canEditCond && (
+                    <button
+                      type="button"
+                      onClick={() => openCondEdit(cond)}
+                      className="text-[10px] font-black text-indigo-500 underline shrink-0 print:hidden"
+                    >
+                      編集
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
+          {editingCondDate && (
+            <div className="mt-3 p-4 bg-white border border-slate-200 rounded-2xl space-y-3 print:hidden">
+              <p className="text-[10px] font-black text-slate-400">
+                コンディション編集{editingCondDate !== "single" ? ` (${editingCondDate.slice(5).replace("-", "/")})` : ""}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  ["weather", "天候", "晴れ"],
+                  ["wind", "風", "無風"],
+                  ["temp", "気温(℃)", "20"],
+                  ["humidity", "湿度(%)", "50"],
+                ].map(([k, label, ph]) => (
+                  <div key={k}>
+                    <label className="text-[9px] font-black text-slate-400 block mb-1">{label}</label>
+                    <input
+                      type="text"
+                      value={condForm[k]}
+                      onChange={(e) => setCondForm((p) => ({ ...p, [k]: e.target.value }))}
+                      placeholder={ph}
+                      className="w-full p-2 bg-slate-50 rounded-lg text-sm font-bold text-slate-700 outline-none border border-slate-200"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setEditingCondDate(null)} className="flex-1 py-2 rounded-lg bg-slate-100 text-xs font-black text-slate-500">キャンセル</button>
+                <button type="button" onClick={saveCond} className="flex-1 py-2 rounded-lg bg-indigo-600 text-xs font-black text-white">保存</button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* 選手記録一覧（日付ごとグループ化） */}
-        <div>
+        {/* 駅伝チーム成績：チーム別の区間一覧＋総合タイム */}
+        {isEkidenReport && hasTeams && teamSummary.length > 0 && (
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 print:shadow-none print:border print:border-slate-200 print:p-3">
+            <h3 className="text-sm font-black text-indigo-600 uppercase tracking-widest mb-4 flex items-center gap-2 print:text-slate-800">
+              <Award size={16} /> チーム成績
+            </h3>
+            <div className="space-y-5">
+              {teamSummary.map((t) => (
+                <div
+                  key={t.team.id}
+                  className="border border-slate-100 rounded-2xl overflow-hidden print:border-slate-200"
+                >
+                  <div className="flex items-center justify-between bg-slate-50 px-4 py-2.5 print:bg-white">
+                    <p className="font-black text-slate-700 text-sm">
+                      {t.team.name}
+                      {t.team.category ? (
+                        <span className="ml-2 text-[10px] font-black text-slate-400">
+                          {t.team.category}
+                        </span>
+                      ) : null}
+                    </p>
+                    <TeamTotalBlock
+                      computed={t.totalTime}
+                      result={(reportTour.teamResults || {})[t.team.id]}
+                      canEdit={canEdit}
+                      onSave={onSaveTeamResult ? (d) => onSaveTeamResult(t.team.id, d) : null}
+                    />
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[460px] whitespace-nowrap text-sm border-collapse">
+                      <thead>
+                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                          <th className="text-right py-2 px-3">区間</th>
+                          <th className="text-right py-2 px-3 w-px">選手</th>
+                          <th className="text-right py-2 px-2">距離</th>
+                          <th className="text-right py-2 px-2">記録</th>
+                          <th className="text-right py-2 px-3">AVG</th>
+                          <th className="text-right py-2 px-3">備考</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {t.legs.map((l) => (
+                          <tr
+                            key={l.key}
+                            className="border-b border-slate-50 last:border-0"
+                          >
+                            <td className="text-right py-2 px-3 font-black text-slate-700">
+                              {l.label}
+                            </td>
+                            <td className="text-right py-2 px-3 w-px font-bold text-slate-600">
+                              {l.runnerName || "-"}
+                              {canEdit && onEditCard && (
+                                <button type="button" onClick={() => openFullEdit(l.card)} className="ml-2 text-[10px] font-black text-indigo-500 underline print:hidden">編集</button>
+                              )}
+                            </td>
+                            <td className="text-right py-2 px-2 font-bold text-slate-500">
+                              {l.km ? `${l.km}km` : "-"}
+                            </td>
+                            <td className="text-right py-2 px-2 font-mono font-bold text-slate-700 whitespace-nowrap">
+                              {l.time}
+                            </td>
+                            <td className="text-right py-2 px-3 font-mono font-bold text-indigo-500">
+                              {l.pace}
+                            </td>
+                            <td className="text-right py-2 px-3">
+                              <BadgeChips badges={l.badges} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 駅伝サマリー：区ごとの平均（完走のみ・男女別）。チーム未設定のときのみ表示 */}
+        {isEkidenReport && !hasTeams && legSummaryByGender.length > 0 && (
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 print:shadow-none print:border print:border-slate-200 print:p-3">
+            <h3 className="text-sm font-black text-indigo-600 uppercase tracking-widest mb-4 flex items-center gap-2 print:text-slate-800">
+              <Award size={16} /> チーム成績
+            </h3>
+            <div className="space-y-5">
+              {legSummaryByGender.map((grp) => (
+                <div key={grp.gender} className="space-y-2">
+                  <div className="flex items-end justify-between">
+                    <p className="text-xs font-black text-slate-500">
+                      {grp.gender === "男"
+                        ? "男子"
+                        : grp.gender === "女"
+                          ? "女子"
+                          : grp.gender}
+                    </p>
+                    <TeamTotalBlock
+                      computed={grp.totalTime}
+                      result={(reportTour.teamResults || {})[grp.gender]}
+                      canEdit={canEdit}
+                      onSave={onSaveTeamResult ? (d) => onSaveTeamResult(grp.gender, d) : null}
+                    />
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[460px] whitespace-nowrap text-sm border-collapse">
+                      <thead>
+                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                          <th className="text-right py-2 pr-2">区間</th>
+                          <th className="text-right py-2 px-2">距離</th>
+                          <th className="text-right py-2 px-2">記録</th>
+                          <th className="text-right py-2 pl-2">AVG</th>
+                          <th className="text-right py-2 pl-3">備考</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {grp.rows.map((r) => (
+                          <tr
+                            key={r.label}
+                            className="border-b border-slate-50 last:border-0"
+                          >
+                            <td className="text-right py-2 pr-2 font-black text-slate-700">
+                              {r.label}
+                            </td>
+                            <td className="text-right py-2 px-2 font-bold text-slate-500">
+                              {r.km > 0 ? `${r.km}km` : "-"}
+                            </td>
+                            <td className="text-right py-2 px-2 font-mono font-bold text-slate-700 whitespace-nowrap">
+                              {r.avgTime || "-"}
+                            </td>
+                            <td className="text-right py-2 pl-2 font-mono font-bold text-indigo-500">
+                              {r.avgPace}
+                            </td>
+                            <td className="text-right py-2 pl-3">
+                              <BadgeChips badges={r.badges} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 選手記録一覧（日付ごとグループ化）。駅伝はチーム成績のみ表示 */}
+        {!isEkidenReport && <div>
           {sortedDates.length === 0 ? (
             <p className="text-center py-10 text-slate-300 font-bold bg-white rounded-3xl border border-slate-100">
               まだ記録がありません
@@ -703,6 +1198,8 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                                         ? "bg-orange-500 print:border-orange-500"
                                         : badge === "組1位"
                                           ? "bg-blue-500 print:border-blue-500"
+                                          : badge === "学校記録"
+                                            ? "bg-rose-500 print:border-rose-500"
                                           : "bg-emerald-500 print:border-emerald-500"
                                     }`}
                                   >
@@ -780,7 +1277,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                                       ))}
                               </div>
                             </div>
-                          ) : (
+                          ) : isEkidenReport ? null : (
                             <div className="flex-1 flex items-center justify-center">
                               <p className="text-xs text-slate-300 font-bold bg-slate-50 px-4 py-2 rounded-xl">
                                 LAP未入力
@@ -795,7 +1292,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
     </div>
     {/* 監督用 Result / LAP 編集モーダル */}
@@ -835,9 +1332,24 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
             </button>
           </div>
           <div className="overflow-y-auto px-6 py-4 space-y-4">
+            {Array.isArray(reportTour.teams) && reportTour.teams.length > 0 && (
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">出場チーム</label>
+                <select
+                  value={fullEditInput.teamId || ""}
+                  onChange={(e) => setFullEditInput((p) => ({ ...p, teamId: e.target.value }))}
+                  className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
+                >
+                  <option value="">チームを選択...</option>
+                  {reportTour.teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}{t.category ? `（${t.category}）` : ""}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">レース日</label>
-              <input type="date" value={fullEditInput.date} onChange={(e) => setFullEditInput((p) => ({ ...p, date: e.target.value }))} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
+              <input type="date" value={fullEditInput.date} onChange={(e) => setFullEditInput((p) => ({ ...p, date: e.target.value }))} className="block w-full min-w-0 max-w-full appearance-none box-border text-left min-h-[42px] p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
             </div>
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">ステータス</label>
@@ -881,10 +1393,10 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                 <input type="text" value={fullEditInput.resultTime} onChange={(e) => setFullEditInput((p) => ({ ...p, resultTime: e.target.value }))} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
               </div>
             </div>
-            <div>
+            {editingFullCard?.raceType !== RACE_TYPES.EKIDEN && <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">ラップタイム</label>
               <textarea value={fullEditInput.lapTimes} onChange={(e) => setFullEditInput((p) => ({ ...p, lapTimes: e.target.value }))} rows={4} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-mono font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400 resize-none" />
-            </div>
+            </div>}
             {[
               { key: "racePlan", label: "レースプラン" },
               { key: "wupPlan", label: "W-UP計画" },
@@ -992,9 +1504,13 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                         {entry.card ? <Check size={14} className="text-white" /> : <AlertCircle size={14} className="text-white" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-slate-800">{entry.name}</p>
+                        <p className="text-sm font-black text-slate-800">
+                          {entry.card?.raceType === RACE_TYPES.EKIDEN && entry.card.distance
+                            ? `${entry.card.distance} ${String(entry.name || "").replace(/^区s*/, "")}`
+                            : entry.name}
+                        </p>
                         <p className="text-[10px] font-bold text-slate-500">
-                          {entry.event && <span className="mr-1">{entry.event}</span>}
+                          {entry.event && !(entry.card?.raceType === RACE_TYPES.EKIDEN) && <span className="mr-1">{entry.event}</span>}
                           {entry.status === "dns" ? "DNS" : entry.status === "dnf" ? "DNF" : entry.resultTime}
                           {entry.rank && ` · ${entry.rank}位`}
                         </p>
@@ -1297,7 +1813,24 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                 value={addCardInput.runnerId}
                 onChange={(e) => {
                   const r = (allRunners || []).find((r) => r.id === e.target.value);
-                  setAddCardInput((p) => ({ ...p, runnerId: e.target.value, runnerName: r ? `${r.lastName} ${r.firstName}` : "" }));
+                  setAddCardInput((p) => {
+                    // 駅伝プリセット大会なら、選手の性別に応じて区間距離を再反映
+                    const legs =
+                      p.raceType === RACE_TYPES.EKIDEN
+                        ? legsLabels(addEkidenLegs, r?.gender)
+                        : null;
+                    return {
+                      ...p,
+                      runnerId: e.target.value,
+                      runnerName: r ? `${r.lastName} ${r.firstName}` : "",
+                      ekidenDistance: legs
+                        ? String(
+                            legsDistance(addEkidenLegs, r?.gender, p.distance) ??
+                              "",
+                          )
+                        : p.ekidenDistance,
+                    };
+                  });
                 }}
                 className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
               >
@@ -1318,10 +1851,26 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                 )}
               </select>
             </div>
+            {/* 出場チーム */}
+            {Array.isArray(reportTour.teams) && reportTour.teams.length > 0 && (
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">出場チーム</label>
+                <select
+                  value={addCardInput.teamId || ""}
+                  onChange={(e) => setAddCardInput((p) => ({ ...p, teamId: e.target.value }))}
+                  className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
+                >
+                  <option value="">チームを選択...</option>
+                  {reportTour.teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}{t.category ? `（${t.category}）` : ""}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {/* レース日 */}
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">レース日</label>
-              <input type="date" value={addCardInput.date} onChange={(e) => setAddCardInput((p) => ({ ...p, date: e.target.value }))} className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
+              <input type="date" value={addCardInput.date} onChange={(e) => setAddCardInput((p) => ({ ...p, date: e.target.value }))} className="block w-full min-w-0 max-w-full appearance-none box-border text-left min-h-[42px] p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400" />
             </div>
             {/* 種目 */}
             <div className="grid grid-cols-2 gap-3">
@@ -1329,7 +1878,24 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">区分</label>
                 <select
                   value={addCardInput.raceType}
-                  onChange={(e) => setAddCardInput((p) => ({ ...p, raceType: e.target.value, distance: RACE_DISTANCES[e.target.value][0], ekidenDistance: "" }))}
+                  onChange={(e) => {
+                    const newType = e.target.value;
+                    const legs =
+                      newType === RACE_TYPES.EKIDEN
+                        ? legsLabels(addEkidenLegs, addGender)
+                        : null;
+                    const firstDist = legs ? legs[0] : RACE_DISTANCES[newType][0];
+                    setAddCardInput((p) => ({
+                      ...p,
+                      raceType: newType,
+                      distance: firstDist,
+                      ekidenDistance: legs
+                        ? String(
+                            legsDistance(addEkidenLegs, addGender, firstDist) ?? "",
+                          )
+                        : "",
+                    }));
+                  }}
                   className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
                 >
                   {Object.values(RACE_TYPES).map((t) => <option key={t} value={t}>{t}</option>)}
@@ -1339,13 +1905,30 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">距離・種目</label>
                 <select
                   value={addCardInput.distance}
-                  onChange={(e) => setAddCardInput((p) => ({ ...p, distance: e.target.value }))}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setAddCardInput((p) => ({
+                      ...p,
+                      distance: val,
+                      ekidenDistance: addUsingPreset
+                        ? String(
+                            legsDistance(addEkidenLegs, addGender, val) ?? "",
+                          )
+                        : p.ekidenDistance,
+                    }));
+                  }}
                   className="w-full p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 outline-none border border-slate-200 focus:border-blue-400"
                 >
-                  {RACE_DISTANCES[addCardInput.raceType].map((d) => <option key={d} value={d}>{d}</option>)}
+                  {addDistanceOptions.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
             </div>
+            {addUsingPreset && (
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">区間距離 (km) ※自動反映</label>
+                <input type="text" readOnly value={addCardInput.ekidenDistance} className="w-full p-2.5 bg-slate-100 rounded-xl text-sm font-bold text-slate-500 outline-none border border-slate-200 cursor-not-allowed" />
+              </div>
+            )}
             {(addCardInput.distance === "その他") && (
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">詳細</label>
@@ -1411,7 +1994,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
         </div>
       </div>
     )}
-  </>);
+  </>, document.body);
 };
 
 export default TeamRaceReport;

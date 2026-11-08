@@ -24,3 +24,21 @@ code {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+/* iOS Safari: 日付入力が親幅からはみ出す／中央寄せになるのを防ぐ */
+input[type="date"],
+input[type="time"],
+input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="month"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-width: 0;
+}

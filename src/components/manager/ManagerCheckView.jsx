@@ -4,16 +4,14 @@
  * ManagerDashboard から check ビューを分離。日付選択と、その日の選手提出状況
  * 一覧を表示する。状態・派生データ・ハンドラは props で受け取る。
  */
-import { ArrowLeft, ChevronRight, HeartPulse, Check } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
+import SubmissionStatusRow from "../shared/SubmissionStatusRow";
 
 const ManagerCheckView = ({
   shiftDate,
   checkDate,
   setCheckDate,
   submissionStatusList,
-  allLogs,
-  setSelectedLog,
-  setIsDetailOpen,
 }) => {
   return (
           <div className="h-full flex flex-col gap-4 animate-in fade-in">
@@ -53,60 +51,10 @@ const ManagerCheckView = ({
               <div className="px-5 pt-5 pb-3 flex-shrink-0 border-b border-slate-100">
                 <h3 className="font-black text-sm text-slate-700">提出状況</h3>
               </div>
-              <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1 pb-4">
-                {submissionStatusList.map((r) => {
-                  const targetLog = allLogs.find(
-                    (l) => l.runnerId === r.id && l.date === checkDate,
-                  );
-                  return (
-                    <div
-                      key={r.id}
-                      onClick={() => {
-                        if (targetLog) {
-                          setSelectedLog(targetLog);
-                          setIsDetailOpen(true);
-                        }
-                      }}
-                      className={`py-3 flex items-center justify-between px-2 rounded-xl transition-all ${targetLog ? "cursor-pointer hover:bg-indigo-50" : "opacity-70"}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white ${r.status === "unsubmitted" ? "bg-slate-200" : "bg-indigo-500"}`}
-                        >
-                          {r.lastName.charAt(0)}
-                        </div>
-                        <div>
-                          <span className="font-bold text-sm text-slate-700 block">
-                            {r.lastName} {r.firstName}
-                          </span>
-                          <div className="flex gap-2 items-center">
-                            <span className="text-[11px] text-slate-500 font-bold bg-slate-100 px-1.5 rounded">
-                              月間: {r.monthTotal}km
-                            </span>
-                            {targetLog && targetLog.pain >= 3 && (
-                              <span className="text-[11px] text-rose-500 font-bold flex items-center gap-0.5 animate-pulse">
-                                <HeartPulse size={10} /> Pain
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div>
-                        {r.status === "unsubmitted" ? (
-                          <span className="text-[11px] font-bold text-rose-500 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-100">
-                            未提出
-                          </span>
-                        ) : (
-                          <span
-                            className={`px-3 py-1 rounded-full text-[11px] font-black border flex items-center gap-1 ${r.status === "rest" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-blue-50 text-blue-600 border-blue-100"}`}
-                          >
-                            <Check size={10} /> {r.label}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="flex-1 overflow-y-auto px-5 py-3 divide-y divide-slate-100 pb-4">
+                {submissionStatusList.map((r) => (
+                  <SubmissionStatusRow key={r.id} runner={r} />
+                ))}
               </div>
             </div>
           </div>

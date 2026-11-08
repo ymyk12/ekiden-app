@@ -7,19 +7,9 @@
  */
 import { useState } from "react";
 import { Trophy, Download } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  LabelList,
-} from "recharts";
 import CoachReportView from "../CoachReportView";
 import MonthlyReportView from "../MonthlyReportView";
+import RankingList from "../shared/RankingList";
 
 const CoachStatsView = ({
   exportCSV,
@@ -57,8 +47,8 @@ const CoachStatsView = ({
         ))}
       </div>
       {statsSubTab === "ranking" && (
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm h-[28rem] lg:h-[calc(100dvh-240px)] flex flex-col">
-          <div className="flex justify-between items-center mb-6">
+        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm h-[32rem] lg:h-[calc(100dvh-170px)] flex flex-col">
+          <div className="flex justify-between items-center mb-4">
             <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2">
               <Trophy size={18} className="text-orange-500" /> Team
               Ranking
@@ -71,75 +61,7 @@ const CoachStatsView = ({
             </button>
           </div>
           <div className="flex-1 w-full min-h-0 overflow-y-auto pr-2">
-            <div
-              style={{ height: Math.max(300, rankingData.length * 50) }}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={rankingData}
-                  layout="vertical"
-                  margin={{ left: -10, right: 60 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    horizontal={false}
-                    stroke="#f1f5f9"
-                  />
-                  <XAxis type="number" hide />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    width={110}
-                    tick={{
-                      fontSize: 12,
-                      fontWeight: "bold",
-                      fill: "#1e293b",
-                      interval: 0,
-                    }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "#f8fafc" }}
-                    contentStyle={{
-                      borderRadius: "12px",
-                      border: "none",
-                      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                      fontWeight: "bold",
-                    }}
-                  />
-                  <Bar
-                    dataKey="total"
-                    radius={[0, 10, 10, 0]}
-                    barSize={24}
-                  >
-                    {rankingData.map((_, i) => (
-                      <Cell
-                        key={i}
-                        fill={
-                          i === 0
-                            ? "#0f172a"
-                            : i < 3
-                              ? "#3b82f6"
-                              : "#cbd5e1"
-                        }
-                      />
-                    ))}
-                    <LabelList
-                      dataKey="total"
-                      position="right"
-                      formatter={(v) => `${v}km`}
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "black",
-                        fill: "#475569",
-                      }}
-                      offset={10}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <RankingList rankingData={rankingData} />
           </div>
         </div>
       )}

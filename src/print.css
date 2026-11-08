@@ -97,6 +97,11 @@
     size: A4 portrait;
     margin: 10mm;
   }
+  /* 大会レポート印刷時は、背後のアプリ本体(#root)を印刷範囲から除外し、
+     body 直下へ portal したレポートだけを印刷する（他大会名の混入対策）。 */
+  body.team-report-open > #root {
+    display: none !important;
+  }
   body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

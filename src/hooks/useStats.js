@@ -6,7 +6,8 @@
  */
 import { useMemo } from "react";
 import { ROLES } from "../utils/constants";
-import { getTodayStr, getDatesInRange } from "../utils/dateUtils";
+import { getTodayStr, getDatesInRange, countMissingDays } from "../utils/dateUtils";
+import { buildSubmissionRow } from "../utils/submission";
 
 export const useStats = ({
   allLogs,
@@ -152,18 +153,25 @@ export const useStats = ({
     return activeRunners
       .filter((r) => r.role !== ROLES.MANAGER)
       .map((r) => {
-        const total = allLogs
+        const runnerLogs = allLogs.filter((l) => l.runnerId === r.id);
+        const total = runnerLogs
           .filter(
             (l) =>
-              l.runnerId === r.id &&
-              new Date(l.date) >= start &&
-              new Date(l.date) <= end,
+              new Date(l.date) >= start && new Date(l.date) <= end,
           )
           .reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+        // 未入力日数（期間開始〜前日まで。完全休養は入力済み扱い）
+        const logDateSet = new Set(runnerLogs.map((l) => l.date));
+        const missingCount = countMissingDays(
+          logDateSet,
+          targetPeriod.start,
+          targetPeriod.end,
+        );
         return {
           name: `${r.lastName} ${r.firstName}`,
           id: r.id,
           total: Math.round(total * 10) / 10,
+          missingCount,
         };
       })
       .sort((a, b) => b.total - a.total);
@@ -366,35 +374,24 @@ export const useStats = ({
   }, [allLogs, targetPeriod, activeRunners]);
 
   const checkListData = useMemo(() => {
+    const monthPrefix = (checkDate || "").slice(0, 7);
     return activeRunners
       .filter((r) => r.role !== ROLES.MANAGER)
       .map((runner) => {
-        const logs = allLogs.filter(
-          (l) => l.runnerId === runner.id && l.date === checkDate,
-        );
-
-        let status = "unsubmitted";
-        let detail = "-";
-
-        if (logs.length > 0) {
-          const totalDist = logs.reduce(
-            (sum, l) => sum + (Number(l.distance) || 0),
-            0,
-          );
-          const isRest = logs.some((l) => l.category === "完全休養");
-
-          if (totalDist > 0) {
-            status = "active";
-            detail = `${Math.round(totalDist * 10) / 10}km`;
-          } else if (isRest) {
-            status = "rest";
-            detail = "休み";
-          } else {
-            status = "rest";
-            detail = "0km";
-          }
-        }
-        return { ...runner, status, detail };
+        // 提出状況の判定は共通ロジック（監督基準）を使用
+        const { status, detail } = buildSubmissionRow(runner, allLogs, checkDate);
+        // 月間走行距離（付加情報。監督の提出状況一覧に表示）
+        const monthTotal =
+          Math.round(
+            allLogs
+              .filter(
+                (l) =>
+                  l.runnerId === runner.id &&
+                  (l.date || "").startsWith(monthPrefix),
+              )
+              .reduce((sum, l) => sum + (Number(l.distance) || 0), 0) * 10,
+          ) / 10;
+        return { ...runner, status, detail, monthTotal };
       });
   }, [activeRunners, allLogs, checkDate]);
 

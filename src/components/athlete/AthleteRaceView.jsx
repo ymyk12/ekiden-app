@@ -15,12 +15,19 @@ import {
   Plus,
   Users,
 } from "lucide-react";
+import TournamentMonthFilter from "../shared/TournamentMonthFilter";
+import {
+  getTournamentLegs,
+  legsLabels,
+  legsDistance,
+} from "../../data/ekidenPresets";
 
 const AthleteRaceView = ({
   safeChangeView,
   tournaments,
   raceCards,
   currentUserId,
+  gender,
   setRaceCardInput,
   setEditingRaceCardId,
   setView,
@@ -44,22 +51,11 @@ const AthleteRaceView = ({
             </div>
 
             <div className="space-y-4">
-              {tournaments.length > 0 && (() => {
-                const months = [...new Set(tournaments.map(t => t.startDate?.slice(0, 7)).filter(Boolean))].sort().reverse();
-                return (
-                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                    {["all", ...months].map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setRaceMonthFilter(m)}
-                        className={`flex-none px-3 py-1 rounded-full text-[10px] font-black transition-all ${raceMonthFilter === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                      >
-                        {m === "all" ? "すべて" : m.replace("-", "/")}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })()}
+              <TournamentMonthFilter
+                tournaments={tournaments}
+                value={raceMonthFilter}
+                onChange={setRaceMonthFilter}
+              />
               <div className="space-y-6 overflow-y-auto max-h-[calc(100dvh-400px)] pr-1">
               {tournaments.length === 0 ? (
                 <div className="text-center py-10">
@@ -120,6 +116,8 @@ const AthleteRaceView = ({
                                         ? "bg-orange-500"
                                         : badge === "組1位"
                                           ? "bg-blue-500"
+                                          : badge === "学校記録"
+                                            ? "bg-rose-500"
                                           : "bg-emerald-500"
                                     }`}
                                   >
@@ -172,11 +170,18 @@ const AthleteRaceView = ({
                         <button
                           onClick={() => {
                             setEditingRaceCardId(null);
+                            // プリセット駅伝大会（この選手の性別に区間距離あり）なら
+                            // 既定を「駅伝/1区」にし区間距離も自動反映。それ以外は
+                            // 従来どおり「トラック/1500m」。
+                            const legs = getTournamentLegs(tour);
+                            const isPresetEkiden = !!legsLabels(legs, gender);
                             setRaceCardInput({
                               tournamentId: tour.id,
-                              raceType: "トラック",
-                              distance: "1500m",
-                              ekidenDistance: "",
+                              raceType: isPresetEkiden ? "駅伝" : "トラック",
+                              distance: isPresetEkiden ? "1区" : "1500m",
+                              ekidenDistance: isPresetEkiden
+                                ? String(legsDistance(legs, gender, "1区") ?? "")
+                                : "",
                               targetTime: "",
                               wupPlan: "",
                               racePlan: "",

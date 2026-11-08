@@ -9,12 +9,14 @@
 import { useState } from "react";
 import { setDoc, addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { toast } from "react-hot-toast";
-import { colRef, docRef } from "../utils/firestore";
+import { colRef, docRef, settingsDocRef } from "../utils/firestore";
+import { findPreset } from "../data/ekidenPresets";
 
 export const useRaceHandlers = ({
   currentUserId,
   currentProfile,
   tournaments,
+  appSettings,
   setView,
   setIsSubmitting,
   setConfirmDialog,
@@ -23,6 +25,9 @@ export const useRaceHandlers = ({
     name: "",
     startDate: "",
     endDate: "",
+    ekidenPreset: "",
+    ekidenLegs: null,
+    teams: [],
   });
 
   const [editingRaceCardId, setEditingRaceCardId] = useState(null);
@@ -32,6 +37,7 @@ export const useRaceHandlers = ({
     distance: "",
     startTime: "",
     ekidenDistance: "",
+    teamId: "",
     targetTime: "",
     wupPlan: "",
     racePlan: "",
@@ -66,17 +72,33 @@ export const useRaceHandlers = ({
     setIsSubmitting(true);
     try {
       const tournamentId = `tour_${Date.now()}`;
+      // プリセットの区間距離(legs)を大会に非正規化して保存する
+      const presetId = newTournamentInput.ekidenPreset || "";
+      const ekidenLegs = presetId
+        ? findPreset(presetId, appSettings?.ekidenPresets)?.legs || null
+        : null;
       const newTournament = {
         id: tournamentId,
         name: newTournamentInput.name,
         startDate: newTournamentInput.startDate,
         endDate: newTournamentInput.endDate,
+        ekidenPreset: presetId,
+        ekidenLegs,
+        teams: Array.isArray(newTournamentInput.teams)
+          ? newTournamentInput.teams
+          : [],
         createdAt: new Date().toISOString(),
       };
 
       await setDoc(docRef("tournaments", tournamentId), newTournament);
 
-      setNewTournamentInput({ name: "", startDate: "", endDate: "" });
+      setNewTournamentInput({
+        name: "",
+        startDate: "",
+        endDate: "",
+        ekidenPreset: "",
+        teams: [],
+      });
       toast.success("新しい大会を登録しました！");
     } catch (error) {
       console.error("Error saving tournament:", error);
@@ -161,6 +183,20 @@ export const useRaceHandlers = ({
     });
   };
 
+  // 駅伝プリセット（カスタム）を設定ドキュメントに保存する（CRUD共通）
+  const handleSaveEkidenPresets = async (nextPresets) => {
+    setIsSubmitting(true);
+    try {
+      await updateDoc(settingsDocRef(), { ekidenPresets: nextPresets });
+      toast.success("駅伝プリセットを保存しました");
+    } catch (error) {
+      console.error("Error saving ekiden presets:", error);
+      toast.error("プリセットの保存に失敗しました");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSaveRaceCardFeedback = async (cardId, feedbackText) => {
     setIsSubmitting(true);
     try {
@@ -191,5 +227,6 @@ export const useRaceHandlers = ({
     handleSaveRaceCard,
     handleDeleteRaceCard,
     handleSaveRaceCardFeedback,
+    handleSaveEkidenPresets,
   };
 };

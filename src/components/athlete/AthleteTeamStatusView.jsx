@@ -7,14 +7,13 @@
 import { useState } from "react";
 import {
   ArrowLeft,
-  Users,
-  Check,
   Dumbbell,
   Activity,
   MessageSquare,
 } from "lucide-react";
-import { getTodayStr } from "../../utils/dateUtils";
 import DiaryListItem from "../DiaryListItem";
+import RankingList from "../shared/RankingList";
+import TeamActivityFeed from "../shared/TeamActivityFeed";
 
 const AthleteTeamStatusView = ({
   safeChangeView,
@@ -62,57 +61,11 @@ const AthleteTeamStatusView = ({
 
             {/* ランキング */}
             {teamSubView === "ranking" && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-end px-2">
-                  <h4 className="font-black text-xl text-slate-800 flex items-center gap-2">
-                    <Users className="text-blue-500" /> ランキング
-                  </h4>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    {targetPeriod.name}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  {rankingData.map((runner, index) => {
-                    const todayLog = allLogs.find(
-                      (l) => l.runnerId === runner.id && l.date === getTodayStr(),
-                    );
-                    return (
-                      <div
-                        key={runner.id}
-                        className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 relative overflow-hidden"
-                      >
-                        <div
-                          className={`absolute top-0 left-0 px-3 py-1 rounded-br-xl text-[10px] font-black ${index === 0 ? "bg-yellow-400 text-yellow-900" : index === 1 ? "bg-slate-300 text-slate-700" : index === 2 ? "bg-orange-300 text-orange-800" : "bg-slate-200 text-slate-500"}`}
-                        >
-                          #{index + 1}
-                        </div>
-                        <div className="flex items-center gap-3 pl-8">
-                          <div>
-                            <p className="font-bold text-slate-700 text-sm">
-                              {runner.name}
-                            </p>
-                            {todayLog ? (
-                              <p className="text-[10px] font-bold text-blue-500 flex items-center gap-1 mt-0.5">
-                                <Check size={10} /> 今日: {todayLog.distance}km
-                              </p>
-                            ) : (
-                              <p className="text-[10px] font-bold text-slate-300 mt-0.5">
-                                今日: -
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-slate-800">
-                            {runner.total}
-                            <span className="text-xs ml-0.5 text-slate-400">km</span>
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <RankingList
+                rankingData={rankingData}
+                title="ランキング"
+                periodName={targetPeriod.name}
+              />
             )}
 
             {/* 日誌 */}
@@ -214,16 +167,15 @@ const AthleteTeamStatusView = ({
               </div>
             )}
 
-            {/* 活動フィード */}
+            {/* 活動フィード（共通コンポーネント・閲覧専用） */}
             {teamSubView === "activity" && (
               <div className="space-y-4 max-h-[500px] overflow-y-auto no-scrollbar pr-1">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
                   過去7日間の活動
                 </p>
                 {(() => {
-                  const today = new Date();
                   const pastDate = new Date();
-                  pastDate.setDate(today.getDate() - 6);
+                  pastDate.setDate(pastDate.getDate() - 6);
                   const minDateStr = pastDate.toLocaleDateString("sv-SE");
 
                   const teamLogsList = allLogs
@@ -235,47 +187,9 @@ const AthleteTeamStatusView = ({
                     })
                     .slice(0, 20);
 
-                  if (teamLogsList.length === 0) {
-                    return (
-                      <p className="text-center text-xs text-slate-300 py-8 font-bold">
-                        直近の活動記録はありません
-                      </p>
-                    );
-                  }
-
-                  return teamLogsList.map((log) => {
-                    const isRest = log.category === "完全休養";
-                    return (
-                      <div key={log.id} className="flex items-start gap-3 relative pl-2">
-                        <div className="absolute left-[19px] top-8 bottom-[-16px] w-0.5 bg-slate-100 last:hidden"></div>
-                        <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-sm z-10 ${isRest ? "bg-emerald-400" : "bg-blue-500"}`}>
-                          {log.runnerName ? log.runnerName.charAt(0) : "?"}
-                        </div>
-                        <div className="bg-slate-50 p-3 rounded-2xl w-full border border-slate-100">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-[10px] font-bold text-slate-400">
-                                {log.date.slice(5).replace("-", "/")} · {log.runnerName}
-                              </p>
-                              <p className={`text-sm font-black ${isRest ? "text-emerald-600" : "text-slate-700"}`}>
-                                {isRest ? "完全休養" : `${log.distance}km`}
-                                {!isRest && (
-                                  <span className="text-[10px] font-bold text-slate-400 ml-2 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                    {log.category}
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          {log.menuDetail && (
-                            <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed bg-white/50 p-1.5 rounded-lg">
-                              "{log.menuDetail}"
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  });
+                  return (
+                    <TeamActivityFeed logs={teamLogsList} accent="blue" />
+                  );
                 })()}
               </div>
             )}
