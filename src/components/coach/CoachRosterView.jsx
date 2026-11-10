@@ -201,12 +201,34 @@ const CoachRosterView = ({
                     <p className="font-bold text-slate-600">
                       {r.lastName} {r.firstName}
                     </p>
+                    <div className="flex items-center gap-2 mt-0.5 mb-0.5">
+                      <span className="text-[10px] md:text-xs font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                        ID: {r.memberCode || "-"}
+                      </span>
+                      {r.gender && (
+                        <span
+                          className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${r.gender === "男" ? "bg-blue-100 text-blue-600" : "bg-pink-100 text-pink-600"}`}
+                        >
+                          {r.gender}
+                        </span>
+                      )}
+                      <span className="text-[10px] md:text-xs text-slate-400 font-mono">
+                        PIN: {r.pin || "----"}
+                      </span>
+                    </div>
                     <p className="text-[10px] text-slate-400 font-bold">
                       Retired
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleStartPreview(r)}
+                    className="text-slate-400 hover:text-blue-600 p-2 rounded-lg bg-slate-50 transition-colors"
+                    title="OB画面をプレビュー"
+                  >
+                    <Eye size={18} />
+                  </button>
                   <button
                     onClick={() =>
                       setConfirmDialog({

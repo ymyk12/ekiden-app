@@ -24,6 +24,28 @@ export const useStats = ({
     );
   }, [allRunners]);
 
+  // 引退者を含む全選手（履歴・過去の記録の参照用）。
+  // 引退しても過去のログはチームの記録として残すため、履歴系の集計・表示はこちらを使う。
+  // 提出チェック・名簿など「現在の運用」に関わるものは activeRunners のまま。
+  const teamRunners = useMemo(() => {
+    return allRunners.filter((r) => r.lastName !== "admin");
+  }, [allRunners]);
+
+  // 対象期間の集計用: 現役 ＋ 期間内にログがある引退者。
+  // （期間内に記録のない引退者が 0 行で並ぶのを防ぐ）
+  const periodRunners = useMemo(() => {
+    const start = targetPeriod?.start || "2000-01-01";
+    const end = targetPeriod?.end || "2100-12-31";
+    const retiredWithLogs = new Set(
+      allLogs
+        .filter((l) => l.date >= start && l.date <= end)
+        .map((l) => l.runnerId),
+    );
+    return teamRunners.filter(
+      (r) => r.status !== "retired" || retiredWithLogs.has(r.id),
+    );
+  }, [teamRunners, allLogs, targetPeriod]);
+
   const personalStats = useMemo(() => {
     if (!currentUserId)
       return { daily: [], monthly: 0, period: 0, qs: [0, 0, 0, 0] };
@@ -150,7 +172,7 @@ export const useStats = ({
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
 
-    return activeRunners
+    return periodRunners
       .filter((r) => r.role !== ROLES.MANAGER)
       .map((r) => {
         const runnerLogs = allLogs.filter((l) => l.runnerId === r.id);
@@ -175,7 +197,7 @@ export const useStats = ({
         };
       })
       .sort((a, b) => b.total - a.total);
-  }, [activeRunners, allLogs, targetPeriod]);
+  }, [periodRunners, allLogs, targetPeriod]);
 
   const reportChartData = useMemo(() => {
     const start = new Date(targetPeriod.start || "2000-01-01");
@@ -184,7 +206,7 @@ export const useStats = ({
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
 
-    const athletes = activeRunners.filter((r) => r.role !== ROLES.MANAGER);
+    const athletes = periodRunners.filter((r) => r.role !== ROLES.MANAGER);
 
     const data = athletes.map((r) => {
       const total = allLogs
@@ -228,14 +250,14 @@ export const useStats = ({
     });
 
     return data.sort((a, b) => a.id.localeCompare(b.id));
-  }, [activeRunners, allLogs, targetPeriod, activeQuarters]);
+  }, [periodRunners, allLogs, targetPeriod, activeQuarters]);
 
   const reportDates = useMemo(() => {
     return getDatesInRange(targetPeriod.start, targetPeriod.end);
   }, [targetPeriod]);
 
   const reportMatrix = useMemo(() => {
-    const sortedRunners = activeRunners
+    const sortedRunners = periodRunners
       .filter((r) => r.role !== ROLES.MANAGER)
       .sort((a, b) =>
         (a.memberCode || a.id).localeCompare(b.memberCode || b.id),
@@ -292,7 +314,7 @@ export const useStats = ({
     });
 
     return { matrix, totals, qTotals };
-  }, [reportDates, activeRunners, allLogs, activeQuarters]);
+  }, [reportDates, periodRunners, allLogs, activeQuarters]);
 
   const cumulativeData = useMemo(() => {
     const data = [];
@@ -300,7 +322,7 @@ export const useStats = ({
       data.push({ date: date.slice(5).replace("-", "/") });
     });
 
-    const athletes = activeRunners.filter((r) => r.role !== ROLES.MANAGER);
+    const athletes = periodRunners.filter((r) => r.role !== ROLES.MANAGER);
 
     athletes.forEach((r) => {
       let sum = 0;
@@ -319,7 +341,7 @@ export const useStats = ({
       });
     });
     return data;
-  }, [reportDates, activeRunners, allLogs]);
+  }, [reportDates, periodRunners, allLogs]);
 
   const monthlyTrendData = useMemo(() => {
     if (!targetPeriod || targetPeriod.type !== "month") return [];
@@ -340,7 +362,7 @@ export const useStats = ({
       );
     }
 
-    const athletes = activeRunners.filter((r) => r.role !== ROLES.MANAGER);
+    const athletes = periodRunners.filter((r) => r.role !== ROLES.MANAGER);
     const monthlyMap = {};
 
     past12Months.forEach((yyyymm) => {
@@ -371,7 +393,7 @@ export const useStats = ({
       });
       return newRow;
     });
-  }, [allLogs, targetPeriod, activeRunners]);
+  }, [allLogs, targetPeriod, periodRunners]);
 
   const checkListData = useMemo(() => {
     const monthPrefix = (checkDate || "").slice(0, 7);
@@ -470,6 +492,8 @@ export const useStats = ({
 
   return {
     activeRunners,
+    teamRunners,
+    periodRunners,
     personalStats,
     missingDates,
     currentFeedback,

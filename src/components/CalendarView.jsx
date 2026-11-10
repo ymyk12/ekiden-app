@@ -4,7 +4,8 @@
  * 練習記録・チーム日誌・大会・完全休養を月単位で一覧表示。
  * 日付タップで詳細ポップアップを表示。
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useLogRange } from "../hooks/useLogRange";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X, Plus, Pencil } from "lucide-react";
 import { ROLES, CATEGORY } from "../utils/constants";
@@ -32,6 +33,15 @@ function CalendarView({
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(null);
+
+  // 直近3か月より前の月を開いたときに過去ログを読み込む。
+  // 特定の選手（本人・監督が選んだ選手）なら全期間、チーム全体なら表示中の1か月だけ。
+  const { ensureRunnerLogs, ensureLogsMonth } = useLogRange();
+  const viewYm = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
+  useEffect(() => {
+    if (currentUserId) ensureRunnerLogs(currentUserId);
+    else ensureLogsMonth(viewYm);
+  }, [currentUserId, viewYm, ensureRunnerLogs, ensureLogsMonth]);
 
   const todayStr = getTodayStr();
 

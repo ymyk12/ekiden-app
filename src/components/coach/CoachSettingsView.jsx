@@ -36,6 +36,8 @@ const CoachSettingsView = ({
   handleDeleteCustomPeriod,
   setDemoMode,
   setView,
+  coachFullLogs,
+  setCoachFullLogs,
 }) => {
   const [isExistingPeriodsOpen, setIsExistingPeriodsOpen] = useState(false);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
@@ -67,6 +69,27 @@ const CoachSettingsView = ({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="bg-slate-50 p-4 rounded-2xl space-y-3 border border-slate-100">
+        <h4 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2">
+          <Calendar size={14} /> Log Range (この端末のみ)
+        </h4>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-1 w-4 h-4"
+            checked={!!coachFullLogs}
+            onChange={(e) => setCoachFullLogs(e.target.checked)}
+          />
+          <span className="text-sm font-bold text-slate-700">
+            ログを全期間取得する
+            <span className="block text-[11px] font-bold text-slate-400 mt-0.5">
+              OFF（既定）は直近3か月を常に読み込み、それより前は、期間の選択・カレンダーや月間レポートで月を開く・選手を選ぶといった操作のときに自動で追加読み込みします。
+              すべての画面で全期間を常に使いたいときだけ ON にしてください（ON は読み取りが増え、起動が遅くなります）。
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="space-y-4">

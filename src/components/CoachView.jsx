@@ -31,6 +31,7 @@ import LapTimeModal from "./LapTimeModal";
 import TeamRaceReport from "./TeamRaceReport";
 import TeamDiaryView from "./shared/TeamDiaryView";
 import { useTeamDiary } from "../hooks/useTeamDiary";
+import { useLogRange } from "../hooks/useLogRange";
 import CoachSettingsView from "./coach/CoachSettingsView";
 import CoachRunnerDetailView from "./coach/CoachRunnerDetailView";
 import CoachRaceView from "./coach/CoachRaceView";
@@ -53,6 +54,8 @@ const CoachView = (props) => {
     setSelectedPeriod,
     targetPeriod,
     activeRunners,
+    teamRunners,
+    periodRunners,
     coachStats,
     reportMatrix,
     monthlyTrendData,
@@ -77,6 +80,8 @@ const CoachView = (props) => {
     setConfirmDialog,
     appSettings,
     setAppSettings,
+    coachFullLogs,
+    setCoachFullLogs,
     handleSaveDefaultPeriod,
     editingPeriodId,
     newPeriodInput,
@@ -241,6 +246,27 @@ const CoachView = (props) => {
   });
   const [missingEnd, setMissingEnd] = useState(getTodayStr);
   const [missingCopied, setMissingCopied] = useState(false);
+
+  // 未入力リストの期間が直近3か月より前に及ぶとき、その範囲の各月のチームのログを読み込む。
+  // （読み込み前に集計すると、記録済みでも「未入力」と誤表示されるため）
+  const { ensureLogsMonth } = useLogRange();
+  useEffect(() => {
+    if (!missingStart || !missingEnd || missingStart > missingEnd) return;
+    let y = Number(missingStart.slice(0, 4));
+    let m = Number(missingStart.slice(5, 7));
+    const endYm = missingEnd.slice(0, 7);
+    // 暴走防止に最大 60 か月まで
+    for (let i = 0; i < 60; i++) {
+      const ym = `${y}-${String(m).padStart(2, "0")}`;
+      if (ym > endYm) break;
+      ensureLogsMonth(ym);
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+    }
+  }, [missingStart, missingEnd, ensureLogsMonth]);
   const [isReassigningCard, setIsReassigningCard] = useState(false);
   const [reassignTourId, setReassignTourId] = useState("");
   const [isEditingReadingCard, setIsEditingReadingCard] = useState(false);
@@ -527,6 +553,7 @@ const CoachView = (props) => {
               checkListData={checkListData}
               allLogs={allLogs}
               activeRunners={activeRunners}
+              teamRunners={teamRunners}
               openCoachEditModal={openCoachEditModal}
               isMissingListOpen={isMissingListOpen}
               setIsMissingListOpen={setIsMissingListOpen}
@@ -546,6 +573,8 @@ const CoachView = (props) => {
               rankingData={rankingData}
               handlePrint={handlePrint}
               activeRunners={activeRunners}
+              teamRunners={teamRunners}
+              periodRunners={periodRunners}
               targetPeriod={targetPeriod}
               reportMatrix={reportMatrix}
               monthlyTrendData={monthlyTrendData}
@@ -644,6 +673,8 @@ const CoachView = (props) => {
             <CoachSettingsView
               appSettings={appSettings}
               setAppSettings={setAppSettings}
+              coachFullLogs={coachFullLogs}
+              setCoachFullLogs={setCoachFullLogs}
               handleSaveDefaultPeriod={handleSaveDefaultPeriod}
               availablePeriods={availablePeriods}
               editingPeriodId={editingPeriodId}
@@ -747,6 +778,7 @@ const CoachView = (props) => {
             setCoachFeedbackInput(card.coachFeedback || "");
           }}
           allRunners={activeRunners.filter((r) => r.role !== "manager")}
+          lookupRunners={teamRunners.filter((r) => r.role !== "manager")}
           onAddCard={async (cardData) => {
             const cardId = `rc_coach_${Date.now()}`;
             await setDoc(docRef("raceCards", cardId), {

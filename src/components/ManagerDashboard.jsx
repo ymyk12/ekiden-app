@@ -37,6 +37,7 @@ import ManagerStatusView from "./manager/ManagerStatusView";
 import ManagerRaceView from "./manager/ManagerRaceView";
 import TeamDiaryView from "./shared/TeamDiaryView";
 import { useTeamDiary } from "../hooks/useTeamDiary";
+import { useLogRange } from "../hooks/useLogRange";
 
 import { toast } from "react-hot-toast";
 
@@ -56,6 +57,12 @@ const ManagerDashboard = ({
 }) => {
   const [currentView, setCurrentView] = useState("check");
   const [checkDate, setCheckDate] = useState(getTodayStr());
+
+  // 確認日が直近3か月より前なら、その月のチームのログを読み込む
+  const { ensureLogsMonth } = useLogRange();
+  useEffect(() => {
+    ensureLogsMonth((checkDate || "").slice(0, 7));
+  }, [checkDate, ensureLogsMonth]);
 
   // 詳細モーダル関連のステート
   const [selectedLog, setSelectedLog] = useState(null);

@@ -26,6 +26,7 @@ const CoachHomeView = ({
   checkListData,
   allLogs,
   activeRunners,
+  teamRunners,
   openCoachEditModal,
   isMissingListOpen,
   setIsMissingListOpen,
@@ -126,7 +127,7 @@ const CoachHomeView = ({
         <div className="flex-1 overflow-y-auto p-4">
           <TeamActivityFeed
             logs={allLogs
-              .filter((l) => activeRunners.some((r) => r.id === l.runnerId))
+              .filter((l) => (teamRunners || activeRunners).some((r) => r.id === l.runnerId))
               .sort((a, b) => new Date(b.date) - new Date(a.date))
               .slice(0, 50)}
             accent="blue"

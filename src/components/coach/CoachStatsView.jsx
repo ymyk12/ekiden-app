@@ -16,6 +16,8 @@ const CoachStatsView = ({
   rankingData,
   handlePrint,
   activeRunners,
+  teamRunners,
+  periodRunners,
   targetPeriod,
   reportMatrix,
   monthlyTrendData,
@@ -68,7 +70,7 @@ const CoachStatsView = ({
       {statsSubTab === "report" && (
         <CoachReportView
           handlePrint={handlePrint}
-          activeRunners={activeRunners}
+          activeRunners={periodRunners || activeRunners}
           targetPeriod={targetPeriod}
           reportMatrix={reportMatrix}
           monthlyTrendData={monthlyTrendData}
@@ -79,7 +81,7 @@ const CoachStatsView = ({
       {statsSubTab === "monthly" && (
         <MonthlyReportView
           handlePrint={handlePrint}
-          activeRunners={activeRunners}
+          activeRunners={teamRunners || activeRunners}
           allLogs={allLogs}
           raceCards={raceCards}
           tournaments={tournaments}

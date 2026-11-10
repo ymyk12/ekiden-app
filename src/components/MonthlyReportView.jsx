@@ -7,8 +7,9 @@
  * 全員一括モードでは print.css の .page-break により1人1ページで改ページ。
  * グラフは印刷の確実性を優先して recharts ではなく CSS バーで描画する。
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Printer, FileText, Trophy } from "lucide-react";
+import { useLogRange } from "../hooks/useLogRange";
 import { ROLES, CATEGORY } from "../utils/constants";
 import { getGoalValue } from "../utils/dateUtils";
 
@@ -679,9 +680,12 @@ const MonthlyReportView = ({
   lockedRunnerId = null,
   // 「全選手（一括）」オプションを出すか（選手本人用では false）
   allowAll = true,
+  // 初期表示月（"YYYY-MM"）。引退者向け OBView が「最後に記録した月」を渡す。未指定は先月
+  defaultMonth = undefined,
 }) => {
   // 既定は「先月」（月初に前月分を配る運用を想定）
   const [month, setMonth] = useState(() => {
+    if (defaultMonth) return defaultMonth;
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
@@ -696,9 +700,29 @@ const MonthlyReportView = ({
   );
   // lockedRunnerId が指定されていれば常にその選手に固定（他者データは出さない）
   const effectiveRunnerId = lockedRunnerId || runnerId;
+
+  // 直近3か月より前の月を選んだときに過去ログを読み込む。
+  // 特定の選手なら全期間、全選手（一括）なら選んだ月のチームのログだけ。
+  const { ensureRunnerLogs, ensureLogsMonth } = useLogRange();
+  useEffect(() => {
+    if (effectiveRunnerId && effectiveRunnerId !== "all") {
+      ensureRunnerLogs(effectiveRunnerId);
+    } else {
+      ensureLogsMonth(month);
+    }
+  }, [effectiveRunnerId, month, ensureRunnerLogs, ensureLogsMonth]);
+  // 一括出力では、引退者はその月に記録がある場合のみ含める（空の帳票を出さない）。
+  // 個別選択・本人固定では引退者も過去月のレポートを見られる。
+  const hasLogsInMonth = (r) =>
+    (allLogs || []).some(
+      (l) => l.runnerId === r.id && (l.date || "").startsWith(month),
+    );
+  const bulkAthletes = athletes.filter(
+    (r) => r.status !== "retired" || hasLogsInMonth(r),
+  );
   const targets =
     effectiveRunnerId === "all"
-      ? athletes
+      ? bulkAthletes
       : athletes.filter((r) => r.id === effectiveRunnerId);
 
   const [y, m] = month.split("-").map(Number);
@@ -729,11 +753,12 @@ const MonthlyReportView = ({
             className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500"
           >
             {allowAll && (
-              <option value="all">全選手（一括 {athletes.length}名）</option>
+              <option value="all">全選手（一括 {bulkAthletes.length}名）</option>
             )}
             {athletes.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.lastName} {r.firstName}
+                {r.status === "retired" ? "（引退）" : ""}
               </option>
             ))}
           </select>

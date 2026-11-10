@@ -32,18 +32,24 @@ const AthleteRaceView = ({
   setEditingRaceCardId,
   setView,
   setShowTeamReportId,
+  // 閲覧専用（引退者向け OBView）: 編集・追加の導線と戻るボタンを出さない
+  readOnly = false,
 }) => {
   const [raceMonthFilter, setRaceMonthFilter] = useState("all");
 
   return (
           <div className="bg-white p-6 rounded-[3rem] shadow-sm space-y-6 animate-in fade-in pb-24">
             <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={() => safeChangeView("menu")}
-                className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
-              >
-                <ArrowLeft size={20} />
-              </button>
+              {readOnly ? (
+                <div className="w-9" />
+              ) : (
+                <button
+                  onClick={() => safeChangeView("menu")}
+                  className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+              )}
               <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 text-center tracking-[0.3em]">
                 Race Cards
               </h3>
@@ -95,12 +101,16 @@ const AthleteRaceView = ({
                         {myCards.map((card) => (
                           <div
                             key={card.id}
-                            onClick={() => {
-                              setRaceCardInput(card);
-                              setEditingRaceCardId(card.id);
-                              setView("race-entry");
-                            }}
-                            className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer active:scale-95 transition-all group"
+                            onClick={
+                              readOnly
+                                ? undefined
+                                : () => {
+                                    setRaceCardInput(card);
+                                    setEditingRaceCardId(card.id);
+                                    setView("race-entry");
+                                  }
+                            }
+                            className={`bg-white p-4 rounded-2xl shadow-sm border border-slate-100 transition-all group ${readOnly ? "" : "cursor-pointer active:scale-95"}`}
                           >
                             <div className="flex justify-between items-center mb-2">
                               <div className="flex items-center gap-2">
@@ -131,9 +141,11 @@ const AthleteRaceView = ({
                                   </span>
                                 )}
                               </div>
-                              <span className="text-xs font-black text-slate-400 group-hover:text-blue-500 flex items-center gap-1">
-                                編集 <ChevronRight size={14} />
-                              </span>
+                              {!readOnly && (
+                                <span className="text-xs font-black text-slate-400 group-hover:text-blue-500 flex items-center gap-1">
+                                  編集 <ChevronRight size={14} />
+                                </span>
+                              )}
                             </div>
                             <div className="flex justify-between items-end">
                               <div>
@@ -167,6 +179,7 @@ const AthleteRaceView = ({
                             </div>
                           </div>
                         ))}
+                        {!readOnly && (
                         <button
                           onClick={() => {
                             setEditingRaceCardId(null);
@@ -203,6 +216,7 @@ const AthleteRaceView = ({
                         >
                           <Plus size={16} /> 出場種目を追加
                         </button>
+                        )}
                         {/* チームレポートを開くボタン */}
                         <button
                           onClick={() => setShowTeamReportId(tour.id)}

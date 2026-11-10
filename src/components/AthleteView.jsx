@@ -77,6 +77,7 @@ const AthleteView = (props) => {
     teamLogs,
     allLogs,
     activeRunners,
+    teamRunners,
     logInput,
     setLogInput,
     isSubmitting,
@@ -578,6 +579,7 @@ const AthleteView = (props) => {
             allLogs={allLogs}
             teamLogs={teamLogs}
             activeRunners={activeRunners}
+            teamRunners={teamRunners}
             expandedDiaryId={expandedDiaryId}
             setExpandedDiaryId={setExpandedDiaryId}
           />
@@ -650,7 +652,7 @@ const AthleteView = (props) => {
             </div>
             <MonthlyReportView
               handlePrint={handlePrint}
-              activeRunners={activeRunners}
+              activeRunners={teamRunners}
               allLogs={allLogs}
               raceCards={raceCards}
               tournaments={tournaments}

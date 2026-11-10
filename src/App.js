@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
-import { setDoc, updateDoc } from "firebase/firestore";
-import { docRef } from "./utils/firestore";
+import { setDoc, updateDoc, getDocs } from "firebase/firestore";
+import { docRef, colRef } from "./utils/firestore";
 
 import { Toaster, toast } from "react-hot-toast";
 
@@ -18,6 +18,7 @@ import { useLogHandlers } from "./hooks/useLogHandlers";
 import { useRaceHandlers } from "./hooks/useRaceHandlers";
 import { useGoalReview } from "./hooks/useGoalReview";
 import { useRunnerManagement } from "./hooks/useRunnerManagement";
+import { LogRangeContext } from "./hooks/useLogRange";
 
 import { getToken } from "firebase/messaging";
 import { messaging } from "./firebaseConfig";
@@ -35,9 +36,10 @@ const CoachAuthScreen = lazy(() => import("./components/CoachAuthScreen"));
 const CoachView = lazy(() => import("./components/CoachView"));
 const AthleteView = lazy(() => import("./components/AthleteView"));
 const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
+const OBView = lazy(() => import("./components/OBView"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.7.51";
+const APP_LAST_UPDATED = "6.7.52";
 
 // FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
 const FCM_VAPID_KEY =
@@ -93,6 +95,24 @@ const App = () => {
     return d.toLocaleDateString("sv-SE");
   });
 
+  // 監督の「ログを全期間取得」切替（この端末のみ・既定は OFF＝選手と同じ直近3ヶ月）。
+  // 不便なときに設定画面から全期間へ戻せる。
+  const [coachFullLogs, setCoachFullLogsState] = useState(() => {
+    try {
+      return localStorage.getItem("coachFullLogs") === "1";
+    } catch (e) {
+      return false;
+    }
+  });
+  const setCoachFullLogs = (v) => {
+    setCoachFullLogsState(v);
+    try {
+      localStorage.setItem("coachFullLogs", v ? "1" : "0");
+    } catch (e) {
+      // localStorage が使えなくても切替自体は有効（保存されないだけ）
+    }
+  };
+
   const {
     allRunners,
     allLogs,
@@ -104,7 +124,14 @@ const App = () => {
     dataLoading,
     tournaments,
     raceCards,
-  } = useTeamData(user, role, fetchCutoff);
+    ensureRunnerLogs,
+    ensureLogsMonth,
+  } = useTeamData(
+    user,
+    role,
+    fetchCutoff,
+    (role === ROLES.COACH || role === ROLES.ADMIN) && coachFullLogs,
+  );
 
   // appSettings が揃ってから初期化するため useTeamData の後に呼ぶ
   const {
@@ -124,6 +151,16 @@ const App = () => {
     handleCancelEdit,
     handleSaveDefaultPeriod,
   } = usePeriod({ appSettings, setFetchCutoff, setConfirmDialog });
+
+  // 過去ログの追加読み込み。
+  //  - 監督が選手をプレビューするときは、その選手の全期間を読み込む
+  //  - 監督／マネージャーの「確認日」が直近3か月より前なら、その月のチームのログを読み込む
+  useEffect(() => {
+    if (previewRunner?.id) ensureRunnerLogs(previewRunner.id);
+  }, [previewRunner?.id, ensureRunnerLogs]);
+  useEffect(() => {
+    ensureLogsMonth((checkDate || "").slice(0, 7));
+  }, [checkDate, ensureLogsMonth]);
 
   // 監督モードで選択中の選手情報をリアルタイムに同期する
   useEffect(() => {
@@ -201,6 +238,8 @@ const App = () => {
 
   const {
     activeRunners,
+    teamRunners,
+    periodRunners,
     personalStats,
     missingDates,
     currentFeedback,
@@ -393,7 +432,24 @@ const App = () => {
   }, [role]);
 
   // ─── データ出力 ───
-  const exportCSV = () => {
+  // CSV は「全期間の全ログ」を出力する。画面には直近3ヶ月＋開いた分しか読み込んでいないため、
+  // 出力の瞬間だけ logs を全件取得する（操作は手動・低頻度なので読み取りは許容）。
+  const exportCSV = async () => {
+    const loadingId = toast.loading("全期間のログを取得しています…");
+    let exportLogs;
+    try {
+      const snap = await getDocs(colRef("logs"));
+      exportLogs = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    } catch (e) {
+      console.error("CSV用ログの取得に失敗しました:", e);
+      toast.error("ログの取得に失敗しました。CSVは出力されていません", {
+        id: loadingId,
+      });
+      return;
+    }
+    toast.dismiss(loadingId);
     const headers = [
       "日付",
       "名前",
@@ -403,7 +459,7 @@ const App = () => {
       "練習強度(RPE)",
       "痛み",
     ];
-    const rows = allLogs.map((l) => [
+    const rows = exportLogs.map((l) => [
       l.date,
       l.runnerName,
       l.category,
@@ -454,6 +510,7 @@ const App = () => {
     practiceMenus,
     allLogs,
     activeRunners,
+    teamRunners,
     logInput,
     setLogInput,
     isSubmitting,
@@ -498,6 +555,8 @@ const App = () => {
     setSelectedPeriod,
     targetPeriod,
     activeRunners,
+    teamRunners,
+    periodRunners,
     coachStats,
     reportMatrix,
     monthlyTrendData,
@@ -523,6 +582,8 @@ const App = () => {
     setConfirmDialog,
     appSettings,
     setAppSettings,
+    coachFullLogs,
+    setCoachFullLogs,
     handleSaveDefaultPeriod,
     editingPeriodId,
     newPeriodInput,
@@ -733,6 +794,31 @@ const App = () => {
       );
     }
 
+    // 引退した選手 → OB/OG 閲覧専用画面（引退処理 ＝ OBView への移行）
+    // 監督が名簿の引退者をプレビューする場合も同じ画面（バナー付き）を表示する
+    const isRetiredPreview =
+      role === ROLES.COACH && previewRunner?.status === "retired";
+    if (
+      isRetiredPreview ||
+      (role === ROLES.RUNNER && profile && profile.status === "retired")
+    ) {
+      return (
+        <OBView
+          profile={isRetiredPreview ? previewRunner : profile}
+          teamRunners={teamRunners}
+          allLogs={allLogs}
+          raceCards={raceCards}
+          tournaments={tournaments}
+          handleLogout={handleLogout}
+          isPreview={isRetiredPreview}
+          onExitPreview={() => {
+            setPreviewRunner(null);
+            setView("coach-roster");
+          }}
+        />
+      );
+    }
+
     // 選手ダッシュボード（監督プレビュー中も含む）
     if (
       (role === ROLES.RUNNER && profile) ||
@@ -767,7 +853,9 @@ const App = () => {
         }
       >
         <Toaster position="top-center" reverseOrder={false} />
-        {renderContent()}
+        <LogRangeContext.Provider value={{ ensureRunnerLogs, ensureLogsMonth }}>
+          {renderContent()}
+        </LogRangeContext.Provider>
       </Suspense>
     </ErrorBoundary>
   );

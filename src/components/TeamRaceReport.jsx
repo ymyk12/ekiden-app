@@ -165,7 +165,7 @@ const TeamTotalBlock = ({ computed, result, canEdit, onSave }) => {
   );
 };
 
-const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit, onSaveTeamResult, onSaveConditions, onSaveCard, onEditCard, onDeleteCard, onOpenCard, allRunners, onAddCard }) => {
+const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit, onSaveTeamResult, onSaveConditions, onSaveCard, onEditCard, onDeleteCard, onOpenCard, allRunners, lookupRunners, onAddCard }) => {
   const [editingCard, setEditingCard] = useState(null);
   const [editingCondDate, setEditingCondDate] = useState(null);
   const [condForm, setCondForm] = useState({ weather: "", wind: "", temp: "", humidity: "" });
@@ -647,7 +647,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
         // チーム未設定: 男子→女子の順に、区順
         if (teamsArr.length === 0) {
           const gOf = (c) => {
-            const r = (allRunners || []).find((x) => x.id === c.runnerId);
+            const r = (lookupRunners || allRunners || []).find((x) => x.id === c.runnerId);
             return r?.gender === "男" ? 0 : r?.gender === "女" ? 1 : 2;
           };
           const gdiff = gOf(a) - gOf(b);
@@ -673,7 +673,7 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
   const ekidenReportLegs = getTournamentLegs(reportTour);
   const isEkidenReport = !!ekidenReportLegs;
   const runnerGenderById = {};
-  (allRunners || []).forEach((r) => {
+  (lookupRunners || allRunners || []).forEach((r) => {
     runnerGenderById[r.id] = r.gender;
   });
   const legAgg = {}; // { 男: { "1区": {...} }, 女: {...} }

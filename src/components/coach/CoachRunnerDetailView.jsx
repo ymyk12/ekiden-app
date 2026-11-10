@@ -6,6 +6,8 @@
  * フィードバック・ステータス（引退）・ロール転向をまとめて扱う。
  * 状態・ハンドラは CoachView 側に残し props で受け取る（挙動は従来と同一）。
  */
+import { useEffect } from "react";
+import { useLogRange } from "../../hooks/useLogRange";
 import {
   ArrowLeft,
   Target,
@@ -46,6 +48,13 @@ const CoachRunnerDetailView = ({
   setConfirmDialog,
   handleCoachChangeRole,
 }) => {
+  // 「最近の記録」は直近3か月より前の選手でも出せるよう、この選手の全期間を読み込む
+  // （記録が3か月以上ない選手が「記録がありません」と誤表示されるのを防ぐ）
+  const { ensureRunnerLogs } = useLogRange();
+  useEffect(() => {
+    if (selectedRunner?.id) ensureRunnerLogs(selectedRunner.id);
+  }, [selectedRunner?.id, ensureRunnerLogs]);
+
   return (
     <div className="bg-white p-8 rounded-[3rem] shadow-sm space-y-8 animate-in slide-in-from-right-10 max-w-2xl mx-auto">
       <div className="flex items-center gap-4 mb-6">

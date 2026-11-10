@@ -22,6 +22,7 @@ const AthleteTeamStatusView = ({
   allLogs,
   teamLogs,
   activeRunners,
+  teamRunners,
   expandedDiaryId,
   setExpandedDiaryId,
 }) => {
@@ -180,7 +181,7 @@ const AthleteTeamStatusView = ({
 
                   const teamLogsList = allLogs
                     .filter((l) => l.date >= minDateStr)
-                    .filter((l) => activeRunners.some((r) => r.id === l.runnerId))
+                    .filter((l) => (teamRunners || activeRunners).some((r) => r.id === l.runnerId))
                     .sort((a, b) => {
                       if (a.date !== b.date) return a.date < b.date ? 1 : -1;
                       return (b.createdAt || "").localeCompare(a.createdAt || "");
