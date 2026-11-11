@@ -48,7 +48,7 @@ export const useStats = ({
 
   const personalStats = useMemo(() => {
     if (!currentUserId)
-      return { daily: [], monthly: 0, period: 0, qs: [0, 0, 0, 0] };
+      return { daily: [], period: 0, qs: [0, 0, 0, 0] };
     const myLogs = allLogs.filter((l) => l.runnerId === currentUserId);
 
     const start = new Date(targetPeriod.start || "2000-01-01");
@@ -57,17 +57,6 @@ export const useStats = ({
       .filter((l) => {
         const d = new Date(l.date);
         return d >= start && d <= end;
-      })
-      .reduce((s, l) => s + (Number(l.distance) || 0), 0);
-
-    const now = new Date();
-    const monthlyTotal = myLogs
-      .filter((l) => {
-        const d = new Date(l.date);
-        return (
-          d.getMonth() === now.getMonth() &&
-          d.getFullYear() === now.getFullYear()
-        );
       })
       .reduce((s, l) => s + (Number(l.distance) || 0), 0);
 
@@ -102,7 +91,6 @@ export const useStats = ({
 
     return {
       daily,
-      monthly: Math.round(monthlyTotal * 10) / 10,
       period: Math.round(periodTotal * 10) / 10,
       qs: qs.map((v) => Math.round(v * 10) / 10),
     };

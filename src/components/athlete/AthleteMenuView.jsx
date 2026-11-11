@@ -187,9 +187,7 @@ const AthleteMenuView = ({
                 </div>
                 <div className="flex justify-between items-end mb-2">
                   <span className="text-3xl font-black text-blue-600 tracking-tighter">
-                    {targetPeriod.type === "month"
-                      ? personalStats.monthly
-                      : personalStats.period}
+                    {personalStats.period}
                     <span className="text-xs font-normal text-slate-400">
                       km
                     </span>
@@ -215,7 +213,7 @@ const AthleteMenuView = ({
                     <div
                       className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-1000"
                       style={{
-                        width: `${Math.min(100, ((targetPeriod.type === "month" ? personalStats.monthly : personalStats.period) / getGoalValue(currentProfile, targetPeriod.id, targetPeriod.type, "goalPeriod")) * 100)}%`,
+                        width: `${Math.min(100, (personalStats.period / getGoalValue(currentProfile, targetPeriod.id, targetPeriod.type, "goalPeriod")) * 100)}%`,
                       }}
                     ></div>
                   </div>
