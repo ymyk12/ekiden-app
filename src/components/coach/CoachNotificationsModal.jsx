@@ -18,10 +18,10 @@ const CoachNotificationsModal = ({
       onClick={() => setIsNotifOpen(false)}
     >
       <div
-        className="bg-white w-full max-w-md max-h-[80vh] rounded-[2.5rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom-10"
+        className="bg-white w-full max-w-md max-h-[80vh] rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white rounded-t-[2.5rem] sticky top-0 z-10">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 relative z-10">
           <h3 className="font-black text-lg flex items-center gap-2 text-slate-800">
             <Bell className="text-rose-500" /> Notifications
           </h3>
@@ -32,7 +32,7 @@ const CoachNotificationsModal = ({
             閉じる
           </button>
         </div>
-        <div className="overflow-y-auto p-4 space-y-3 pb-8">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3 pb-8">
           {notifications.length === 0 ? (
             <div className="text-center py-10 opacity-50">
               <Bell size={40} className="mx-auto mb-2 text-slate-300" />
