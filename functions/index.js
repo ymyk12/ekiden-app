@@ -55,9 +55,34 @@ const db = admin.firestore();
 const APP_ID = "kswc-ekidenteam-distancerecords";
 const DATA_PATH = `artifacts/${APP_ID}/public/data`;
 
+// 失効したトークンかどうか（アンインストール等）
+const isInvalidTokenError = (r) => {
+  if (r.success) return false;
+  const code = (r.error && r.error.code) || "";
+  return (
+    code.includes("registration-token-not-registered") ||
+    code.includes("invalid-argument")
+  );
+};
+
+// 指定トークンへ送信し、結果（responses）を返す。
+// 表示はブラウザ（FCM SDK）の自動表示に任せる。アイコン等はここで指定する。
+// tag を付けると同じ種類の通知は上書きされ、重複表示になりにくい。
+const multicast = (tokens, notification) =>
+  admin.messaging().sendEachForMulticast({
+    tokens,
+    notification,
+    webpush: {
+      notification: {
+        icon: "/logo192.png",
+        badge: "/logo192.png",
+        tag: "ekiden-notif",
+      },
+    },
+  });
+
 // coach_devices に登録された監督端末すべてへ通知を送る。
-// 以前は sendToTopic("coaches") だったが、クライアントにトピック購読の
-// 仕組みがなく誰にも届かないため、保存済みトークンへの直接送信に変更した。
+// （端末ごとのオン/オフは、クライアントが coach_devices の登録/削除で表現する）
 const sendToCoachDevices = async (notification) => {
   const devicesSnap = await db.collection(`${DATA_PATH}/coach_devices`).get();
   const tokens = devicesSnap.docs
@@ -69,30 +94,100 @@ const sendToCoachDevices = async (notification) => {
     return;
   }
 
-  const res = await admin
-    .messaging()
-    .sendEachForMulticast({ tokens, notification });
+  const res = await multicast(tokens, notification);
 
-  // 無効になったトークン（アンインストール等）を掃除する
+  // 無効になったトークンを掃除する
   const batch = db.batch();
   let invalidCount = 0;
   res.responses.forEach((r, i) => {
-    if (!r.success) {
-      const code = (r.error && r.error.code) || "";
-      if (
-        code.includes("registration-token-not-registered") ||
-        code.includes("invalid-argument")
-      ) {
-        batch.delete(devicesSnap.docs[i].ref);
-        invalidCount++;
-      }
+    if (isInvalidTokenError(r)) {
+      batch.delete(devicesSnap.docs[i].ref);
+      invalidCount++;
     }
   });
   if (invalidCount > 0) await batch.commit();
 
   console.log(
-    `通知送信: 成功 ${res.successCount} / 失敗 ${res.failureCount}（無効トークン削除 ${invalidCount}件）`,
+    `監督へ通知: 成功 ${res.successCount} / 失敗 ${res.failureCount}` +
+      `（無効トークン削除 ${invalidCount}件）`,
   );
+};
+
+// 選手へ通知を送る。runnerIds を省略すると、引退者を除く全選手が対象。
+// 宛先は runners.fcmToken（ログインした端末のトークン）。
+const sendToRunners = async (notification, runnerIds) => {
+  let docs;
+  if (Array.isArray(runnerIds)) {
+    const snaps = await Promise.all(
+      runnerIds.map((id) => db.doc(`${DATA_PATH}/runners/${id}`).get()),
+    );
+    docs = snaps.filter((s) => s.exists);
+  } else {
+    docs = (await db.collection(`${DATA_PATH}/runners`).get()).docs;
+  }
+  docs = docs.filter(
+    (d) => d.data().status !== "retired" && d.data().fcmToken,
+  );
+
+  const tokens = docs.map((d) => d.data().fcmToken);
+  if (tokens.length === 0) {
+    console.log("通知先の選手トークンがないためスキップしました");
+    return;
+  }
+
+  const res = await multicast(tokens, notification);
+
+  // 無効なトークンは選手側から取り除く
+  const batch = db.batch();
+  let invalidCount = 0;
+  res.responses.forEach((r, i) => {
+    if (isInvalidTokenError(r)) {
+      batch.update(docs[i].ref, {
+        fcmToken: admin.firestore.FieldValue.delete(),
+      });
+      invalidCount++;
+    }
+  });
+  if (invalidCount > 0) await batch.commit();
+
+  console.log(
+    `選手へ通知: 成功 ${res.successCount} / 失敗 ${res.failureCount}` +
+      `（無効トークン削除 ${invalidCount}件）`,
+  );
+};
+
+const isSilentTime = () => {
+  const jstHour = (new Date().getUTCHours() + 9) % 24;
+  return jstHour >= 19 || jstHour < 8;
+};
+
+// 選手向け通知の文面
+const MSG_COMMENT = {
+  title: "監督からコメント",
+  body: "監督からコメントが届きました",
+};
+const MSG_TOURNAMENT = {
+  title: "新しい大会",
+  body: "新しい大会が設定されました",
+};
+
+// 選手向け通知: 昼は即時送信、夜（19時〜8時）は保留箱へ（朝8時にまとめて送信）
+const notifyRunnersOrQueue = async ({ type, runnerId }) => {
+  if (isSilentTime()) {
+    const item = {
+      type,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (runnerId) item.runnerId = String(runnerId);
+    await db.collection("notification_queue").add(item);
+    console.log(`夜間なので ${type} を保留しました`);
+    return;
+  }
+  if (type === "new_tournament") {
+    await sendToRunners(MSG_TOURNAMENT);
+  } else {
+    await sendToRunners(MSG_COMMENT, [String(runnerId)]);
+  }
 };
 
 // 🌟 2. データが追加された時に動く「仕分け係」
@@ -101,12 +196,13 @@ exports.queueOrSendNotification = functions.firestore
   .onCreate(async (snap, context) => {
     const newCard = snap.data();
 
-    const now = new Date();
-    const jstHour = (now.getUTCHours() + 9) % 24;
+    // ローカル／プレビュー環境で作られたカードは通知しない（即時送信もキュー追加もしない）
+    if (newCard.skipNotify === true) {
+      console.log("skipNotify のカードのため通知をスキップしました");
+      return;
+    }
 
-    const isSilentTime = jstHour >= 19 || jstHour < 8;
-
-    if (isSilentTime) {
+    if (isSilentTime()) {
       await db.collection("notification_queue").add({
         type: "new_race_card",
         runnerName: newCard.runnerName,
@@ -122,6 +218,48 @@ exports.queueOrSendNotification = functions.firestore
     }
   });
 
+// 監督が大会ノートにフィードバックを書いたとき → 該当の選手へ
+exports.notifyRaceCardFeedback = functions.firestore
+  .document(`artifacts/${APP_ID}/public/data/raceCards/{cardId}`)
+  .onUpdate(async (change) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    if (after.skipNotify === true) return;
+    const text = (after.coachFeedback || "").trim();
+    if (!text || before.coachFeedback === after.coachFeedback) return;
+    if (!after.runnerId) return;
+    await notifyRunnersOrQueue({
+      type: "runner_comment",
+      runnerId: after.runnerId,
+    });
+  });
+
+// 監督が期間のフィードバックコメントを書いたとき → 該当の選手へ
+// （feedbacks の ID は `${periodId}_${runnerId}`。選手の振り返り保存でも
+//   書き込まれるため、coachComment が変わったときだけ通知する）
+exports.notifyCoachComment = functions.firestore
+  .document(`artifacts/${APP_ID}/public/data/feedbacks/{fbId}`)
+  .onWrite(async (change, context) => {
+    if (!change.after.exists) return;
+    const before = change.before.exists ? change.before.data() : {};
+    const after = change.after.data();
+    if (after.skipNotify === true) return;
+    const text = (after.coachComment || "").trim();
+    if (!text || before.coachComment === after.coachComment) return;
+    const fbId = context.params.fbId;
+    const runnerId = after.runnerId || fbId.slice(fbId.lastIndexOf("_") + 1);
+    if (!runnerId) return;
+    await notifyRunnersOrQueue({ type: "runner_comment", runnerId });
+  });
+
+// 監督が大会を新規登録したとき → 全選手へ
+exports.notifyNewTournament = functions.firestore
+  .document(`artifacts/${APP_ID}/public/data/tournaments/{tourId}`)
+  .onCreate(async (snap) => {
+    if (snap.data().skipNotify === true) return;
+    await notifyRunnersOrQueue({ type: "new_tournament" });
+  });
+
 // 🌟 3. 毎朝8時に動く「まとめ送信係」（Cronジョブ）
 exports.morningBatchNotification = functions.pubsub
   .schedule("0 8 * * *")
@@ -135,12 +273,33 @@ exports.morningBatchNotification = functions.pubsub
       return null;
     }
 
-    const count = snapshot.size;
+    const items = snapshot.docs.map((d) => d.data());
 
-    await sendToCoachDevices({
-      title: "☀️ 朝のまとめ通知",
-      body: `おはようございます！夜間に ${count} 件の大会ノート追加がありました。確認しましょう！`,
-    });
+    // 監督向け: 大会ノート追加（type 無しは旧形式として監督向け扱い）
+    const coachCount = items.filter(
+      (i) => !i.type || i.type === "new_race_card",
+    ).length;
+    if (coachCount > 0) {
+      await sendToCoachDevices({
+        title: "☀️ 朝のまとめ通知",
+        body: `おはようございます！夜間に ${coachCount} 件の大会ノート追加がありました。確認しましょう！`,
+      });
+    }
+
+    // 選手向け: コメントは選手ごとに1通、大会設定は全員に1通
+    const commentRunnerIds = [
+      ...new Set(
+        items
+          .filter((i) => i.type === "runner_comment" && i.runnerId)
+          .map((i) => i.runnerId),
+      ),
+    ];
+    if (commentRunnerIds.length > 0) {
+      await sendToRunners(MSG_COMMENT, commentRunnerIds);
+    }
+    if (items.some((i) => i.type === "new_tournament")) {
+      await sendToRunners(MSG_TOURNAMENT);
+    }
 
     const batch = db.batch();
     snapshot.docs.forEach((doc) => {
@@ -148,6 +307,8 @@ exports.morningBatchNotification = functions.pubsub
     });
     await batch.commit();
 
-    console.log(`朝のまとめ通知（${count}件）を送信し、保留箱を空にしました`);
+    console.log(
+      `朝のまとめ通知（${snapshot.size}件）を送信し、保留箱を空にしました`,
+    );
     return null;
   });

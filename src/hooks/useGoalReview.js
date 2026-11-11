@@ -14,6 +14,7 @@ import { setDoc, updateDoc } from "firebase/firestore";
 import { toast } from "react-hot-toast";
 import { docRef } from "../utils/firestore";
 import { extractGoalInputs } from "../utils/dateUtils";
+import { notifyFlag } from "../utils/notify";
 
 export const useGoalReview = ({
   currentUserId,
@@ -121,8 +122,10 @@ export const useGoalReview = ({
       await setDoc(
         docRef("feedbacks", feedbackId),
         {
+          runnerId,
           coachComment: coachFeedbackComment,
           updatedAt: new Date().toISOString(),
+          ...notifyFlag(),
         },
         { merge: true },
       );

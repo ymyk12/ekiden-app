@@ -35,9 +35,13 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log("[sw.js] バックグラウンドで通知を受信:", payload);
 
-  const notificationTitle = payload.notification.title;
+  // payload.notification がある通知は FCM SDK/ブラウザが自動で表示する。
+  // ここでも showNotification すると同じ通知が2件出るため、何もしない。
+  if (payload.notification) return;
+
+  const notificationTitle = payload.data?.title || "お知らせ";
   const notificationOptions = {
-    body: payload.notification.body,
+    body: payload.data?.body || "",
     icon: "/logo192.png", // もしアイコンがあれば指定（publicフォルダ内のパス）
     badge: "/logo192.png", // Androidの通知バーに表示されるアイコン
     tag: "ekiden-notif", // 同じタグの通知は重ねて表示される

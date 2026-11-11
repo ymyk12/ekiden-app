@@ -11,6 +11,7 @@ import { setDoc, addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { toast } from "react-hot-toast";
 import { colRef, docRef, settingsDocRef } from "../utils/firestore";
 import { findPreset } from "../data/ekidenPresets";
+import { notifyFlag } from "../utils/notify";
 
 export const useRaceHandlers = ({
   currentUserId,
@@ -88,6 +89,7 @@ export const useRaceHandlers = ({
           ? newTournamentInput.teams
           : [],
         createdAt: new Date().toISOString(),
+        ...notifyFlag(),
       };
 
       await setDoc(docRef("tournaments", tournamentId), newTournament);
@@ -146,6 +148,7 @@ export const useRaceHandlers = ({
         runnerId: currentUserId,
         runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
         updatedAt: new Date().toISOString(),
+        ...notifyFlag(),
       };
 
       if (editingRaceCardId) {
@@ -205,6 +208,7 @@ export const useRaceHandlers = ({
         coachFeedbackAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         updatedBy: "coach",
+        ...notifyFlag(),
       });
       toast.success("フィードバックを送信しました！");
     } catch (e) {

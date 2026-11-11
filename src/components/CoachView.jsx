@@ -82,6 +82,8 @@ const CoachView = (props) => {
     setAppSettings,
     coachFullLogs,
     setCoachFullLogs,
+    coachPush,
+    setCoachPush,
     handleSaveDefaultPeriod,
     editingPeriodId,
     newPeriodInput,
@@ -675,6 +677,8 @@ const CoachView = (props) => {
               setAppSettings={setAppSettings}
               coachFullLogs={coachFullLogs}
               setCoachFullLogs={setCoachFullLogs}
+              coachPush={coachPush}
+              setCoachPush={setCoachPush}
               handleSaveDefaultPeriod={handleSaveDefaultPeriod}
               availablePeriods={availablePeriods}
               editingPeriodId={editingPeriodId}

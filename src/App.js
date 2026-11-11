@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
-import { setDoc, updateDoc, getDocs } from "firebase/firestore";
+import { setDoc, updateDoc, getDocs, deleteDoc } from "firebase/firestore";
 import { docRef, colRef } from "./utils/firestore";
 
 import { Toaster, toast } from "react-hot-toast";
@@ -39,7 +39,7 @@ const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 const OBView = lazy(() => import("./components/OBView"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.7.52";
+const APP_LAST_UPDATED = "6.7.53";
 
 // FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
 const FCM_VAPID_KEY =
@@ -104,6 +104,22 @@ const App = () => {
       return false;
     }
   });
+  // 監督の「この端末で通知を受け取る」切替（この端末のみ・既定は ON）
+  const [coachPush, setCoachPushState] = useState(() => {
+    try {
+      return localStorage.getItem("coachPush") !== "0";
+    } catch (e) {
+      return true;
+    }
+  });
+  const setCoachPush = (v) => {
+    setCoachPushState(v);
+    try {
+      localStorage.setItem("coachPush", v ? "1" : "0");
+    } catch (e) {
+      // 保存できなくても切替自体は有効
+    }
+  };
   const setCoachFullLogs = (v) => {
     setCoachFullLogsState(v);
     try {
@@ -411,10 +427,21 @@ const App = () => {
   // 監督端末の通知登録。監督は runners にプロフィールを持たないため、
   // coach_devices コレクションへトークンを保存し、Cloud Functions が
   // 大会ノート提出時にこの宛先へ直接プッシュ通知を送る。
+  // 端末ごとのオン/オフ（coachPush）: OFF の端末は登録を外し、通知を受け取らない。
   useEffect(() => {
     if (role !== ROLES.COACH) return;
     const registerCoachDevice = async () => {
       try {
+        if (!coachPush) {
+          // OFF: 許可済みなら、この端末のトークンの登録を削除する
+          if (Notification.permission === "granted") {
+            const token = await getToken(messaging, {
+              vapidKey: FCM_VAPID_KEY,
+            });
+            if (token) await deleteDoc(docRef("coach_devices", token));
+          }
+          return;
+        }
         const permission = await Notification.requestPermission();
         if (permission !== "granted") return;
         const token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
@@ -429,7 +456,7 @@ const App = () => {
       }
     };
     registerCoachDevice();
-  }, [role]);
+  }, [role, coachPush]);
 
   // ─── データ出力 ───
   // CSV は「全期間の全ログ」を出力する。画面には直近3ヶ月＋開いた分しか読み込んでいないため、
@@ -584,6 +611,8 @@ const App = () => {
     setAppSettings,
     coachFullLogs,
     setCoachFullLogs,
+    coachPush,
+    setCoachPush,
     handleSaveDefaultPeriod,
     editingPeriodId,
     newPeriodInput,
