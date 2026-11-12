@@ -3,7 +3,7 @@
  *
  * CoachView から coach-runner-detail ビューの JSX を分離。ROSTER で選手を
  * 選んだときに開く個別ページ。プロフィール編集・目標値設定・最近の記録表示/修正・
- * フィードバック・ステータス（引退）・ロール転向をまとめて扱う。
+ * ステータス（引退）・ロール転向をまとめて扱う。
  * 状態・ハンドラは CoachView 側に残し props で受け取る（挙動は従来と同一）。
  */
 import { useEffect } from "react";
@@ -14,8 +14,6 @@ import {
   FileText,
   HeartPulse,
   Edit,
-  MessageSquare,
-  User,
   Settings,
   UserMinus,
   Users,
@@ -42,9 +40,6 @@ const CoachRunnerDetailView = ({
   handleCoachSaveGoals,
   allLogs,
   openCoachEditModal,
-  getRunnerFeedback,
-  setCoachFeedbackComment,
-  handleSaveCoachFeedback,
   setConfirmDialog,
   handleCoachChangeRole,
 }) => {
@@ -343,47 +338,6 @@ const CoachRunnerDetailView = ({
               記録がありません
             </p>
           )}
-        </div>
-      </div>
-      <div className="border-t border-slate-100 pt-6 space-y-4">
-        <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2">
-          <MessageSquare size={16} /> Feedback for {targetPeriod.name}
-        </h4>
-        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-          <p className="text-[9px] text-slate-400 font-bold uppercase mb-2 flex items-center gap-1">
-            <User size={10} /> Runner's Comment
-          </p>
-          <p className="text-sm text-slate-700 font-bold whitespace-pre-wrap">
-            {getRunnerFeedback(selectedRunner.id)?.runnerComment ||
-              "（未入力）"}
-          </p>
-        </div>
-        <div className="space-y-2">
-          <p className="text-[9px] text-slate-400 font-bold uppercase ml-2 flex items-center gap-1">
-            <Edit size={10} /> Coach Comment
-          </p>
-          <textarea
-            key={selectedRunner.id}
-            className="w-full p-4 bg-blue-50 rounded-2xl text-sm font-bold text-slate-700 min-h-[100px] outline-none focus:ring-2 ring-blue-200 border border-blue-100"
-            placeholder="フィードバックを入力..."
-            defaultValue={
-              getRunnerFeedback(selectedRunner.id)?.coachComment || ""
-            }
-            onChange={(e) => setCoachFeedbackComment(e.target.value)}
-          />
-          <button
-            onClick={() => handleSaveCoachFeedback(selectedRunner.id)}
-            disabled={isSubmitting}
-            className={`w-full py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 ${isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" : "bg-slate-800 text-white active:scale-95"}`}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 size={13} className="animate-spin" /> 送信中...
-              </>
-            ) : (
-              "フィードバック送信"
-            )}
-          </button>
         </div>
       </div>
       <div className="border-t border-slate-100 pt-8 mt-4 space-y-4">

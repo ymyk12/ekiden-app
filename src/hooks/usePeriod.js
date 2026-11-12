@@ -5,7 +5,7 @@
  * データ取得の下限日（fetchCutoff）を App.js に返す。
  * 期間が変わると useTeamData が自動的に再購読範囲を調整する。
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { updateDoc } from "firebase/firestore";
 import { toast } from "react-hot-toast";
 import { settingsDocRef } from "../utils/firestore";
@@ -14,6 +14,9 @@ import {
   calculateAutoQuarters,
   getMonthRange,
   getYearRange,
+  getPeriodViewMonth,
+  makeMonthPeriod,
+  makeYearPeriod,
 } from "../utils/dateUtils";
 
 export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => {
@@ -23,6 +26,7 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
 
   const initialPeriodInput = {
     name: "",
+    kind: "training",
     start: "",
     end: "",
     quarters: [
@@ -83,8 +87,17 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
       });
     }
 
+    // ヘッダーや月送りで選んだ月が直近12か月の外でも、選択肢に載せて選択状態を保つ
+    if (
+      selectedPeriod &&
+      (selectedPeriod.type === "month" || selectedPeriod.type === "year") &&
+      !periods.some((p) => p.id === selectedPeriod.id)
+    ) {
+      periods.push(selectedPeriod);
+    }
+
     return periods;
-  }, [appSettings]);
+  }, [appSettings, selectedPeriod]);
 
   useEffect(() => {
     if (
@@ -149,7 +162,27 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
     }
   }, [targetPeriod, setFetchCutoff]);
 
+  // 月単位の画面（月間レポート・カレンダー）が表示する月と、その月送り。
+  // 画面側の「< >」は、ここを通してヘッダーの期間を直接切り替える（常に連動）。
+  const viewMonth = useMemo(() => getPeriodViewMonth(targetPeriod), [targetPeriod]);
+  const stepMonth = useCallback(
+    (delta) => setSelectedPeriod(makeMonthPeriod(viewMonth, delta)),
+    [viewMonth],
+  );
+  // 年度の期間が選ばれているとき、年度レポートの「< >」から前後の年度へ切り替える
+  const stepYear = useCallback(
+    (delta) => {
+      const y = parseInt(String(targetPeriod.id).split("_")[1], 10);
+      if (!Number.isNaN(y)) setSelectedPeriod(makeYearPeriod(y + delta));
+    },
+    [targetPeriod],
+  );
+
   const activeQuarters = useMemo(() => {
+    // 合宿はクォーターごとに目標を分けない（期間全体の目標だけ）
+    if (targetPeriod.type === "custom" && targetPeriod.kind === "camp") {
+      return [];
+    }
     if (targetPeriod.type === "global" || targetPeriod.type === "custom") {
       const hasValidQuarters =
         targetPeriod.quarters &&
@@ -169,7 +202,17 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
 
   const updateNewPeriodInputWithAutoQuarters = (field, value) => {
     const updatedInput = { ...newPeriodInput, [field]: value };
-    if (updatedInput.start && updatedInput.end) {
+    // クォーターの自動計算は、開始日・終了日を変えたときだけ行う。
+    // （名前や種類を変えただけで、手で直したクォーターが初期値に戻らないようにする。
+    //   合宿から鍛錬期に戻して、クォーターが空のときだけは計算し直す）
+    const quartersEmpty = !(updatedInput.quarters || []).some(
+      (q) => q.start && q.end,
+    );
+    const shouldRecalc =
+      field === "start" ||
+      field === "end" ||
+      (field === "kind" && value !== "camp" && quartersEmpty);
+    if (shouldRecalc && updatedInput.start && updatedInput.end) {
       updatedInput.quarters = calculateAutoQuarters(
         updatedInput.start,
         updatedInput.end,
@@ -195,15 +238,20 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
       if (editingPeriodId) {
         updatedPeriods = appSettings.customPeriods.map((p) =>
           p.id === editingPeriodId
-            ? { ...newPeriodInput, id: editingPeriodId, type: "custom" }
+            ? {
+                ...newPeriodInput,
+                id: editingPeriodId,
+                type: "custom",
+                quarters: newPeriodInput.kind === "camp" ? [] : newPeriodInput.quarters,
+              }
             : p,
         );
         toast.success("期間を更新しました");
       } else {
-        const qs = calculateAutoQuarters(
-          newPeriodInput.start,
-          newPeriodInput.end,
-        );
+        const qs =
+          newPeriodInput.kind === "camp"
+            ? []
+            : calculateAutoQuarters(newPeriodInput.start, newPeriodInput.end);
         const newPeriod = {
           id: `custom_${Date.now()}`,
           ...newPeriodInput,
@@ -242,6 +290,7 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
   const handleEditCustomPeriod = (period) => {
     setNewPeriodInput({
       name: period.name,
+      kind: period.kind === "camp" ? "camp" : "training",
       start: period.start,
       end: period.end,
       quarters:
@@ -266,6 +315,9 @@ export const usePeriod = ({ appSettings, setFetchCutoff, setConfirmDialog }) => 
     selectedPeriod,
     setSelectedPeriod,
     targetPeriod,
+    viewMonth,
+    stepMonth,
+    stepYear,
     activeQuarters,
     newPeriodInput,
     editingPeriodId,

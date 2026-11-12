@@ -138,3 +138,39 @@ export const extractGoalInputs = (runner, periodId, periodType) => ({
   q3:      getGoalValue(runner, periodId, periodType, "goalQ3")      || "",
   q4:      getGoalValue(runner, periodId, periodType, "goalQ4")      || "",
 });
+
+// 期間（ヘッダーの期間選択）から、月単位の画面が表示すべき月（"YYYY-MM"）を返す。
+// 月の期間ならその月、年度・カスタム期間なら「期間の終了日（未来なら今日）」の月。
+export const getPeriodViewMonth = (period) => {
+  if (!period) return getTodayStr().slice(0, 7);
+  if (period.type === "month" && period.start) return period.start.slice(0, 7);
+  const today = getTodayStr();
+  const base = period.end && period.end < today ? period.end : today;
+  return base.slice(0, 7);
+};
+
+// "YYYY-MM" を delta か月ずらした月の期間オブジェクト（usePeriod の月の期間と同じ形）
+export const makeMonthPeriod = (ym, delta = 0) => {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  const range = getMonthRange(d);
+  return {
+    id: `month_${d.getFullYear()}_${d.getMonth() + 1}`,
+    name: range.name,
+    start: range.start,
+    end: range.end,
+    type: "month",
+  };
+};
+
+// 年度の期間オブジェクト（usePeriod の年度の期間と同じ形。year は年度の開始年）
+export const makeYearPeriod = (year) => {
+  const range = getYearRange(year);
+  return {
+    id: `year_${year}`,
+    name: range.name,
+    start: range.start,
+    end: range.end,
+    type: "year",
+  };
+};

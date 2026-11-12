@@ -1,5 +1,5 @@
 /*
- * MonthlyReportView — 選手別 月間レポート（A4印刷 → PDF配布用）
+ * MonthlyReportView — 選手別 月間レポート（A4印刷 → PDF配布用）。ヘッダーで年度が選ばれているときは年間レポート
  *
  * 監督が「月 × 選手（または全員一括）」を選ぶと、月間走行距離・練習日数・
  * 週別推移・区分内訳・大会結果・日々の練習ログをA4 1枚に自動集計する。
@@ -8,10 +8,12 @@
  * グラフは印刷の確実性を優先して recharts ではなく CSS バーで描画する。
  */
 import { useState, useEffect } from "react";
-import { Printer, FileText, Trophy } from "lucide-react";
+import { Printer, Trophy, ChevronLeft, ChevronRight } from "lucide-react";
+import { usePeriodNav } from "../hooks/usePeriodNav";
 import { useLogRange } from "../hooks/useLogRange";
-import { ROLES, CATEGORY } from "../utils/constants";
-import { getGoalValue } from "../utils/dateUtils";
+import { ROLES, CATEGORY, PERIOD_KINDS, periodKindOf } from "../utils/constants";
+import { getTodayStr, makeYearPeriod } from "../utils/dateUtils";
+import { YearlySheet, buildYearlyData } from "./YearlyReportSheet";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const fmtLocal = (d) =>
@@ -91,15 +93,34 @@ const LogTable = ({ logs }) => (
   </table>
 );
 
-// 1人分の月間データを集計する
-const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
-  const [y, m] = month.split("-").map(Number);
-  const first = new Date(y, m - 1, 1);
-  const last = new Date(y, m, 0);
-  const prefix = `${month}-`;
+const parseYmd = (s) => {
+  const [yy, mm, dd] = s.split("-").map(Number);
+  return new Date(yy, mm - 1, dd);
+};
+const addDaysStr = (s, n) => {
+  const d = parseYmd(s);
+  d.setDate(d.getDate() + n);
+  return fmtLocal(d);
+};
+const dayDiff = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 86400000);
+// "YYYY-MM" の月初〜月末
+const monthRangeOf = (ym) => {
+  const [yy, mm] = ym.split("-").map(Number);
+  return { start: `${ym}-01`, end: fmtLocal(new Date(yy, mm, 0)) };
+};
+
+// 1人分のレポートデータを集計する。
+// range = { start, end, kind } 。kind は "month"（月間）か "custom"（カスタム期間）。
+const buildMonthlyData = (runner, allLogs, raceCards, tournaments, range) => {
+  // 推移グラフは「期間の終了月」を含む直近6ヶ月
+  const [y, m] = range.end.split("-").slice(0, 2).map(Number);
+  const first = parseYmd(range.start);
+  const last = parseYmd(range.end);
+  const totalDays = dayDiff(range.start, range.end) + 1;
+  const inRange = (ds) => !!ds && ds >= range.start && ds <= range.end;
 
   const logs = (allLogs || [])
-    .filter((l) => l.runnerId === runner.id && (l.date || "").startsWith(prefix))
+    .filter((l) => l.runnerId === runner.id && inRange(l.date))
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -118,9 +139,9 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
   const lastStr = fmtLocal(last);
   const firstStr = fmtLocal(first);
   let elapsedDays;
-  if (todayStr >= lastStr) elapsedDays = last.getDate();
+  if (todayStr >= lastStr) elapsedDays = totalDays;
   else if (todayStr < firstStr) elapsedDays = 0;
-  else elapsedDays = Number(todayStr.slice(8, 10));
+  else elapsedDays = dayDiff(range.start, todayStr) + 1;
   const missingDays = Math.max(0, elapsedDays - entryDates.size);
 
   const rpeLogs = logs.filter(
@@ -135,17 +156,30 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
     logs.filter((l) => Number(l.pain) >= 3).map((l) => l.date),
   ).size;
 
-  // 前月合計（前月比表示用）
-  const pd = new Date(y, m - 2, 1);
-  const prevPrefix = `${pd.getFullYear()}-${pad2(pd.getMonth() + 1)}-`;
-  const prevKm =
-    Math.round(
-      (allLogs || [])
-        .filter(
-          (l) => l.runnerId === runner.id && (l.date || "").startsWith(prevPrefix),
-        )
-        .reduce((s, l) => s + (Number(l.distance) || 0), 0) * 10,
-    ) / 10;
+  // 比較相手の合計（前月比表示用）。
+  // カスタム期間は「同じ種類（鍛錬期／合宿）の直前の期間」。無ければ比較なし。
+  const prevRange =
+    range.kind === "custom"
+      ? range.prev
+      : monthRangeOf(
+          (() => {
+            const pd = new Date(first.getFullYear(), first.getMonth() - 1, 1);
+            return `${pd.getFullYear()}-${pad2(pd.getMonth() + 1)}`;
+          })(),
+        );
+  const hasPrev = !!prevRange;
+  const prevKm = hasPrev
+    ? Math.round(
+        (allLogs || [])
+          .filter(
+            (l) =>
+              l.runnerId === runner.id &&
+              l.date >= prevRange.start &&
+              l.date <= prevRange.end,
+          )
+          .reduce((s, l) => s + (Number(l.distance) || 0), 0) * 10,
+      ) / 10
+    : 0;
 
   // 週別集計（月曜始まり、月初・月末で区間をクリップ）
   const weeks = [];
@@ -205,7 +239,12 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
       : card.distance || card.ekidenDistance || "";
   const myCards = (raceCards || []).filter((c) => c.runnerId === runner.id);
   const races = myCards
-    .filter((c) => (c.date || "").startsWith(prefix))
+    // 削除された大会のカード（大会が存在しないもの）は載せない
+    .filter(
+      (c) =>
+        inRange(c.date) &&
+        (tournaments || []).some((t) => t.id === c.tournamentId),
+    )
     .map((c) => {
       const tour = (tournaments || []).find((t) => t.id === c.tournamentId);
       return {
@@ -223,12 +262,12 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
   const trainDates = new Set(
     logs.filter((l) => l.category !== CATEGORY.REST).map((l) => l.date),
   );
-  for (let day = 1; day <= last.getDate(); day++) {
-    const ds = `${month}-${pad2(day)}`;
+  for (let i = 0; i < totalDays; i++) {
+    const ds = addDaysStr(range.start, i);
     const dayLogs = logs.filter((l) => l.date === ds);
     const train = dayLogs.filter((l) => l.category !== CATEGORY.REST);
     daily.push({
-      day,
+      day: i + 1,
       rpe: Math.max(0, ...train.map((l) => Number(l.rpe) || 0)),
       pain: Math.max(0, ...dayLogs.map((l) => Number(l.pain) || 0)),
       isRest: dayLogs.length > 0 && train.length === 0,
@@ -251,8 +290,8 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
   );
   let maxTrainStreak = 0;
   let ts = 0;
-  for (let day = 1; day <= last.getDate(); day++) {
-    const ds = `${month}-${pad2(day)}`;
+  for (let i = 0; i < totalDays; i++) {
+    const ds = addDaysStr(range.start, i);
     ts = trainDates.has(ds) ? ts + 1 : 0;
     if (ts > maxTrainStreak) maxTrainStreak = ts;
   }
@@ -261,7 +300,8 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
   ).size;
 
   // 月間距離の推移（当月含む直近6ヶ月）
-  const trend = [];
+  let trend = [];
+  let trendTitle = "月間走行距離の推移（直近6ヶ月）";
   for (let i = 5; i >= 0; i--) {
     const td = new Date(y, m - 1 - i, 1);
     const tPrefix = `${td.getFullYear()}-${pad2(td.getMonth() + 1)}-`;
@@ -279,11 +319,53 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
       isCurrent: i === 0,
     });
   }
+  // カスタム期間は、同じ種類（鍛錬期／合宿）の過去の期間との比較にする
+  if (range.kind === "custom") {
+    trendTitle =
+      range.periodKind === "camp"
+        ? "合宿の推移（過去の合宿との比較）"
+        : "鍛錬期の推移（過去の鍛錬期との比較）";
+    trend = (range.series || []).map((sp) => ({
+      label: sp.name,
+      sub: `${dayDiff(sp.start, sp.end) + 1}日間`,
+      km:
+        Math.round(
+          (allLogs || [])
+            .filter(
+              (l) =>
+                l.runnerId === runner.id && l.date >= sp.start && l.date <= sp.end,
+            )
+            .reduce((a, l) => a + (Number(l.distance) || 0), 0) * 10,
+        ) / 10,
+      isCurrent: sp.current,
+    }));
+  }
 
-  const goal = getGoalValue(runner, "any", "month", "goalPeriod") || 0;
-  const goalRate = goal > 0 ? Math.round((totalKm / goal) * 100) : null;
+  // 日ごとの合計走行距離（合宿レポートで表示）
+  const dayKm = [];
+  for (let i = 0; i < totalDays; i++) {
+    const ds = addDaysStr(range.start, i);
+    const dayLogs = logs.filter((l) => l.date === ds);
+    const km =
+      Math.round(
+        dayLogs
+          .filter((l) => l.category !== CATEGORY.REST)
+          .reduce((a, l) => a + (Number(l.distance) || 0), 0) * 10,
+      ) / 10;
+    dayKm.push({
+      date: ds,
+      km,
+      isRest: dayLogs.length > 0 && dayLogs.every((l) => l.category === CATEGORY.REST),
+    });
+  }
 
   return {
+    kind: range.kind,
+    periodKind: range.periodKind,
+    trendTitle,
+    dayKm,
+    start: range.start,
+    end: range.end,
     logs,
     totalKm,
     trainDays,
@@ -292,11 +374,12 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
     avgRpe,
     painDays,
     prevKm,
+    hasPrev,
+    prevName: range.prev?.name || "",
+    prevLabel: range.kind === "custom" ? range.prevLabel : "前月",
     weeks,
     categories,
     races,
-    goal,
-    goalRate,
     trend,
     daily,
     bestDay,
@@ -307,8 +390,10 @@ const buildMonthlyData = (runner, allLogs, raceCards, tournaments, month) => {
 };
 
 // A4 1枚分のレポート本体
-const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
+const ReportSheet = ({ runner, data, title, isFirst }) => {
   const d = data;
+  const isCustom = d.kind === "custom";
+  const shortDate = (ds) => `${Number(ds.slice(5, 7))}/${Number(ds.slice(8, 10))}`;
   const diff = Math.round((d.totalKm - d.prevKm) * 10) / 10;
   const maxWeekKm = Math.max(...d.weeks.map((w) => w.km), 1);
   const maxCatKm = Math.max(...d.categories.map((c) => c.km), 1);
@@ -326,7 +411,7 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
             Monthly Training Report
           </p>
           <h2 className="text-xl max-sm:text-base print:text-base font-black text-slate-800 whitespace-nowrap">
-            {monthLabel} 月間レポート
+            {title}
           </h2>
         </div>
         <p className="text-lg max-sm:text-sm print:text-base font-black text-slate-800 whitespace-nowrap flex-shrink-0">
@@ -338,28 +423,30 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
       <div className="grid grid-cols-2 md:grid-cols-5 print:grid-cols-5 gap-2">
         <div className="border border-slate-200 rounded-xl p-2.5 print:p-1 text-center col-span-2 md:col-span-1 print:col-span-1">
           <p className="text-[9px] font-black text-slate-400 uppercase">
-            月間走行距離
+            {isCustom ? "期間走行距離" : "月間走行距離"}
           </p>
           <p className="text-xl font-black text-blue-600 leading-tight">
             {d.totalKm}
             <span className="text-[10px] text-slate-400 font-bold">km</span>
           </p>
-          {d.goal > 0 && (
-            <p className="text-[9px] font-bold text-slate-500">
-              目標 {d.goal}km（{d.goalRate}%）
-            </p>
-          )}
         </div>
         <div className="border border-slate-200 rounded-xl p-2.5 print:p-1 text-center">
-          <p className="text-[9px] font-black text-slate-400 uppercase">前月比</p>
-          <p
-            className={`text-lg font-black leading-tight ${diff >= 0 ? "text-emerald-600" : "text-rose-500"}`}
-          >
-            {diff >= 0 ? "+" : ""}
-            {diff}
-            <span className="text-[10px] text-slate-400 font-bold">km</span>
+          <p className="text-[9px] font-black text-slate-400 uppercase">
+            {d.prevLabel}比
           </p>
-          <p className="text-[9px] font-bold text-slate-400">前月 {d.prevKm}km</p>
+          <p
+            className={`text-lg font-black leading-tight ${!d.hasPrev ? "text-slate-300" : diff >= 0 ? "text-emerald-600" : "text-rose-500"}`}
+          >
+            {d.hasPrev ? `${diff >= 0 ? "+" : ""}${diff}` : "—"}
+            {d.hasPrev && (
+              <span className="text-[10px] text-slate-400 font-bold">km</span>
+            )}
+          </p>
+          <p className="text-[9px] font-bold text-slate-400">
+            {d.hasPrev
+              ? `${d.prevName ? d.prevName + " " : d.prevLabel + " "}${d.prevKm}km`
+              : `${d.prevLabel}なし`}
+          </p>
         </div>
         <div className="border border-slate-200 rounded-xl p-2.5 print:p-1 text-center">
           <p className="text-[9px] font-black text-slate-400 uppercase">
@@ -400,7 +487,7 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
       {/* 今月のハイライト */}
       <div className="border border-blue-100 bg-blue-50/40 rounded-xl p-3 print:p-2">
         <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1.5">
-          今月のハイライト
+          {isCustom ? "期間のハイライト" : "今月のハイライト"}
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 print:grid-cols-4 gap-2">
           <div className="text-center">
@@ -515,7 +602,7 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
       {d.races.length > 0 && (
         <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-3">
           <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-            <Trophy size={11} /> 今月の大会結果
+            <Trophy size={11} /> {isCustom ? "期間の大会結果" : "今月の大会結果"}
           </p>
           <div className="space-y-2 print:space-y-1">
             {d.races.map((r, i) => {
@@ -566,6 +653,37 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
         </div>
       )}
 
+      {/* 日ごとの合計走行距離（合宿のみ） */}
+      {d.periodKind === "camp" && (
+        <div className="border border-slate-200 rounded-xl p-3 print:p-2">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+            日別走行距離（1日の合計）
+          </p>
+          <div className="space-y-1.5">
+            {d.dayKm.map((dk) => {
+              const maxDay = Math.max(...d.dayKm.map((x) => x.km), 1);
+              const dt = parseYmd(dk.date);
+              return (
+                <div key={dk.date} className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-500 w-16 flex-shrink-0">
+                    {dt.getMonth() + 1}/{dt.getDate()}({DAY_JP[dt.getDay()]})
+                  </span>
+                  <div className="flex-1 h-3 bg-slate-100 rounded overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded"
+                      style={{ width: `${(dk.km / maxDay) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-black text-slate-700 w-16 text-right">
+                    {dk.isRest ? "休養" : `${dk.km}km`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 練習ログ（本人の入力をそのまま掲載）
           前半/後半の2分割横並びでA4 1枚に収める（31日分でも約16行の高さ） */}
       <div>
@@ -577,7 +695,7 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
         </p>
         {d.logs.length === 0 ? (
           <p className="border border-slate-300 rounded px-2 py-2 text-[10px] text-slate-400 font-bold text-center">
-            この月の記録はありません
+            {isCustom ? "この期間の記録はありません" : "この月の記録はありません"}
           </p>
         ) : (
           (() => {
@@ -624,41 +742,56 @@ const ReportSheet = ({ runner, data, monthLabel, isFirst }) => {
             ))}
           </div>
           <div className="flex justify-between mt-1 text-[8px] font-bold text-slate-400 leading-none">
-            <span>1日</span>
-            <span>10日</span>
-            <span>20日</span>
-            <span>{d.daily.length}日</span>
+            {isCustom ? (
+              <>
+                <span>{shortDate(d.start)}</span>
+                <span>{shortDate(d.end)}</span>
+              </>
+            ) : (
+              <>
+                <span>1日</span>
+                <span>10日</span>
+                <span>20日</span>
+                <span>{d.daily.length}日</span>
+              </>
+            )}
           </div>
         </div>
         <div className="border border-slate-200 rounded-xl p-3 print:p-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-            月間走行距離の推移（直近6ヶ月）
+            {d.trendTitle}
           </p>
-          <div className="flex items-end gap-2 h-16 print:h-14">
-          {d.trend.map((t) => (
-            <div
-              key={t.label}
-              className="flex-1 flex flex-col items-center justify-end h-full"
-            >
-              <span
-                className={`text-[9px] font-black leading-none mb-0.5 ${t.isCurrent ? "text-blue-600" : "text-slate-500"}`}
-              >
-                {t.km}
-              </span>
-              <div
-                className={`w-full max-w-[3.5rem] rounded-t ${t.isCurrent ? "bg-blue-500" : "bg-slate-300"}`}
-                style={{
-                  height: `${Math.max((t.km / maxTrendKm) * 100, t.km > 0 ? 4 : 0)}%`,
-                }}
-              />
-              <span
-                className={`text-[8px] font-bold mt-0.5 leading-none ${t.isCurrent ? "text-blue-600" : "text-slate-400"}`}
-              >
-                {t.label}
-              </span>
-            </div>
-          ))}
-        </div>
+          <div className="flex gap-2">
+            {d.trend.map((t) => {
+              // 棒の領域は固定の高さ。値の文字ぶん（上20%）を残して、最大値が80%になる
+              const pct = Math.max((t.km / maxTrendKm) * 80, t.km > 0 ? 3 : 0);
+              return (
+                <div
+                  key={t.label}
+                  className="flex-1 flex flex-col items-center min-w-0"
+                >
+                  <div className="relative w-full h-16 print:h-14">
+                    <span
+                      className={`absolute left-0 right-0 text-center text-[9px] font-black leading-none ${t.isCurrent ? "text-blue-600" : "text-slate-500"}`}
+                      style={{ bottom: `calc(${pct}% + 2px)` }}
+                    >
+                      {t.km}
+                    </span>
+                    <div
+                      className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[3.5rem] rounded-t ${t.isCurrent ? "bg-blue-500" : "bg-slate-300"}`}
+                      style={{ height: `${pct}%` }}
+                    />
+                  </div>
+                  <span
+                    className={`text-[8px] font-bold mt-1 leading-tight text-center break-all ${t.isCurrent ? "text-blue-600" : "text-slate-400"}`}
+                  >
+                    {t.label}
+                    {t.sub && <span className="block font-medium">{t.sub}</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -682,14 +815,30 @@ const MonthlyReportView = ({
   allowAll = true,
   // 初期表示月（"YYYY-MM"）。引退者向け OBView が「最後に記録した月」を渡す。未指定は先月
   defaultMonth = undefined,
+  // 操作バーの上に同じカードで載せる見出し（My Log のタイトルとタブ）。未指定なら操作バーだけ
+  topSlot = null,
 }) => {
   // 既定は「先月」（月初に前月分を配る運用を想定）
-  const [month, setMonth] = useState(() => {
+  const [localMonth, setMonth] = useState(() => {
     if (defaultMonth) return defaultMonth;
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
   });
+  // ヘッダーに期間選択がある画面（選手・監督）では、表示月をヘッダーの期間と連動させる。
+  // 無い画面（OB 画面）は従来どおり自分で月を持つ。
+  const periodNav = usePeriodNav();
+  const month = periodNav ? periodNav.viewMonth : localMonth;
+  // ヘッダーで「年度」が選ばれているときは、年間（年度）レポートを表示する。
+  // 月・カスタム期間のときは、従来の月間レポート。
+  const yearPeriod =
+    periodNav && periodNav.period?.type === "year" ? periodNav.period : null;
+  // カスタム期間が選ばれているときは、その期間のレポート（内容は月間レポートと同じ）
+  const customPeriod =
+    periodNav && periodNav.period?.type === "custom" ? periodNav.period : null;
+  const isCurrentOrFuture = yearPeriod
+    ? yearPeriod.end >= getTodayStr()
+    : month >= getTodayStr().slice(0, 7);
   // lockedRunnerId 指定時はその選手を初期選択。未指定かつ全選手不可なら空。
   const [runnerId, setRunnerId] = useState(
     lockedRunnerId || (allowAll ? "all" : ""),
@@ -704,18 +853,51 @@ const MonthlyReportView = ({
   // 直近3か月より前の月を選んだときに過去ログを読み込む。
   // 特定の選手なら全期間、全選手（一括）なら選んだ月のチームのログだけ。
   const { ensureRunnerLogs, ensureLogsMonth } = useLogRange();
+  const yearStart = yearPeriod?.start;
+  const customStart = customPeriod?.start;
+  const customEnd = customPeriod?.end;
   useEffect(() => {
     if (effectiveRunnerId && effectiveRunnerId !== "all") {
       ensureRunnerLogs(effectiveRunnerId);
+    } else if (yearStart) {
+      // 年度（と前年度比のための前年度）の24か月ぶん
+      const sy = Number(yearStart.slice(0, 4));
+      const sm = Number(yearStart.slice(5, 7));
+      for (let i = -12; i < 12; i++) {
+        const d = new Date(sy, sm - 1 + i, 1);
+        ensureLogsMonth(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
+      }
+    } else if (customStart && customEnd) {
+      // カスタム期間がまたぐ月のぶん（最大24か月まで）
+      let cur = customStart.slice(0, 7);
+      for (let i = 0; i < 24 && cur <= customEnd.slice(0, 7); i++) {
+        ensureLogsMonth(cur);
+        const [cy, cm] = cur.split("-").map(Number);
+        const nd = new Date(cy, cm, 1);
+        cur = `${nd.getFullYear()}-${pad2(nd.getMonth() + 1)}`;
+      }
     } else {
       ensureLogsMonth(month);
     }
-  }, [effectiveRunnerId, month, ensureRunnerLogs, ensureLogsMonth]);
+  }, [
+    effectiveRunnerId,
+    month,
+    yearStart,
+    customStart,
+    customEnd,
+    ensureRunnerLogs,
+    ensureLogsMonth,
+  ]);
   // 一括出力では、引退者はその月に記録がある場合のみ含める（空の帳票を出さない）。
   // 個別選択・本人固定では引退者も過去月のレポートを見られる。
   const hasLogsInMonth = (r) =>
     (allLogs || []).some(
-      (l) => l.runnerId === r.id && (l.date || "").startsWith(month),
+      (l) =>
+        l.runnerId === r.id &&
+        (yearPeriod || customPeriod
+          ? l.date >= (yearPeriod || customPeriod).start &&
+            l.date <= (yearPeriod || customPeriod).end
+          : (l.date || "").startsWith(month)),
     );
   const bulkAthletes = athletes.filter(
     (r) => r.status !== "retired" || hasLogsInMonth(r),
@@ -728,29 +910,213 @@ const MonthlyReportView = ({
   const [y, m] = month.split("-").map(Number);
   const monthLabel = `${y}年${m}月`;
 
+  const reportKind = yearPeriod
+    ? "年間レポート"
+    : customPeriod
+      ? "期間レポート"
+      : "月間レポート";
+  const reportKey = yearPeriod
+    ? yearPeriod.name
+    : customPeriod
+      ? customPeriod.name
+      : month;
+  // 月間レポートの集計範囲（カスタム期間のときは期間の開始〜終了）
+  // カスタム期間の比較相手: 同じ種類（鍛錬期／合宿）で、開始前に終わった直近の期間
+  const customKind = customPeriod ? periodKindOf(customPeriod) : null;
+  const prevCustom = customPeriod
+    ? (periodNav.periods || [])
+        .filter(
+          (p) =>
+            p.type === "custom" &&
+            p.id !== customPeriod.id &&
+            periodKindOf(p) === customKind &&
+            p.end < customPeriod.start,
+        )
+        .sort((a, b) => b.end.localeCompare(a.end))[0] || null
+    : null;
+  const range = customPeriod
+    ? {
+        start: customPeriod.start,
+        end: customPeriod.end,
+        kind: "custom",
+        prev: prevCustom
+          ? { start: prevCustom.start, end: prevCustom.end, name: prevCustom.name }
+          : null,
+        prevLabel: PERIOD_KINDS[customKind].prevLabel,
+        periodKind: customKind,
+        // 同じ種類の過去の期間（今回を含む直近6件）。推移グラフの比較に使う
+        series: (periodNav.periods || [])
+          .filter(
+            (p) =>
+              p.type === "custom" &&
+              periodKindOf(p) === customKind &&
+              p.start <= customPeriod.start,
+          )
+          .sort((a, b) => a.start.localeCompare(b.start))
+          .slice(-6)
+          .map((p) => ({
+            name: p.name,
+            start: p.start,
+            end: p.end,
+            current: p.id === customPeriod.id,
+          })),
+      }
+    : { ...monthRangeOf(month), kind: "month" };
+  // ─ レポートの種類（月間／年間／鍛錬期／合宿）。ヘッダーの期間と連動する ─
+  const reportType = yearPeriod ? "year" : customPeriod ? customKind : "month";
+  const customsOf = (kind) =>
+    (periodNav?.periods || [])
+      .filter((p) => p.type === "custom" && periodKindOf(p) === kind)
+      .sort((a, b) => a.start.localeCompare(b.start));
+  const sameKindCustoms = customPeriod ? customsOf(customKind) : [];
+  const customIdx = customPeriod
+    ? sameKindCustoms.findIndex((p) => p.id === customPeriod.id)
+    : -1;
+  const stepCustom = (delta) => {
+    const next = sameKindCustoms[customIdx + delta];
+    if (next) periodNav.selectPeriod(next);
+  };
+  const onTypeChange = (t) => {
+    if (!periodNav || t === reportType) return;
+    if (t === "month") {
+      periodNav.stepMonth(0);
+    } else if (t === "year") {
+      const yy = Number(month.slice(0, 4));
+      const mm = Number(month.slice(5, 7));
+      periodNav.selectPeriod(makeYearPeriod(mm <= 3 ? yy - 1 : yy));
+    } else {
+      // その種類のカスタム期間のうち、開始が今日以前で一番新しいもの（なければ最後のもの）
+      const list = customsOf(t);
+      const today = getTodayStr();
+      const pick =
+        [...list].reverse().find((p) => p.start <= today) ||
+        list[list.length - 1];
+      if (pick) periodNav.selectPeriod(pick);
+    }
+  };
+  const reportTitle = customPeriod
+    ? `${customPeriod.name} レポート`
+    : `${monthLabel} 月間レポート`;
   const printName =
     effectiveRunnerId === "all"
-      ? `月間レポート_${month}_全選手`
-      : `月間レポート_${month}_${targets[0] ? `${targets[0].lastName}${targets[0].firstName}` : ""}`;
+      ? `${reportKind}_${reportKey}_全選手`
+      : `${reportKind}_${reportKey}_${targets[0] ? `${targets[0].lastName}${targets[0].firstName}` : ""}`;
 
   return (
     <div className="space-y-4">
-      {/* 操作バー（印刷時は非表示） */}
-      <div className="no-print bg-white p-4 rounded-[2rem] shadow-sm flex flex-wrap items-center gap-3">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-          <FileText size={14} /> Monthly Report
-        </p>
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => e.target.value && setMonth(e.target.value)}
-          className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-        />
+      {/* 操作バー（印刷時は非表示）。左: 種類 / 中央: 期間と「< >」 / 右: 印刷 */}
+      <div
+        className={
+          topSlot
+            ? "no-print bg-white rounded-[3rem] shadow-sm overflow-hidden"
+            : "no-print bg-white px-4 py-3 rounded-2xl shadow-sm"
+        }
+      >
+        {topSlot}
+        <div
+          className={
+            topSlot ? "border-t border-slate-100 px-4 py-3 space-y-2" : "space-y-2"
+          }
+        >
+        <div className="flex items-center gap-2">
+          <div className="w-[4.75rem] flex-shrink-0">
+            {periodNav && (
+              <select
+                value={reportType}
+                onChange={(e) => onTypeChange(e.target.value)}
+                aria-label="レポートの種類"
+                className="w-full bg-slate-100 text-slate-700 font-black text-xs rounded-xl px-2 py-2.5 outline-none"
+              >
+                <option value="month">月間</option>
+                <option value="year">年間</option>
+                <option
+                  value="training"
+                  disabled={customsOf("training").length === 0}
+                >
+                  鍛錬期
+                </option>
+                <option value="camp" disabled={customsOf("camp").length === 0}>
+                  合宿
+                </option>
+              </select>
+            )}
+          </div>
+          <div className="flex-1 min-w-0 flex items-center justify-center gap-1">
+            {periodNav ? (
+              <>
+                <button
+                  onClick={() =>
+                    customPeriod
+                      ? stepCustom(-1)
+                      : yearPeriod
+                        ? periodNav.stepYear(-1)
+                        : periodNav.stepMonth(-1)
+                  }
+                  disabled={customPeriod ? customIdx <= 0 : false}
+                  aria-label="前へ"
+                  className="flex-shrink-0 p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <div className="min-w-0 flex-1 text-center leading-tight">
+                  <p className="text-[13px] font-black text-slate-700 break-all">
+                    {customPeriod
+                      ? customPeriod.name
+                      : yearPeriod
+                        ? yearPeriod.name
+                        : `${month.split("-")[0]}年${Number(month.split("-")[1])}月`}
+                  </p>
+                  {customPeriod && (
+                    <p className="text-[9px] font-bold text-slate-400">
+                      {customPeriod.start.replace(/-/g, "/")}〜
+                      {customPeriod.end.replace(/-/g, "/")}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() =>
+                    customPeriod
+                      ? stepCustom(1)
+                      : yearPeriod
+                        ? periodNav.stepYear(1)
+                        : periodNav.stepMonth(1)
+                  }
+                  disabled={
+                    customPeriod
+                      ? customIdx < 0 || customIdx >= sameKindCustoms.length - 1
+                      : isCurrentOrFuture
+                  }
+                  aria-label="次へ"
+                  className="flex-shrink-0 p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </>
+            ) : (
+              <input
+                type="month"
+                value={month}
+                onChange={(e) => e.target.value && setMonth(e.target.value)}
+                className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+              />
+            )}
+          </div>
+          <div className="w-[4.75rem] flex-shrink-0 flex justify-end">
+            <button
+              onClick={() => handlePrint(printName)}
+              aria-label="印刷 / PDF保存"
+              title="印刷 / PDF保存"
+              className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-md shadow-blue-200"
+            >
+              <Printer size={18} />
+            </button>
+          </div>
+        </div>
         {!lockedRunnerId && (
           <select
             value={runnerId}
             onChange={(e) => setRunnerId(e.target.value)}
-            className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+            className="w-full bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl px-2 py-2 outline-none focus:border-blue-500"
           >
             {allowAll && (
               <option value="all">全選手（一括 {bulkAthletes.length}名）</option>
@@ -763,12 +1129,7 @@ const MonthlyReportView = ({
             ))}
           </select>
         )}
-        <button
-          onClick={() => handlePrint(printName)}
-          className="ml-auto bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 active:scale-95 transition-all shadow-md shadow-blue-200"
-        >
-          <Printer size={16} /> 印刷 / PDF保存
-        </button>
+        </div>
       </div>
 
       {targets.length === 0 ? (
@@ -776,21 +1137,37 @@ const MonthlyReportView = ({
           対象の選手がいません
         </p>
       ) : (
-        targets.map((runner, idx) => (
+        targets.map((runner, idx) =>
+          yearPeriod ? (
+            <YearlySheet
+              key={runner.id}
+              runner={runner}
+              periodName={yearPeriod.name}
+              isFirst={idx === 0}
+              data={buildYearlyData(
+                runner,
+                allLogs,
+                raceCards,
+                tournaments,
+                yearPeriod,
+              )}
+            />
+          ) : (
           <ReportSheet
             key={runner.id}
             runner={runner}
-            monthLabel={monthLabel}
+            title={reportTitle}
             isFirst={idx === 0}
             data={buildMonthlyData(
               runner,
               allLogs,
               raceCards,
               tournaments,
-              month,
+              range,
             )}
           />
-        ))
+          ),
+        )
       )}
     </div>
   );

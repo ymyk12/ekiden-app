@@ -6,7 +6,6 @@
  */
 import { useState } from "react";
 import {
-  ArrowLeft,
   Dumbbell,
   Activity,
   MessageSquare,
@@ -16,7 +15,6 @@ import RankingList from "../shared/RankingList";
 import TeamActivityFeed from "../shared/TeamActivityFeed";
 
 const AthleteTeamStatusView = ({
-  safeChangeView,
   targetPeriod,
   rankingData,
   allLogs,
@@ -33,10 +31,8 @@ const AthleteTeamStatusView = ({
             {/* サブヘッダー（固定）＋サブタブ */}
             <div className="flex-shrink-0 border-b border-slate-100">
               <div className="flex items-center gap-2 px-6 pt-6 pb-3">
-                <button onClick={() => safeChangeView("menu")} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200">
-                  <ArrowLeft size={20} />
-                </button>
-                <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">Team</h3>
+                <div className="w-9" />
+                <h3 className="flex-1 text-center font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">Team</h3>
                 <div className="w-9" />
               </div>
             {/* サブタブ */}

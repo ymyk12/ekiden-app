@@ -15,7 +15,6 @@ import {
   Target,
   LogOut,
   Filter,
-  Activity,
   BookOpen,
   Users,
   Trash2,
@@ -28,7 +27,6 @@ import {
   Calendar,
   Bell,
   X,
-  FileText,
 } from "lucide-react";
 
 import { ROLES, CATEGORY } from "../utils/constants";
@@ -37,15 +35,12 @@ import RaceCardEntry from "./RaceCardEntry";
 import TeamRaceReport from "./TeamRaceReport";
 import CalendarView from "./CalendarView";
 import DocumentsModal from "./DocumentsModal";
-import MonthlyReportView from "./MonthlyReportView";
 import AnnouncementCenter from "./shared/AnnouncementCenter";
-import { usePrint } from "../hooks/usePrint";
 import { useAnnouncements } from "../hooks/useAnnouncements";
 import AthleteTeamStatusView from "./athlete/AthleteTeamStatusView";
 import AthleteMenuView from "./athlete/AthleteMenuView";
 import AthleteEntryView from "./athlete/AthleteEntryView";
 import AthleteMyLogView from "./athlete/AthleteMyLogView";
-import AthleteReviewView from "./athlete/AthleteReviewView";
 import AthleteGoalView from "./athlete/AthleteGoalView";
 import AthleteRaceView from "./athlete/AthleteRaceView";
 
@@ -71,7 +66,6 @@ const AthleteView = (props) => {
     activeQuarters,
     personalStats,
     missingDates,
-    currentFeedback,
     periodLogs,
     rankingData,
     teamLogs,
@@ -87,7 +81,6 @@ const AthleteView = (props) => {
     setExpandedDiaryId,
     goalInput,
     setGoalInput,
-    setReviewComment,
     handleLogout,
     handleSaveLog,
     handleDeleteLog,
@@ -95,7 +88,6 @@ const AthleteView = (props) => {
     handleEditLog,
     resetForm,
     updateGoals,
-    handleSaveReview,
     tournaments,
     raceCards,
     editingRaceCardId,
@@ -118,18 +110,18 @@ const AthleteView = (props) => {
 
   const isPreview = role === ROLES.COACH && previewRunner;
 
-  // 月間レポート（選手本人用）の印刷・PDF保存
-  const { handlePrint } = usePrint();
-
   // 新機能のお知らせ（プレビュー中の監督には出さない＝本人ログイン時のみ）
-  const announcementRole = isPreview ? "" : "athlete";
+  // 確認用: プレビュー中でも、URL に ?announce=1 を付ければお知らせを表示できる
+  const announcementRole =
+    !isPreview || new URLSearchParams(window.location.search).has("announce")
+      ? "athlete"
+      : "";
   const {
     forRole: roleAnnouncements,
     pendingModal: pendingAnnouncements,
     markShown: markAnnouncementShown,
     markUsed: markAnnouncementUsed,
     hasUnused: hasUnusedAnnouncement,
-    isUnusedView: isAnnouncementNewView,
   } = useAnnouncements({ role: announcementRole, userId: currentUserId });
 
   // 新機能の画面を開いたら、その機能を「使用済み」にして NEW バッジを消す
@@ -172,20 +164,6 @@ const AthleteView = (props) => {
       });
     });
 
-    if (currentFeedback && currentFeedback.coachComment) {
-      list.push({
-        id: `fb_period_${targetPeriod.id}`,
-        type: "Feedback",
-        title: "振り返りにコメントが届きました",
-        message: `「${targetPeriod.name}」の目標・振り返りに監督からフィードバックがあります！`,
-        time: currentFeedback.updatedAt || "2024-01-01T00:00:00.000Z",
-        onClick: () => {
-          setIsNotifOpen(false);
-          setView("review");
-        },
-      });
-    }
-
     // 3. 新しい大会が追加された（便宜上、トーナメント一覧の最後を最新とみなす）
     // 全ての大会を通知リストに追加（未読判定は後続のロジックで行う）
     if (tournaments && tournaments.length > 0) {
@@ -207,9 +185,7 @@ const AthleteView = (props) => {
     return list.sort((a, b) => (a.time < b.time ? 1 : -1));
   }, [
     raceCards,
-    currentFeedback,
     tournaments,
-    targetPeriod,
     currentUserId,
     setEditingRaceCardId,
     setRaceCardInput,
@@ -222,9 +198,6 @@ const AthleteView = (props) => {
   const unreadNotifs = notifications.filter((n) => n.time > lastReadTime);
   const hasUnreadRace = unreadNotifs.some(
     (n) => n.id.startsWith("fb_race_") || n.id.startsWith("tour_"),
-  );
-  const hasUnreadReview = unreadNotifs.some((n) =>
-    n.id.startsWith("fb_period_"),
   );
   const [showTeamReportId, setShowTeamReportId] = useState(null);
   const [diaryDetailLog, setDiaryDetailLog] = useState(null);
@@ -353,20 +326,6 @@ const AthleteView = (props) => {
               className="w-full py-4 bg-slate-100 rounded-2xl font-bold text-slate-700 flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               <Target size={20} /> 目標設定
-            </button>
-            <button
-              onClick={() => {
-                safeChangeView("my-report");
-                setIsMenuOpen(false);
-              }}
-              className="relative w-full py-4 bg-slate-100 rounded-2xl font-bold text-slate-700 flex items-center justify-center gap-2 active:scale-95 transition-all"
-            >
-              <FileText size={20} /> 月間レポート
-              {isAnnouncementNewView("my-report") && (
-                <span className="absolute top-2 right-3 text-[9px] font-black text-white bg-rose-500 px-1.5 py-0.5 rounded-full animate-pulse">
-                  NEW
-                </span>
-              )}
             </button>
             <button
               onClick={handleLogout}
@@ -507,8 +466,6 @@ const AthleteView = (props) => {
             missingDates={missingDates}
             logInput={logInput}
             setLogInput={setLogInput}
-            hasUnreadReview={hasUnreadReview}
-            currentFeedback={currentFeedback}
             setShowDocs={setShowDocs}
             personalStats={personalStats}
             activeQuarters={activeQuarters}
@@ -534,26 +491,18 @@ const AthleteView = (props) => {
         )}
 
         {/* MY LOG */}
-        {view === "diary" && (
+        {(view === "diary" || view === "my-report") && (
           <AthleteMyLogView
+            initialSubView={view === "my-report" ? "report" : "log"}
+            teamRunners={teamRunners}
             safeChangeView={safeChangeView}
             periodLogs={periodLogs}
             setDiaryDetailLog={setDiaryDetailLog}
-          />
-        )}
-
-        {/* Review View */}
-        {view === "review" && (
-          <AthleteReviewView
-            safeChangeView={safeChangeView}
             targetPeriod={targetPeriod}
-            currentProfile={currentProfile}
-            personalStats={personalStats}
-            periodLogs={periodLogs}
-            currentFeedback={currentFeedback}
-            setReviewComment={setReviewComment}
-            handleSaveReview={handleSaveReview}
-            isSubmitting={isSubmitting}
+            allLogs={allLogs}
+            raceCards={raceCards}
+            tournaments={tournaments}
+            currentUserId={currentUserId}
           />
         )}
 
@@ -635,44 +584,7 @@ const AthleteView = (props) => {
           />
         )}
 
-        {/* 月間レポート（選手本人用）。lockedRunnerId で本人固定・他者データは出さない */}
-        {view === "my-report" && (
-          <div className="space-y-4 print:space-y-0">
-            <div className="flex items-center justify-between no-print print:hidden">
-              <button
-                onClick={() => safeChangeView("menu")}
-                className="p-2 bg-white rounded-full text-slate-500 hover:bg-slate-100 shadow-sm"
-              >
-                <X size={20} />
-              </button>
-              <h3 className="font-black uppercase text-[10px] tracking-[0.3em] text-slate-400">
-                Monthly Report
-              </h3>
-              <div className="w-9" />
-            </div>
-            <MonthlyReportView
-              handlePrint={handlePrint}
-              activeRunners={teamRunners}
-              allLogs={allLogs}
-              raceCards={raceCards}
-              tournaments={tournaments}
-              lockedRunnerId={currentUserId}
-              allowAll={false}
-            />
-          </div>
-        )}
       </main>
-
-      {/* My Log 期間分析 FAB — diary ビューのみ表示 */}
-      {view === "diary" && (
-        <button
-          onClick={() => safeChangeView("review")}
-          className="fixed bottom-28 right-4 z-30 flex items-center gap-1.5 bg-blue-500 text-white text-[11px] font-black px-3.5 py-2.5 rounded-2xl shadow-lg shadow-blue-500/30 active:scale-95 transition-all"
-        >
-          <Activity size={13} />
-          期間分析
-        </button>
-      )}
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 max-w-md mx-auto pointer-events-none">
         <div className="bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-[max(2rem,env(safe-area-inset-bottom))] pt-2 px-3 rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] flex justify-between items-end min-h-24 pointer-events-auto">
@@ -685,14 +597,13 @@ const AthleteView = (props) => {
           </button>
           <button
             onClick={() => safeChangeView("diary")}
-            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 rounded-xl py-1 ${view === "diary" || view === "review" ? "text-blue-600 -translate-y-1 bg-blue-50" : "text-slate-400 hover:text-slate-500"}`}
+            className={`flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 rounded-xl py-1 ${view === "diary" || view === "my-report" ? "text-blue-600 -translate-y-1 bg-blue-50" : "text-slate-400 hover:text-slate-500"}`}
           >
             <div className="relative">
-              <BookOpen size={20} strokeWidth={view === "diary" || view === "review" ? 3 : 2} />
-              {hasUnreadReview && (
-                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 border border-white"></span>
+              <BookOpen size={20} strokeWidth={view === "diary" || view === "my-report" ? 3 : 2} />
+              {hasUnusedAnnouncement("mylog") && (
+                <span className="absolute -top-1.5 -right-3 text-[8px] font-black text-white bg-rose-500 px-1 py-px rounded-full animate-pulse">
+                  NEW
                 </span>
               )}
             </div>

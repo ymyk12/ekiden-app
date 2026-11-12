@@ -22,19 +22,19 @@
  */
 export const ANNOUNCEMENTS = [
   {
-    id: "monthly-report-v1",
+    id: "mylog-renewal-v1",
     roles: ["athlete"],
-    since: "6.7.37",
-    icon: "FileText",
-    title: "「月間レポート」が使えるようになりました",
-    body: "あなたの1か月の走行距離・練習ログ・大会結果・週別の推移などを、A4 1枚のレポートに自動でまとめます。印刷やPDF保存もできます。",
+    since: "6.8.0",
+    icon: "BarChart2",
+    title: "「My Log」がリニューアルしました",
+    body: "My Log が「ログ・レポート・記録」の3つのタブになりました。レポートはメニュー（☰）からここへ移り、月間・年間・鍛錬期・合宿を切り替えて見られます。上で選んだ期間と表示が連動します。",
     steps: [
-      "左上の ☰ メニューを開く",
-      "「月間レポート」をタップ",
-      "見たい月を選ぶ（印刷・PDF保存も可）",
+      "下のタブの「My Log」を開く",
+      "上のタブで「ログ／レポート／記録」を切り替える",
+      "レポートの左のメニューで、月間・年間・鍛錬期・合宿を選ぶ",
     ],
-    locationHint: "メニュー（左上 ☰）→「月間レポート」",
-    highlight: "menu",
-    cta: { label: "さっそく開く", view: "my-report" },
+    locationHint: "My Log →「ログ」「レポート」「記録」",
+    highlight: "mylog",
+    cta: { label: "さっそく開く", view: "diary" },
   },
 ];

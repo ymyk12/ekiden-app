@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { setDoc, updateDoc, getDocs, deleteDoc } from "firebase/firestore";
 import { docRef, colRef } from "./utils/firestore";
@@ -19,6 +19,7 @@ import { useRaceHandlers } from "./hooks/useRaceHandlers";
 import { useGoalReview } from "./hooks/useGoalReview";
 import { useRunnerManagement } from "./hooks/useRunnerManagement";
 import { LogRangeContext } from "./hooks/useLogRange";
+import { PeriodNavContext } from "./hooks/usePeriodNav";
 
 import { getToken } from "firebase/messaging";
 import { messaging } from "./firebaseConfig";
@@ -39,7 +40,7 @@ const ManagerDashboard = lazy(() => import("./components/ManagerDashboard"));
 const OBView = lazy(() => import("./components/OBView"));
 
 // --- App Version ---
-const APP_LAST_UPDATED = "6.7.55";
+const APP_LAST_UPDATED = "6.8.0";
 
 // FCM Web Push 用の公開鍵（Firebaseコンソール > Cloud Messaging > ウェブ構成）
 const FCM_VAPID_KEY =
@@ -155,6 +156,9 @@ const App = () => {
     selectedPeriod,
     setSelectedPeriod,
     targetPeriod,
+    viewMonth,
+    stepMonth,
+    stepYear,
     activeQuarters,
     newPeriodInput,
     editingPeriodId,
@@ -167,6 +171,26 @@ const App = () => {
     handleCancelEdit,
     handleSaveDefaultPeriod,
   } = usePeriod({ appSettings, setFetchCutoff, setConfirmDialog });
+
+  // 月単位の画面（月間レポート・カレンダー）をヘッダーの期間と連動させる
+  const periodNav = useMemo(
+    () => ({
+      viewMonth,
+      stepMonth,
+      period: targetPeriod,
+      stepYear,
+      periods: availablePeriods,
+      selectPeriod: setSelectedPeriod,
+    }),
+    [
+      viewMonth,
+      stepMonth,
+      targetPeriod,
+      stepYear,
+      availablePeriods,
+      setSelectedPeriod,
+    ],
+  );
 
   // 過去ログの追加読み込み。
   //  - 監督が選手をプレビューするときは、その選手の全期間を読み込む
@@ -258,7 +282,6 @@ const App = () => {
     periodRunners,
     personalStats,
     missingDates,
-    currentFeedback,
     periodLogs,
     rankingData,
     reportChartData,
@@ -350,19 +373,11 @@ const App = () => {
   const {
     goalInput,
     setGoalInput,
-    reviewComment,
-    setReviewComment,
-    coachFeedbackComment,
-    setCoachFeedbackComment,
     updateGoals,
-    handleSaveReview,
-    handleSaveCoachFeedback,
-    getRunnerFeedback,
   } = useGoalReview({
     currentUserId,
     currentProfile,
     targetPeriod,
-    allFeedbacks,
     view,
     setView,
     setIsSubmitting,
@@ -389,7 +404,6 @@ const App = () => {
     setView,
     setIsSubmitting,
     setConfirmDialog,
-    setCoachFeedbackComment,
   });
 
   // プッシュ通知の許可と FCM トークン保存
@@ -529,7 +543,6 @@ const App = () => {
     activeQuarters,
     personalStats,
     missingDates,
-    currentFeedback,
     periodLogs,
     rankingData,
     checkListData,
@@ -547,8 +560,6 @@ const App = () => {
     setExpandedDiaryId,
     goalInput,
     setGoalInput,
-    reviewComment,
-    setReviewComment,
     handleLogout,
     handleSaveLog,
     handleDeleteLog,
@@ -556,7 +567,6 @@ const App = () => {
     handleEditLog,
     resetForm,
     updateGoals,
-    handleSaveReview,
     isAthleteEditModalOpen,
     setIsAthleteEditModalOpen,
     handleAthleteUpdateLog,
@@ -644,10 +654,6 @@ const App = () => {
     setCoachGoalInput,
     handleCoachSaveGoals,
     selectedRunner,
-    getRunnerFeedback,
-    coachFeedbackComment,
-    setCoachFeedbackComment,
-    handleSaveCoachFeedback,
     openCoachEditModal,
     setDemoMode,
     tournaments,
@@ -750,9 +756,6 @@ const App = () => {
               toast.success("【デモ】休養を記録しました！")
             }
             updateGoals={() => toast.success("【デモ】目標を保存しました！")}
-            handleSaveReview={() =>
-              toast.success("【デモ】振り返りを保存しました！")
-            }
           />
         </div>
       );
@@ -861,12 +864,20 @@ const App = () => {
           </div>
         );
       }
-      return <AthleteView {...athleteProps} />;
+      return (
+        <PeriodNavContext.Provider value={periodNav}>
+          <AthleteView {...athleteProps} />
+        </PeriodNavContext.Provider>
+      );
     }
 
     // 監督ダッシュボード
     if (role === ROLES.COACH) {
-      return <CoachView {...coachProps} />;
+      return (
+        <PeriodNavContext.Provider value={periodNav}>
+          <CoachView {...coachProps} />
+        </PeriodNavContext.Provider>
+      );
     }
 
     return null;

@@ -5,9 +5,6 @@
  * ロール切替、目標値の保存、重複選手の統合をまとめて管理する。
  * 入力フォーム（coachEditFormData / coachGoalInput / mergeInput）も
  * このフックが保持する。
- *
- * coachFeedbackComment のクリアだけは useGoalReview 側が所有する state を
- * 使うため、setCoachFeedbackComment を引数で受け取る。
  */
 import { useState, useEffect } from "react";
 import {
@@ -32,7 +29,6 @@ export const useRunnerManagement = ({
   setView,
   setIsSubmitting,
   setConfirmDialog,
-  setCoachFeedbackComment,
 }) => {
   const [coachEditFormData, setCoachEditFormData] = useState({});
   const [mergeInput, setMergeInput] = useState({ sourceId: "", targetId: "" });
@@ -69,7 +65,6 @@ export const useRunnerManagement = ({
       pin: runner.pin || "",
       gender: runner.gender || "",
     });
-    setCoachFeedbackComment("");
     setView("coach-runner-detail");
   };
 

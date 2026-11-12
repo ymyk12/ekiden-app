@@ -1,32 +1,22 @@
 /*
- * useGoalReview — 目標値・振り返り・監督フィードバックの操作
+ * useGoalReview — 選手の目標値（目標距離・タイム）の操作
  *
- * 選手の目標距離/タイムの保存（updateGoals）、選手の振り返りコメント
- * （handleSaveReview）、監督のフィードバックコメント（handleSaveCoachFeedback）
- * をまとめて管理する。入力フォーム（goalInput / reviewComment /
- * coachFeedbackComment）もこのフックが保持する。
- *
- * coachFeedbackComment は監督が選手詳細を開くとき（useRunnerManagement の
- * handleCoachEditRunner）にもクリアされるため、setter を外部へ公開する。
+ * 目標設定画面の入力フォーム（goalInput）と保存（updateGoals）を管理する。
  */
 import { useState, useEffect } from "react";
-import { setDoc, updateDoc } from "firebase/firestore";
+import { updateDoc } from "firebase/firestore";
 import { toast } from "react-hot-toast";
 import { docRef } from "../utils/firestore";
 import { extractGoalInputs } from "../utils/dateUtils";
-import { notifyFlag } from "../utils/notify";
 
 export const useGoalReview = ({
   currentUserId,
   currentProfile,
   targetPeriod,
-  allFeedbacks,
   view,
   setView,
   setIsSubmitting,
 }) => {
-  const [reviewComment, setReviewComment] = useState("");
-  const [coachFeedbackComment, setCoachFeedbackComment] = useState("");
   const [goalInput, setGoalInput] = useState({
     monthly: "",
     period: "",
@@ -87,73 +77,9 @@ export const useGoalReview = ({
     }
   };
 
-  // 選手が自分の振り返りコメントを保存する
-  const handleSaveReview = async () => {
-    if (!reviewComment.trim()) return;
-    setIsSubmitting(true);
-    try {
-      const feedbackId = `${targetPeriod.id}_${currentUserId}`;
-      await setDoc(
-        docRef("feedbacks", feedbackId),
-        {
-          periodId: targetPeriod.id,
-          periodName: targetPeriod.name,
-          runnerId: currentUserId,
-          runnerName: `${currentProfile.lastName} ${currentProfile.firstName}`,
-          runnerComment: reviewComment,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true },
-      );
-      toast.success("振り返りを保存しました！📝");
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 監督のフィードバックコメントを保存する
-  const handleSaveCoachFeedback = async (runnerId) => {
-    if (!coachFeedbackComment.trim()) return;
-    setIsSubmitting(true);
-    try {
-      const feedbackId = `${targetPeriod.id}_${runnerId}`;
-      await setDoc(
-        docRef("feedbacks", feedbackId),
-        {
-          runnerId,
-          coachComment: coachFeedbackComment,
-          updatedAt: new Date().toISOString(),
-          ...notifyFlag(),
-        },
-        { merge: true },
-      );
-      toast.success("フィードバックを送りました！");
-      setCoachFeedbackComment("");
-    } catch (e) {
-      toast.error("エラー: " + e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const getRunnerFeedback = (rId) => {
-    if (!rId || !targetPeriod) return null;
-    const feedbackId = `${targetPeriod.id}_${rId}`;
-    return allFeedbacks.find((f) => f.id === feedbackId);
-  };
-
   return {
     goalInput,
     setGoalInput,
-    reviewComment,
-    setReviewComment,
-    coachFeedbackComment,
-    setCoachFeedbackComment,
     updateGoals,
-    handleSaveReview,
-    handleSaveCoachFeedback,
-    getRunnerFeedback,
   };
 };

@@ -28,8 +28,6 @@ const AthleteMenuView = ({
   missingDates,
   logInput,
   setLogInput,
-  hasUnreadReview,
-  currentFeedback,
   setShowDocs,
   personalStats,
   activeQuarters,
@@ -127,32 +125,6 @@ const AthleteMenuView = ({
                     休みだった場合も「完全休養」として記録しましょう！
                   </p>
                 )}
-              </div>
-            )}
-
-            {hasUnreadReview && (
-              <div
-                onClick={() => safeChangeView("review")}
-                className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-4 rounded-2xl shadow-lg mb-6 flex items-center justify-between cursor-pointer active:scale-95 transition-transform animate-in slide-in-from-top-2"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 p-2 rounded-full flex-shrink-0">
-                    <MessageSquare size={20} className="text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-black text-xs uppercase tracking-widest opacity-90">
-                      Coach Feedback
-                    </p>
-                    <p className="font-bold text-sm truncate">
-                      {currentFeedback?.coachComment
-                        ? `「${currentFeedback.coachComment.slice(0, 20)}${currentFeedback.coachComment.length > 20 ? "…" : ""}」`
-                        : "監督からフィードバックが届いています"}
-                    </p>
-                  </div>
-                </div>
-                <div className="bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-black shadow-sm flex-shrink-0 ml-2">
-                  確認する
-                </div>
               </div>
             )}
 

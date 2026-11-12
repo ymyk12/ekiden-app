@@ -166,6 +166,10 @@ const MSG_COMMENT = {
   title: "監督からコメント",
   body: "監督からコメントが届きました",
 };
+const MSG_APP_UPDATE = {
+  title: "My Log がリニューアル",
+  body: "My Log が使いやすくなりました。月間・年間レポートや自己ベストが見られます。",
+};
 const MSG_TOURNAMENT = {
   title: "新しい大会",
   body: "新しい大会が設定されました",
@@ -185,6 +189,8 @@ const notifyRunnersOrQueue = async ({ type, runnerId }) => {
   }
   if (type === "new_tournament") {
     await sendToRunners(MSG_TOURNAMENT);
+  } else if (type === "app_update") {
+    await sendToRunners(MSG_APP_UPDATE);
   } else {
     await sendToRunners(MSG_COMMENT, [String(runnerId)]);
   }
@@ -234,30 +240,20 @@ exports.notifyRaceCardFeedback = functions.firestore
     });
   });
 
-// 監督が期間のフィードバックコメントを書いたとき → 該当の選手へ
-// （feedbacks の ID は `${periodId}_${runnerId}`。選手の振り返り保存でも
-//   書き込まれるため、coachComment が変わったときだけ通知する）
-exports.notifyCoachComment = functions.firestore
-  .document(`artifacts/${APP_ID}/public/data/feedbacks/{fbId}`)
-  .onWrite(async (change, context) => {
-    if (!change.after.exists) return;
-    const before = change.before.exists ? change.before.data() : {};
-    const after = change.after.data();
-    if (after.skipNotify === true) return;
-    const text = (after.coachComment || "").trim();
-    if (!text || before.coachComment === after.coachComment) return;
-    const fbId = context.params.fbId;
-    const runnerId = after.runnerId || fbId.slice(fbId.lastIndexOf("_") + 1);
-    if (!runnerId) return;
-    await notifyRunnersOrQueue({ type: "runner_comment", runnerId });
-  });
-
 // 監督が大会を新規登録したとき → 全選手へ
 exports.notifyNewTournament = functions.firestore
   .document(`artifacts/${APP_ID}/public/data/tournaments/{tourId}`)
   .onCreate(async (snap) => {
     if (snap.data().skipNotify === true) return;
     await notifyRunnersOrQueue({ type: "new_tournament" });
+  });
+
+// アプリ更新の案内（大型アップデートのときに1回だけ送る）。
+// app_updates/{id} のドキュメントを作ると全選手へ通知する（夜間は朝8時に保留）。
+exports.notifyAppUpdate = functions.firestore
+  .document(`artifacts/${APP_ID}/public/data/app_updates/{updateId}`)
+  .onCreate(async () => {
+    await notifyRunnersOrQueue({ type: "app_update" });
   });
 
 // 🌟 3. 毎朝8時に動く「まとめ送信係」（Cronジョブ）
@@ -299,6 +295,9 @@ exports.morningBatchNotification = functions.pubsub
     }
     if (items.some((i) => i.type === "new_tournament")) {
       await sendToRunners(MSG_TOURNAMENT);
+    }
+    if (items.some((i) => i.type === "app_update")) {
+      await sendToRunners(MSG_APP_UPDATE);
     }
 
     const batch = db.batch();

@@ -6,6 +6,7 @@
  */
 import { useState, useMemo, useEffect } from "react";
 import { useLogRange } from "../hooks/useLogRange";
+import { usePeriodNav } from "../hooks/usePeriodNav";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X, Plus, Pencil } from "lucide-react";
 import { ROLES, CATEGORY } from "../utils/constants";
@@ -28,10 +29,18 @@ function CalendarView({
   //   コンテナが max-w-md 固定で、ビューポート基準の lg: が誤発火するため）
   responsive = true,
 }) {
-  const [currentMonth, setCurrentMonth] = useState(() => {
+  const [localMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+  // ヘッダーに期間選択がある画面（選手・監督）では、表示月をヘッダーの期間と連動させる。
+  // 無い画面（マネージャー）は従来どおり自分で月を持つ。
+  const periodNav = usePeriodNav();
+  const currentMonth = useMemo(() => {
+    if (!periodNav) return localMonth;
+    const [y, m] = periodNav.viewMonth.split("-").map(Number);
+    return new Date(y, m - 1, 1);
+  }, [periodNav, localMonth]);
   const [selectedDate, setSelectedDate] = useState(null);
 
   // 直近3か月より前の月を開いたときに過去ログを読み込む。
@@ -107,9 +116,13 @@ function CalendarView({
   }, [currentMonth]);
 
   const prevMonth = () =>
-    setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
+    periodNav
+      ? periodNav.stepMonth(-1)
+      : setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
   const nextMonth = () =>
-    setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));
+    periodNav
+      ? periodNav.stepMonth(1)
+      : setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));
 
   const monthLabel = `${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月`;
 

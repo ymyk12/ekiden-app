@@ -17,7 +17,8 @@ import {
   Eye,
   Users,
 } from "lucide-react";
-import { setDoc } from "firebase/firestore";
+import { updateDoc } from "firebase/firestore";
+import { PERIOD_KINDS, periodKindOf } from "../../utils/constants";
 import { settingsDocRef } from "../../utils/firestore";
 
 const CoachSettingsView = ({
@@ -133,6 +134,18 @@ const CoachSettingsView = ({
                 )
               }
             />
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+              {Object.entries(PERIOD_KINDS).map(([key, k]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => updateNewPeriodInputWithAutoQuarters("kind", key)}
+                  className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${(newPeriodInput.kind || "training") === key ? "bg-white text-blue-600 shadow-sm" : "text-slate-400"}`}
+                >
+                  {k.label}
+                </button>
+              ))}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
                 type="date"
@@ -157,7 +170,14 @@ const CoachSettingsView = ({
                 }
               />
             </div>
-            {newPeriodInput.start && newPeriodInput.end && (
+            {newPeriodInput.kind === "camp" && (
+              <p className="text-[10px] font-bold text-slate-400 px-1">
+                合宿はクォーターごとの目標を設けず、期間全体の目標だけを設定します。
+              </p>
+            )}
+            {newPeriodInput.kind !== "camp" &&
+              newPeriodInput.start &&
+              newPeriodInput.end && (
               <div className="bg-white p-3 rounded-xl border border-slate-200 animate-in fade-in">
                 <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">
                   Quarter Details (Auto-calculated, Edit if needed)
@@ -252,6 +272,9 @@ const CoachSettingsView = ({
                       <div>
                         <p className="font-bold text-sm text-slate-700">
                           {p.name}
+                          <span className="ml-1.5 text-[9px] font-black text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {PERIOD_KINDS[periodKindOf(p)].label}
+                          </span>
                         </p>
                         <p className="text-[10px] text-slate-400 font-mono">
                           {p.start} ~ {p.end}
@@ -324,7 +347,12 @@ const CoachSettingsView = ({
           onClick={async () => {
             setIsSettingsSaving(true);
             try {
-              await setDoc(settingsDocRef(), appSettings);
+              // 画面が持つ設定全体で上書きせず、このフォームの項目だけを更新する。
+              // （全体を書くと、カスタム期間などの他の設定が古い値で消えてしまう）
+              await updateDoc(settingsDocRef(), {
+                coachPass: appSettings.coachPass,
+                teamPass: appSettings.teamPass,
+              });
               import("react-hot-toast").then((m) =>
                 m.toast.success("設定を保存しました"),
               );

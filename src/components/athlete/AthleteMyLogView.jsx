@@ -4,22 +4,101 @@
  * AthleteView から diary ビューを分離。選択期間の自分の練習記録を一覧表示し、
  * タップで詳細（diaryDetailLog）を開く。状態・ハンドラは props で受け取る。
  */
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { ChevronRight } from "lucide-react";
+import MonthlyReportView from "../MonthlyReportView";
+import { usePrint } from "../../hooks/usePrint";
+import AthleteBestsTab from "./AthleteBestsTab";
 
-const AthleteMyLogView = ({ safeChangeView, periodLogs, setDiaryDetailLog }) => {
+const AthleteMyLogView = ({
+  periodLogs,
+  setDiaryDetailLog,
+  targetPeriod,
+  allLogs,
+  raceCards,
+  tournaments,
+  currentUserId,
+  teamRunners,
+  initialSubView = "log",
+}) => {
+  const [subView, setSubView] = useState(initialSubView);
+  // 別の画面（お知らせの「開く」など）から月間レポートを直接開くとき
+  useEffect(() => {
+    if (initialSubView === "report") setSubView("report");
+  }, [initialSubView]);
+  const { handlePrint } = usePrint();
+  // 自分の全期間のログ・大会カード（記録タブ用）
+  const myLogs = useMemo(
+    () => (allLogs || []).filter((l) => l.runnerId === currentUserId && l.date),
+    [allLogs, currentUserId],
+  );
+  const myCards = useMemo(
+    () => (raceCards || []).filter((c) => c.runnerId === currentUserId),
+    [raceCards, currentUserId],
+  );
+
+  const titleBar = (
+    <div className="flex items-center gap-2 px-6 pt-6 pb-3">
+      <div className="w-9" />
+      <h3 className="flex-1 text-center font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">My Log</h3>
+      <div className="w-9" />
+    </div>
+  );
+
+  const subTabs = (
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
+                {[
+                  { id: "log", label: "ログ" },
+                  { id: "report", label: "レポート" },
+                  { id: "records", label: "記録" },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSubView(tab.id)}
+                    className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${subView === tab.id ? "bg-white text-blue-600 shadow-sm" : "text-slate-400"}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+  );
+
+  // 月間レポートは印刷（A4）を想定しているため、固定高のスクロール枠の外に出して表示する
+  if (subView === "report") {
+    return (
+      <div className="space-y-4 print:space-y-0">
+        <MonthlyReportView
+          topSlot={
+            <>
+              {titleBar}
+              {subTabs}
+            </>
+          }
+          handlePrint={handlePrint}
+          activeRunners={teamRunners}
+          allLogs={allLogs}
+          raceCards={raceCards}
+          tournaments={tournaments}
+          lockedRunnerId={currentUserId}
+          allowAll={false}
+        />
+      </div>
+    );
+  }
+
   return (
+    <>
           <div className="bg-white rounded-[3rem] shadow-sm animate-in fade-in flex flex-col h-[calc(100dvh-290px)]">
             {/* サブヘッダー（固定） */}
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0 border-b border-slate-100">
-              <button onClick={() => safeChangeView("menu")} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200">
-                <ArrowLeft size={20} />
-              </button>
-              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-400 tracking-[0.3em]">My Log</h3>
-              <div className="w-9" />
+            <div className="flex-shrink-0 border-b border-slate-100">
+              {titleBar}
+              {subTabs}
             </div>
             {/* スクロールエリア */}
             <div className="flex-1 overflow-y-auto px-6 py-4 pb-8 space-y-3">
-              {periodLogs.length === 0 ? (
+              {subView === "records" ? (
+                <AthleteBestsTab myLogs={myLogs} myCards={myCards} tournaments={tournaments || []} />
+              ) : periodLogs.length === 0 ? (
                 <p className="text-center text-xs text-slate-300 py-8 font-bold">
                   この期間の記録はありません
                 </p>
@@ -77,6 +156,7 @@ const AthleteMyLogView = ({ safeChangeView, periodLogs, setDiaryDetailLog }) => 
               )}
             </div>{/* /スクロールエリア */}
           </div>
+    </>
   );
 };
 

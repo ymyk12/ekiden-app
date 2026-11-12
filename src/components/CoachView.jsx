@@ -111,9 +111,6 @@ const CoachView = (props) => {
     setCoachGoalInput,
     handleCoachSaveGoals,
     selectedRunner,
-    getRunnerFeedback,
-    setCoachFeedbackComment,
-    handleSaveCoachFeedback,
     openCoachEditModal,
     confirmDialog,
     setDemoMode,
@@ -125,7 +122,6 @@ const CoachView = (props) => {
     handleDeleteTournament,
     handleSaveRaceCardFeedback,
     handleSaveEkidenPresets,
-    allFeedbacks,
   } = props;
 
   const { handlePrint } = usePrint();
@@ -162,32 +158,11 @@ const CoachView = (props) => {
       });
     }
 
-    if (allFeedbacks && allFeedbacks.length > 0) {
-      allFeedbacks.forEach((f) => {
-        if (f.runnerComment && f.updatedAt) {
-          list.push({
-            id: `review_${f.id}_${f.updatedAt}`,
-            type: "Review",
-            title: "振り返りが提出/更新されました",
-            message: `${f.runnerName}選手が「${f.periodName || "指定期間"}」の振り返りを提出/更新しました。`,
-            time: f.updatedAt,
-            onClick: () => {
-              setIsNotifOpen(false);
-              const runner = activeRunners.find((r) => r.id === f.runnerId);
-              if (runner) handleCoachEditRunner(runner);
-            },
-          });
-        }
-      });
-    }
     return list.sort((a, b) => (a.time < b.time ? 1 : -1));
   }, [
     raceCards,
-    allFeedbacks,
     tournaments,
-    activeRunners,
     setView,
-    handleCoachEditRunner,
   ]);
 
   const unreadCount = notifications.filter((n) => n.time > lastReadTime).length;
@@ -663,9 +638,6 @@ const CoachView = (props) => {
               handleCoachSaveGoals={handleCoachSaveGoals}
               allLogs={allLogs}
               openCoachEditModal={openCoachEditModal}
-              getRunnerFeedback={getRunnerFeedback}
-              setCoachFeedbackComment={setCoachFeedbackComment}
-              handleSaveCoachFeedback={handleSaveCoachFeedback}
               setConfirmDialog={setConfirmDialog}
               handleCoachChangeRole={handleCoachChangeRole}
             />

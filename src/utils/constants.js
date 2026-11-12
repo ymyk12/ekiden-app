@@ -42,3 +42,11 @@ export const RACE_DISTANCES = {
     "10区",
   ],
 };
+
+// カスタム期間の種類。レポートの比較相手（前期 / 前合宿）は、同じ種類の直前の期間。
+export const PERIOD_KINDS = {
+  training: { label: "鍛錬期", prevLabel: "前期" },
+  camp: { label: "合宿", prevLabel: "前合宿" },
+};
+// kind が未設定の期間は鍛錬期として扱う
+export const periodKindOf = (p) => (p && p.kind === "camp" ? "camp" : "training");

@@ -137,7 +137,7 @@ export const useTeamData = (user, role, fetchCutoff, fullLogs = false) => {
             quarters: [],
             customPeriods: [],
             defaultPeriodId: "dynamic_current",
-          });
+          }, { merge: true });
         }
       })
       .catch((e) => console.log("Settings init error", e));
