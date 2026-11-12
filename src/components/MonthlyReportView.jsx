@@ -405,16 +405,16 @@ const ReportSheet = ({ runner, data, title, isFirst }) => {
     >
       {/* ヘッダー。スマホ幅では max-sm で字を詰めて、タイトル・氏名とも1行に収める
           （A4印刷は print: 指定で従来どおり。max-sm は画面が狭いときだけ効く） */}
-      <div className="flex items-end justify-between gap-2 border-b-2 border-slate-800 pb-2 print:pb-1">
+      <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-1 border-b-2 border-slate-800 pb-2 print:pb-1">
         <div>
           <p className="text-[10px] print:text-[8px] font-black text-slate-400 uppercase tracking-widest">
             Monthly Training Report
           </p>
-          <h2 className="text-xl max-sm:text-base print:text-base font-black text-slate-800 whitespace-nowrap">
+          <h2 className="text-xl max-sm:text-base print:text-base font-black text-slate-800 whitespace-normal print:whitespace-nowrap">
             {title}
           </h2>
         </div>
-        <p className="text-lg max-sm:text-sm print:text-base font-black text-slate-800 whitespace-nowrap flex-shrink-0">
+        <p className="text-lg max-sm:text-sm print:text-base font-black text-slate-800 whitespace-nowrap flex-shrink-0 ml-auto">
           {runner.lastName} {runner.firstName}
         </p>
       </div>
@@ -717,7 +717,7 @@ const ReportSheet = ({ runner, data, title, isFirst }) => {
         <div className="border border-slate-200 rounded-xl p-3 print:p-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
             日別コンディション（RPE）
-            <span className="ml-2 normal-case tracking-normal text-rose-400 font-bold">
+            <span className="ml-2 normal-case tracking-normal text-rose-400 font-bold whitespace-nowrap">
               ●=Pain3以上
             </span>
           </p>
@@ -1018,8 +1018,8 @@ const MonthlyReportView = ({
             topSlot ? "border-t border-slate-100 px-4 py-3 space-y-2" : "space-y-2"
           }
         >
-        <div className="flex items-center gap-2">
-          <div className="w-[4.75rem] flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="order-1 w-[4.75rem] flex-shrink-0">
             {periodNav && (
               <select
                 value={reportType}
@@ -1041,7 +1041,7 @@ const MonthlyReportView = ({
               </select>
             )}
           </div>
-          <div className="flex-1 min-w-0 flex items-center justify-center gap-1">
+          <div className={`order-3 w-full min-w-0 flex items-center justify-center gap-1 ${customPeriod ? "" : "min-[420px]:order-2 min-[420px]:w-auto min-[420px]:flex-1"}`}>
             {periodNav ? (
               <>
                 <button
@@ -1059,7 +1059,7 @@ const MonthlyReportView = ({
                   <ChevronLeft size={16} />
                 </button>
                 <div className="min-w-0 flex-1 text-center leading-tight">
-                  <p className="text-[13px] font-black text-slate-700 break-all">
+                  <p className="text-[13px] font-black text-slate-700 break-words">
                     {customPeriod
                       ? customPeriod.name
                       : yearPeriod
@@ -1101,7 +1101,7 @@ const MonthlyReportView = ({
               />
             )}
           </div>
-          <div className="w-[4.75rem] flex-shrink-0 flex justify-end">
+          <div className={`order-2 w-[4.75rem] ml-auto flex-shrink-0 flex justify-end ${customPeriod ? "" : "min-[420px]:order-3"}`}>
             <button
               onClick={() => handlePrint(printName)}
               aria-label="印刷 / PDF保存"

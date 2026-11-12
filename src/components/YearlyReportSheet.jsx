@@ -185,16 +185,16 @@ export const YearlySheet = ({ runner, data, periodName, isFirst }) => {
     <div
       className={`bg-white rounded-[2rem] print:rounded-none shadow-sm print:shadow-none p-6 print:p-0 space-y-4 print:space-y-3 ${isFirst ? "" : "page-break"}`}
     >
-      <div className="flex items-end justify-between gap-2 border-b-2 border-slate-800 pb-2 print:pb-1">
+      <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-1 border-b-2 border-slate-800 pb-2 print:pb-1">
         <div>
           <p className="text-[10px] print:text-[8px] font-black text-slate-400 uppercase tracking-widest">
             Yearly Training Report
           </p>
-          <h2 className="text-xl max-sm:text-base print:text-base font-black text-slate-800 whitespace-nowrap">
+          <h2 className="text-xl max-sm:text-base print:text-base font-black text-slate-800 whitespace-normal print:whitespace-nowrap">
             {periodName} 年間レポート
           </h2>
         </div>
-        <p className="text-lg max-sm:text-sm print:text-base font-black text-slate-800 whitespace-nowrap flex-shrink-0">
+        <p className="text-lg max-sm:text-sm print:text-base font-black text-slate-800 whitespace-nowrap flex-shrink-0 ml-auto">
           {runner.lastName} {runner.firstName}
         </p>
       </div>
@@ -328,7 +328,7 @@ export const YearlySheet = ({ runner, data, periodName, isFirst }) => {
                 key={m.ym}
                 className="flex-1 text-center text-[8px] font-bold text-slate-400 leading-none"
               >
-                {m.label}
+                {m.label.replace("月", "")}
               </span>
             ))}
           </div>
@@ -367,7 +367,7 @@ export const YearlySheet = ({ runner, data, periodName, isFirst }) => {
         <div className="border border-slate-200 rounded-xl p-3 print:p-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
             月別コンディション（平均RPE）
-            <span className="ml-2 normal-case tracking-normal text-rose-400 font-bold">
+            <span className="ml-2 normal-case tracking-normal text-rose-400 font-bold whitespace-nowrap">
               ●=Pain3以上の日数
             </span>
           </p>
