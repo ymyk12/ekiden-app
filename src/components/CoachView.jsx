@@ -466,10 +466,10 @@ const CoachView = (props) => {
           <div className="pointer-events-none absolute top-0 right-0 h-full w-10 bg-gradient-to-l from-slate-950 to-transparent" />
         </div>
         <div className="flex-shrink-0 flex justify-end items-center gap-3 px-5 py-2 bg-slate-50 border-b border-slate-100 no-print print:hidden">
-          <span className="text-xs font-bold text-slate-400">Target:</span>
+          <span className="flex-shrink-0 text-xs font-bold text-slate-400">Target:</span>
           {availablePeriods.length > 0 && selectedPeriod && (
             <select
-              className="bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-4 py-2 outline-none shadow-sm focus:border-blue-500 cursor-pointer"
+              className="min-w-0 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-4 py-2 outline-none shadow-sm focus:border-blue-500 cursor-pointer"
               value={selectedPeriod.id}
               onChange={(e) => {
                 const period = availablePeriods.find(

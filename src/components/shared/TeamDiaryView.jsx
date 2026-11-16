@@ -119,9 +119,9 @@ const TeamDiaryView = ({
             </div>
             <button
               onClick={() => openDiary(getTodayStr())}
-              className={`w-full py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${t.primary}`}
+              className={`w-full py-4 rounded-2xl font-black text-xs min-[340px]:text-sm min-[400px]:text-base whitespace-nowrap shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${t.primary}`}
             >
-              <Plus size={20} /> 今日の日誌をチェック・作成する
+              <Plus size={20} className="flex-shrink-0" /> 今日の日誌をチェック・作成する
             </button>
             <div className="space-y-3 pt-4 border-t border-slate-100">
               {monthlyLogs.length > 0 ? (

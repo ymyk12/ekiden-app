@@ -47,7 +47,7 @@ const CoachHomeView = ({
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"
-            className="flex-1 p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
+            className="[flex:1_1_9.5rem] p-2.5 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 ring-blue-500"
             value={checkDate}
             onChange={(e) => setCheckDate(e.target.value)}
           />

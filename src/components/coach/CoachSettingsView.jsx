@@ -61,7 +61,7 @@ const CoachSettingsView = ({
           onChange={handleSaveDefaultPeriod}
         >
           <option value="dynamic_current">
-            常に「今月」を表示 (Auto Current Month)
+            常に「今月」を表示
           </option>
           {availablePeriods.map((p) => (
             <option key={p.id} value={p.id}>

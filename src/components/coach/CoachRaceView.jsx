@@ -543,9 +543,9 @@ const CoachRaceView = ({
                         </div>
                       </div>
                     ) : (
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-wrap justify-between items-center gap-y-2">
                     <div
-                      className="flex-1 cursor-pointer group pr-4"
+                      className="flex-1 min-w-[10rem] cursor-pointer group pr-4"
                       onClick={() => setShowTeamReportId(tour.id)}
                     >
                       <h5 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors flex items-center gap-2">
@@ -560,7 +560,7 @@ const CoachRaceView = ({
                         {tour.endDate?.replace(/-/g, "/") || ""}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-shrink-0">
                       <div className="flex flex-col items-center gap-1">
                         <button
                           onClick={() => { setSelectedTourId(tour.id); setOnlyPendingFeedback(false); }}
