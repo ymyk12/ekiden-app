@@ -9,6 +9,8 @@ import { ChevronRight } from "lucide-react";
 import MonthlyReportView from "../MonthlyReportView";
 import { usePrint } from "../../hooks/usePrint";
 import AthleteBestsTab from "./AthleteBestsTab";
+import AthleteRaceHistory from "./AthleteRaceHistory";
+import AthleteRaceReport from "./AthleteRaceReport";
 
 const AthleteMyLogView = ({
   periodLogs,
@@ -36,6 +38,17 @@ const AthleteMyLogView = ({
     () => (raceCards || []).filter((c) => c.runnerId === currentUserId),
     [raceCards, currentUserId],
   );
+
+  // 記録タブ: 大会の一覧から開いた大会レポート（カードID）
+  const [openCardId, setOpenCardId] = useState(null);
+  const openCard = openCardId
+    ? myCards.find((c) => c.id === openCardId)
+    : null;
+  const openTour = openCard
+    ? (tournaments || []).find((t) => t.id === openCard.tournamentId)
+    : null;
+  const me = (teamRunners || []).find((r) => r.id === currentUserId);
+  const myName = me ? `${me.lastName || ""} ${me.firstName || ""}`.trim() : "";
 
   const titleBar = (
     <div className="flex items-center gap-2 px-6 pt-6 pb-3">
@@ -86,6 +99,19 @@ const AthleteMyLogView = ({
     );
   }
 
+  // 大会レポートは印刷（A4）を想定しているため、固定高のスクロール枠の外に出して表示する
+  if (subView === "records" && openCard && openTour) {
+    return (
+      <AthleteRaceReport
+        card={openCard}
+        tour={openTour}
+        runnerName={myName}
+        onBack={() => setOpenCardId(null)}
+        handlePrint={handlePrint}
+      />
+    );
+  }
+
   return (
     <>
           <div className="bg-white rounded-[3rem] shadow-sm animate-in fade-in flex flex-col h-[calc(100dvh-290px)]">
@@ -97,7 +123,15 @@ const AthleteMyLogView = ({
             {/* スクロールエリア */}
             <div className="flex-1 overflow-y-auto px-6 py-4 pb-8 space-y-3">
               {subView === "records" ? (
-                <AthleteBestsTab myLogs={myLogs} myCards={myCards} tournaments={tournaments || []} />
+                <>
+                  <AthleteRaceHistory
+                    myCards={myCards}
+                    tournaments={tournaments || []}
+                    onOpen={setOpenCardId}
+                  />
+                  <div className="pt-3" />
+                  <AthleteBestsTab myLogs={myLogs} myCards={myCards} tournaments={tournaments || []} />
+                </>
               ) : periodLogs.length === 0 ? (
                 <p className="text-center text-xs text-slate-300 py-8 font-bold">
                   この期間の記録はありません

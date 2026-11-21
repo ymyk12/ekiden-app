@@ -324,6 +324,7 @@ const ManagerDashboard = ({
           />
         )}
         {currentView === "diary" && (
+          <div className="flex-1 min-h-0 overflow-y-auto pb-6">
           <TeamDiaryView
             accent="indigo"
             diaryDate={checkDate}
@@ -350,6 +351,7 @@ const ManagerDashboard = ({
             deleteDiary={deleteDiary}
             generateDiaryWithAI={generateDiaryWithAI}
           />
+          </div>
         )}
 
         {/* --- 4. 大会記録管理 --- */}

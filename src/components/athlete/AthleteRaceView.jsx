@@ -217,13 +217,16 @@ const AthleteRaceView = ({
                           <Plus size={16} /> 出場種目を追加
                         </button>
                         )}
-                        {/* チームレポートを開くボタン */}
+                        {/* チームレポートの導線は Team タブ「日誌」に統合済み。
+                            閲覧専用（OB）は Team タブがないためここに残す */}
+                        {readOnly && (
                         <button
                           onClick={() => setShowTeamReportId(tour.id)}
                           className="w-full py-3 mt-4 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl font-black text-sm hover:bg-indigo-100 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
                         >
                           <Users size={18} /> 今大会のチームレポートを見る
                         </button>
+                        )}
                       </div>
                     </div>
                   );

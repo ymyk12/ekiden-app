@@ -401,7 +401,7 @@ const ReportSheet = ({ runner, data, title, isFirst }) => {
 
   return (
     <div
-      className={`bg-white rounded-[2rem] print:rounded-none shadow-sm print:shadow-none p-6 print:p-0 space-y-4 print:space-y-3 ${isFirst ? "" : "page-break"}`}
+      className={`bg-white rounded-[2rem] print:rounded-none shadow-sm print:shadow-none p-6 print:p-0 print:w-[190mm] print:max-w-none space-y-4 print:space-y-3 ${isFirst ? "" : "page-break"}`}
     >
       {/* ヘッダー。スマホ幅では max-sm で字を詰めて、タイトル・氏名とも1行に収める
           （A4印刷は print: 指定で従来どおり。max-sm は画面が狭いときだけ効く） */}

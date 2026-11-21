@@ -7,6 +7,7 @@
  */
 import { useMemo } from "react";
 import { Trophy, Flag } from "lucide-react";
+import CollapsibleSection from "./CollapsibleSection";
 import { flexTimeToSeconds } from "../../utils/lapUtils";
 import {
   weekStart,
@@ -90,10 +91,10 @@ const AthleteBestsTab = ({ myLogs, myCards, tournaments }) => {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-          <Trophy size={14} /> Training Bests（全期間）
-        </h4>
+      <CollapsibleSection
+        icon={<Trophy size={14} />}
+        title="Training Bests（全期間）"
+      >
         {!hasLogs || !training.day ? (
           <p className="text-center text-xs text-slate-300 py-4 font-bold">
             練習の記録がありません
@@ -118,12 +119,9 @@ const AthleteBestsTab = ({ myLogs, myCards, tournaments }) => {
             <Row label="通算距離" value={`${training.total} km`} />
           </>
         )}
-      </div>
+      </CollapsibleSection>
 
-      <div className="space-y-3">
-        <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-          <Flag size={14} /> Race Bests
-        </h4>
+      <CollapsibleSection icon={<Flag size={14} />} title="Race Bests">
         {raceBests.length === 0 ? (
           <p className="text-center text-xs text-slate-300 py-4 font-bold">
             タイムの入った大会の記録がありません
@@ -138,7 +136,7 @@ const AthleteBestsTab = ({ myLogs, myCards, tournaments }) => {
             />
           ))
         )}
-      </div>
+      </CollapsibleSection>
     </div>
   );
 };

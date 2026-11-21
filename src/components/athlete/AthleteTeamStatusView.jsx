@@ -9,7 +9,10 @@ import {
   Dumbbell,
   Activity,
   MessageSquare,
+  ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
+import { usePeriodNav } from "../../hooks/usePeriodNav";
 import DiaryListItem from "../DiaryListItem";
 import RankingList from "../shared/RankingList";
 import TeamActivityFeed from "../shared/TeamActivityFeed";
@@ -23,8 +26,13 @@ const AthleteTeamStatusView = ({
   teamRunners,
   expandedDiaryId,
   setExpandedDiaryId,
+  tournaments = [],
+  setShowTeamReportId,
 }) => {
+  const periodNav = usePeriodNav();
   const [teamSubView, setTeamSubView] = useState("ranking");
+  // 日誌タブ内の切替: 練習日誌 / 大会レポート
+  const [diaryKind, setDiaryKind] = useState("practice");
 
   return (
           <div className="bg-white rounded-[3rem] shadow-sm animate-in fade-in flex flex-col h-[calc(100dvh-290px)]">
@@ -68,12 +76,84 @@ const AthleteTeamStatusView = ({
             {/* 日誌 */}
             {teamSubView === "diary" && (
               <div className="space-y-3">
-                <div className="text-center">
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                  {[
+                    { id: "practice", label: "練習日誌" },
+                    { id: "race", label: "大会レポート" },
+                  ].map((k) => (
+                    <button
+                      key={k.id}
+                      onClick={() => setDiaryKind(k.id)}
+                      className={`flex-1 py-1.5 text-[11px] font-black rounded-lg transition-all ${diaryKind === k.id ? "bg-white text-blue-600 shadow-sm" : "text-slate-400"}`}
+                    >
+                      {k.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  {periodNav && (
+                    <button
+                      onClick={() => periodNav.stepMonth(-1)}
+                      aria-label="前の月"
+                      className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 active:scale-90 transition-all"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                  )}
                   <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
                     {targetPeriod.name}
                   </span>
+                  {periodNav && (
+                    <button
+                      onClick={() => periodNav.stepMonth(1)}
+                      aria-label="次の月"
+                      className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 active:scale-90 transition-all"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  )}
                 </div>
-                {(() => {
+                {diaryKind === "race" && (() => {
+                  const startStr = new Date(targetPeriod.start).toLocaleDateString("sv-SE");
+                  const endStr = new Date(targetPeriod.end).toLocaleDateString("sv-SE");
+                  const list = tournaments
+                    .filter(
+                      (t) =>
+                        t.startDate &&
+                        (t.endDate || t.startDate) >= startStr &&
+                        t.startDate <= endStr,
+                    )
+                    .map((t) => ({ tour: t }))
+                    .sort((a, b) => b.tour.startDate.localeCompare(a.tour.startDate));
+                  if (list.length === 0) {
+                    return (
+                      <p className="text-center text-xs text-slate-300 py-8 font-bold">
+                        この期間の大会はありません
+                      </p>
+                    );
+                  }
+                  return list.map(({ tour }) => (
+                    <button
+                      key={tour.id}
+                      onClick={() => setShowTeamReportId && setShowTeamReportId(tour.id)}
+                      className="w-full text-left bg-slate-50 rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3 active:scale-[0.98] hover:bg-slate-100 transition-all"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-slate-400">
+                          {tour.startDate.replace(/-/g, "/")}
+                          {tour.endDate && tour.endDate !== tour.startDate
+                            ? ` 〜 ${tour.endDate.replace(/-/g, "/")}`
+                            : ""}
+                        </p>
+                        <p className="text-sm font-black text-slate-700 break-words">
+                          {tour.name}
+                        </p>
+                      </div>
+                      <ChevronRight size={18} className="text-slate-300 flex-shrink-0" />
+                    </button>
+                  ));
+                })()}
+                {diaryKind === "practice" && (() => {
                   const start = new Date(targetPeriod.start);
                   const end = new Date(targetPeriod.end);
                   end.setHours(23, 59, 59, 999);

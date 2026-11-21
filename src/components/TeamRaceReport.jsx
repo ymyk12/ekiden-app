@@ -22,6 +22,7 @@ import {
   Check,
   AlertCircle,
   Trash2,
+  Users,
 } from "lucide-react";
 import LapTimeModal from "./LapTimeModal";
 import { RACE_TYPES, RACE_DISTANCES } from "../utils/constants";
@@ -1293,6 +1294,40 @@ const TeamRaceReport = ({ reportTour, reportCards, onClose, handlePrint, canEdit
             </div>
           )}
         </div>}
+
+        {/* 仲間の良かったところ（匿名）: 選手が入力した「仲間の良かった点」を
+            誰が書いたか分からない形でまとめる。氏名・選手IDは出さず、
+            並びも提出順や選手順に依存しないよう文面順にする。 */}
+        {(() => {
+          const praises = [
+            ...new Set(
+              reportCards
+                .map((c) => (c.teammateGoodPoints || "").trim())
+                .filter(Boolean),
+            ),
+          ].sort((a, b) => a.localeCompare(b, "ja"));
+          if (praises.length === 0) return null;
+          return (
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 print:shadow-none print:border print:border-slate-200 print:p-3 break-inside-avoid">
+              <h3 className="text-sm font-black text-emerald-600 uppercase tracking-widest mb-1 flex items-center gap-2 print:text-slate-800">
+                <Users size={16} /> 仲間の良かったところ
+              </h3>
+              <p className="text-[10px] font-bold text-slate-400 mb-3">
+                選手が書いた内容です（誰が書いたかは表示されません）
+              </p>
+              <div className="space-y-2">
+                {praises.map((text, i) => (
+                  <p
+                    key={i}
+                    className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 text-xs font-bold text-slate-700 whitespace-pre-wrap leading-relaxed break-words print:bg-white print:text-[10px] print:p-2"
+                  >
+                    {text}
+                  </p>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
     {/* 監督用 Result / LAP 編集モーダル */}
